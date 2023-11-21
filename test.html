@@ -1,0 +1,16 @@
+<html>
+    <head>
+        <title>Web Sound Meter Tests</title>
+    </head>
+    <body>
+        <button onclick="context.resume()">Start</button>
+        <script>
+            let context= new AudioContext();
+            context.audioWorklet.addModule('noise-worklet.js').then(() => {
+                let myNoise = new AudioWorkletNode(context,'pink-noise', {outputChannelCount : [1]});
+                myNoise.connect(context.destination)
+            });
+            console.log(context.sampleRate);
+        </script>
+    </body>
+</html>
