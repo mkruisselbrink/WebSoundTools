@@ -1,16 +1,22 @@
 <html>
-    <head>
-        <title>Web Sound Meter Tests</title>
-    </head>
-    <body>
-        <button onclick="context.resume()">Start</button>
-        <script>
-            let context= new AudioContext();
-            context.audioWorklet.addModule('noise-worklet.js').then(() => {
-                let myNoise = new AudioWorkletNode(context,'pink-noise', {outputChannelCount : [1]});
-                myNoise.connect(context.destination)
-            });
-            console.log(context.sampleRate);
-        </script>
-    </body>
+
+<head>
+    <title>Web Sound Meter Tests</title>
+    <script type="importmap">
+        {
+          "imports": {
+            "utils": "./dist/utils.js"
+          }
+        }
+      </script>
+</head>
+
+<body>
+    <button id="btnStart">Start</button>
+    <button id="btnCapture">Capture</button>
+    <select id="lstGenerators"></select>
+    <script src="dist/main.js" type="module">
+    </script>
+</body>
+
 </html>

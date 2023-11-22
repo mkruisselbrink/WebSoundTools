@@ -1,0 +1,12 @@
+{
+    "references": [
+        { "path": "./audio-worklets" }
+    ],
+    "extends": "./tsconfig_base.json",
+    "compilerOptions": {
+      "lib": ["dom", "es2022"]
+    },
+    "files": [
+        "main.ts"
+    ]
+}

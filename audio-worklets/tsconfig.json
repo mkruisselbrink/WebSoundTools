@@ -1,0 +1,12 @@
+{
+    "extends": "../tsconfig_base.json",
+    "compilerOptions": {
+      "lib": ["es2022"],
+      "types": ["audioworklet"],
+      "composite": true
+    },
+    "files": [
+        "noise-worklet.ts",
+        "utils.ts"
+    ]
+  }
