@@ -1,3 +1,4 @@
+
 type AudioGenerator = {
     name: string,
     generator: AudioNode,
@@ -54,10 +55,6 @@ mainGain.connect(analyser);
 
 let generators = new GeneratorManager(context, mainGain, document.getElementById("lstGenerators") as HTMLSelectElement);
 
-let sine = new OscillatorNode(context, {channelCount: 1});
-sine.start();
-generators.add("Sine", sine);
-
 context.audioWorklet.addModule('dist/noise-worklet.js').then(() => {
     let pinkNoise = new AudioWorkletNode(context, 'pink-noise', { outputChannelCount: [1] });
     generators.add("Pink Noise", pinkNoise);
@@ -66,55 +63,28 @@ context.audioWorklet.addModule('dist/noise-worklet.js').then(() => {
 
 });
 
+let sine = new OscillatorNode(context, {channelCount: 1});
+sine.start();
+generators.add("Sine", sine);
+
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Float32Array(bufferLength);
 
 //Create 2D canvas
-const canvas = document.createElement("canvas");
-canvas.style.position = "absolute";
-canvas.style.top = "32";
-canvas.style.left = "0";
-canvas.width = 1024;//window.innerWidth;
-canvas.height = 256;//window.innerHeight;
+import { TimeChartElement, FrequencyChartElement } from "./src/time_chart.js";
+
+const canvas = new TimeChartElement();
+canvas.setAnalyserNode(analyser);
+document.body.appendChild(document.createElement("br"));
 document.body.appendChild(canvas);
-const canvasCtx = canvas.getContext("2d");
-canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-function draw() {
-    //let drawVisual = requestAnimationFrame(draw);
-
-    const WIDTH = 1024;
-    const HEIGHT = 256;
-    analyser.getFloatTimeDomainData(dataArray);
-
-    canvasCtx.fillStyle = "rgb(200, 200, 200)";
-    canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
-    canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = "rgb(0, 0, 0)";
-    canvasCtx.beginPath();
-
-    const sliceWidth = (WIDTH * 1.0) / bufferLength;
-    let x = 0;
-
-    for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] * HEIGHT / 2;
-        const y = HEIGHT / 2 + v;
-
-        if (i === 0) {
-            canvasCtx.moveTo(x, y);
-        } else {
-            canvasCtx.lineTo(x, y);
-        }
-        x += sliceWidth;
-    }
-
-    canvasCtx.lineTo(canvas.width, canvas.height / 2);
-    canvasCtx.stroke();
-}
-draw();
+const canvas2 = new FrequencyChartElement();
+canvas2.setAnalyserNode(analyser);
+document.body.appendChild(document.createElement("br"));
+document.body.appendChild(canvas2);
 
 function test() {
-    analyser.getFloatTimeDomainData(dataArray);
+    analyser.getFloatFrequencyData(dataArray);
     console.log(dataArray);
     let min = 0;
     let max = 0;
@@ -123,7 +93,6 @@ function test() {
         if (v > max) max = v;
     }
     console.log("Min: ", min, "Max: ", max);
-    draw();
 }
 
 document.getElementById("btnStart").onclick = () => {
