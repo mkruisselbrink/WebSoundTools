@@ -50,7 +50,7 @@ let context = new AudioContext();
 let mainGain = new GainNode(context);
 mainGain.connect(context.destination);
 const analyser = context.createAnalyser();
-analyser.fftSize = 2048;
+analyser.fftSize = 16384;
 mainGain.connect(analyser);
 
 let generators = new GeneratorManager(context, mainGain, document.getElementById("lstGenerators") as HTMLSelectElement);
@@ -63,7 +63,7 @@ context.audioWorklet.addModule('dist/noise-worklet.js').then(() => {
 
 });
 
-let sine = new OscillatorNode(context, {channelCount: 1});
+let sine = new OscillatorNode(context, {channelCount: 1, frequency: 440});
 sine.start();
 generators.add("Sine", sine);
 
