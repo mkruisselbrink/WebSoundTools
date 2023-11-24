@@ -1,6 +1,8 @@
-import { NumberInputElement } from "./number_input.js";
+import { LitElement, PropertyValues, html } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { ref, createRef } from 'lit/directives/ref.js';
 
-abstract class LineChartElement extends HTMLElement {
+abstract class LineChartElement extends LitElement {
     width: number = 1024;
     height: number = 360;
 
@@ -14,10 +16,10 @@ abstract class LineChartElement extends HTMLElement {
 
     padding: number = 16;
 
-    canvas: HTMLCanvasElement;
+    canvasRef = createRef<HTMLCanvasElement>();
     context: CanvasRenderingContext2D;
     dataArray: Float32Array;
-    autoRefresh: HTMLInputElement;
+    autoRefreshRef = createRef<HTMLInputElement>();
 
     constructor() {
         super();
@@ -29,49 +31,32 @@ abstract class LineChartElement extends HTMLElement {
 
     abstract refreshData(data: Float32Array): boolean;
 
-    connectedCallback() {
-        const shadow = this.attachShadow({ mode: "open" });
-
+    render() {
         const ratio = window.devicePixelRatio;
-        this.canvas = document.createElement("canvas");
-        this.canvas.width = this.width * ratio;
-        this.canvas.height = this.height * ratio;
-        this.canvas.style.width = this.width + "px";
-        this.canvas.style.height = this.height + "px";
-        shadow.appendChild(this.canvas);
-        shadow.appendChild(document.createElement("br"));
-
-        const refreshButton = document.createElement("button");
-        refreshButton.appendChild(document.createTextNode("Refresh"));
-        shadow.appendChild(refreshButton)
-        shadow.appendChild(document.createTextNode(" "));
-        refreshButton.onclick = () => {
-            this.draw();
-        };
-        const autoRefreshCheck = document.createElement("input");
-        autoRefreshCheck.type = "checkbox";
-        autoRefreshCheck.id = "autoRefreshCheck";
-        autoRefreshCheck.checked = true;
-        autoRefreshCheck.onchange = () => {
-            this.draw();
-        };
-        this.autoRefresh = autoRefreshCheck;
-        shadow.appendChild(autoRefreshCheck);
-        const autoRefreshLabel = document.createElement("label");
-        autoRefreshLabel.htmlFor = "autoRefreshCheck";
-        autoRefreshLabel.appendChild(document.createTextNode("Auto Refresh"));
-        shadow.appendChild(autoRefreshLabel);
-        let inp = new NumberInputElement();
-        inp.label = "MinX";
-        shadow.appendChild(inp);
-
-        this.context = this.canvas.getContext("2d");
-        this.context.scale(ratio, ratio);
-        this.draw();
+        return html`
+            <canvas ${ref(this.canvasRef)} 
+                width=${ratio * this.width}
+                height=${ratio * this.height}
+                style="width: ${this.width}px; height: ${this.height}px;">
+            </canvas><br />
+            <button @click="${this.draw}">Refresh</button>
+            <input ${ref(this.autoRefreshRef)} 
+                type=checkbox 
+                id="autoRefreshCheck"
+                checked
+                @change="${this.draw}"></input>
+            <label for="autoRefreshCheck">Auto Refresh</label>
+            <number-input label="MinX"></number-input>
+        `;
     }
 
-    getContext(): CanvasRenderingContext2D {
-        return this.canvas.getContext("2d");
+    update(changedProperties: PropertyValues<this>) {
+        super.update(changedProperties);
+        this.context = this.canvasRef.value.getContext("2d");
+        this.context.reset();
+        const ratio = window.devicePixelRatio;
+        this.context.scale(ratio, ratio);
+        this.draw();
     }
 
     abstract getHeightForValue(value: number, height: number): number;
@@ -94,7 +79,7 @@ abstract class LineChartElement extends HTMLElement {
     }
 
     draw() {
-        if (this.autoRefresh.checked) {
+        if (this.autoRefreshRef.value.checked) {
             requestAnimationFrame(() => { this.draw() });
         }
 

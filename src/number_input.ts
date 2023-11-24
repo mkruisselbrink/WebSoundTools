@@ -12,3 +12,4 @@ export class NumberInputElement extends LitElement {
         `;
       }
 }
+
