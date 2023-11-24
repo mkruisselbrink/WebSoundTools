@@ -1,3 +1,4 @@
+import { NumberInputElement } from "./number_input.js";
 
 abstract class LineChartElement extends HTMLElement {
     width: number = 1024;
@@ -60,6 +61,9 @@ abstract class LineChartElement extends HTMLElement {
         autoRefreshLabel.htmlFor = "autoRefreshCheck";
         autoRefreshLabel.appendChild(document.createTextNode("Auto Refresh"));
         shadow.appendChild(autoRefreshLabel);
+        let inp = new NumberInputElement();
+        inp.label = "MinX";
+        shadow.appendChild(inp);
 
         this.context = this.canvas.getContext("2d");
         this.context.scale(ratio, ratio);
@@ -95,8 +99,9 @@ abstract class LineChartElement extends HTMLElement {
         }
 
         const yAxisTextWidth = 64;
+        const xAxisTextHeight = 24;
         const WIDTH = this.width - yAxisTextWidth - 2 * this.padding;
-        const HEIGHT = this.height - 2 * this.padding;
+        const HEIGHT = this.height - 2 * this.padding - xAxisTextHeight;
 
         if (!this.refreshData(this.dataArray)) {
             return;
@@ -123,6 +128,12 @@ abstract class LineChartElement extends HTMLElement {
             const y = this.getHeightForValue(value, HEIGHT);
             this.context.fillText(value.toFixed(ydecimals), yAxisTextWidth - 8, y, yAxisTextWidth);
         }
+        this.context.textAlign = "center";
+        this.context.textBaseline = "alphabetic";
+        for (let value of this.xlabels) {
+            const x = this.getXForValue(value, WIDTH);
+            this.context.fillText(value.toFixed(0), x + yAxisTextWidth, HEIGHT + 20);
+        }
 
         this.context.beginPath();
         this.context.fillStyle = "rgb(255, 255, 255)";
@@ -144,13 +155,6 @@ abstract class LineChartElement extends HTMLElement {
             this.context.lineTo(x + yAxisTextWidth, HEIGHT);
             this.context.stroke();
         }
-        this.context.fillStyle = "rgb(0, 0, 0)";
-        this.context.textAlign = "center";
-        this.context.textBaseline = "alphabetic";
-        for (let value of this.xlabels) {
-            const x = this.getXForValue(value, WIDTH);
-            this.context.fillText(value.toFixed(0), x + yAxisTextWidth, 32);
-        }
 
         this.context.beginPath();
         this.context.rect(yAxisTextWidth, 0, WIDTH, HEIGHT);
@@ -161,7 +165,7 @@ abstract class LineChartElement extends HTMLElement {
         this.context.beginPath();
 
         for (let i = 0; i < this.dataArray.length; i++) {
-            const x = yAxisTextWidth + this.getPositionForIndex(i, WIDTH);
+            const x = yAxisTextWidth + this.getXForValue(this.getValueForIndex(i), WIDTH);
             const y = this.getHeightForValue(this.dataArray[i], HEIGHT);
 
             if (i === 0) {

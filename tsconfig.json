@@ -4,10 +4,12 @@
     ],
     "extends": "./tsconfig_base.json",
     "compilerOptions": {
-      "lib": ["dom", "es2022"]
+      "lib": ["dom", "es2022"],
+      "moduleResolution": "bundler",
     },
     "files": [
         "main.ts",
+        "src/number_input.ts",
         "src/time_chart.ts"
     ]
 }

@@ -63,7 +63,7 @@ context.audioWorklet.addModule('dist/noise-worklet.js').then(() => {
 
 });
 
-let sine = new OscillatorNode(context, {channelCount: 1, frequency: 440});
+let sine = new OscillatorNode(context, {channelCount: 1, frequency: 1000});
 sine.start();
 generators.add("Sine", sine);
 
