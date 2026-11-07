@@ -1,2 +1,5 @@
 node_modules/
 dist/
+osm
+test-results/
+playwright-report/
