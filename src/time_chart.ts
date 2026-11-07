@@ -1,22 +1,34 @@
 import { LitElement, PropertyValues, html } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { ref, createRef } from 'lit/directives/ref.js';
 
 abstract class LineChartElement extends LitElement {
+    @property({type: Number})
     width: number = 1024;
+    @property({type: Number})
     height: number = 360;
 
+    @property({type: Number})
     ymin: number = -1;
+    @property({type: Number})
     ymax: number = 1;
+    @property({type: Number})
     ystep: number = 0.2;
+    @property({type: Number})
     xmin: number = 0;
+    @property({type: Number})
     xmax: number;
+
+    @property({type: Boolean})
     xislogarithmic: boolean = false;
+
     xlabels: Array<number> = [];
 
     padding: number = 16;
 
-    canvasRef = createRef<HTMLCanvasElement>();
+    @query('canvas', true)
+    canvas: HTMLCanvasElement;
+
     context: CanvasRenderingContext2D;
     dataArray: Float32Array;
     autoRefreshRef = createRef<HTMLInputElement>();
@@ -34,7 +46,7 @@ abstract class LineChartElement extends LitElement {
     render() {
         const ratio = window.devicePixelRatio;
         return html`
-            <canvas ${ref(this.canvasRef)} 
+            <canvas
                 width=${ratio * this.width}
                 height=${ratio * this.height}
                 style="width: ${this.width}px; height: ${this.height}px;">
@@ -50,13 +62,21 @@ abstract class LineChartElement extends LitElement {
         `;
     }
 
-    update(changedProperties: PropertyValues<this>) {
-        super.update(changedProperties);
-        this.context = this.canvasRef.value.getContext("2d");
-        this.context.reset();
+    firstUpdated(changedProperties: PropertyValues<this>) {
+        super.firstUpdated(changedProperties);
+        this.context = this.canvas.getContext("2d");
         const ratio = window.devicePixelRatio;
         this.context.scale(ratio, ratio);
         this.draw();
+    }
+
+    update(changedProperties: PropertyValues<this>) {
+        super.update(changedProperties);
+        if (this.context) {
+            this.context.reset();
+            const ratio = window.devicePixelRatio;
+            this.context.scale(ratio, ratio);
+        }
     }
 
     abstract getHeightForValue(value: number, height: number): number;
@@ -165,6 +185,7 @@ abstract class LineChartElement extends LitElement {
     }
 }
 
+@customElement('time-chart')
 export class TimeChartElement extends LineChartElement {
     analyser: AnalyserNode;
 
@@ -200,8 +221,7 @@ export class TimeChartElement extends LineChartElement {
     }
 }
 
-customElements.define("time-chart", TimeChartElement);
-
+@customElement('frequency-chart')
 export class FrequencyChartElement extends LineChartElement {
     analyser: AnalyserNode;
     minDb: number = -180;
@@ -258,6 +278,3 @@ export class FrequencyChartElement extends LineChartElement {
         return ratio * index;
     }
 }
-
-customElements.define("frequency-chart", FrequencyChartElement);
-

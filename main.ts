@@ -48,7 +48,11 @@ class GeneratorManager {
 
 let context = new AudioContext();
 let mainGain = new GainNode(context);
-mainGain.connect(context.destination);
+mainGain.gain.setValueAtTime(1, context.currentTime);
+let outputGain = new GainNode(context);
+outputGain.gain.setValueAtTime(0.005, context.currentTime);
+outputGain.connect(context.destination);
+mainGain.connect(outputGain);
 const analyser = context.createAnalyser();
 analyser.fftSize = 16384;
 mainGain.connect(analyser);
