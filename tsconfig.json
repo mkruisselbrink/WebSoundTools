@@ -1,15 +1,14 @@
 {
-    "references": [
-        { "path": "./audio-worklets" }
-    ],
-    "extends": "./tsconfig_base.json",
-    "compilerOptions": {
-      "lib": ["dom", "es2022"],
-      "moduleResolution": "bundler",
-    },
-    "files": [
-        "main.ts",
-        "src/number_input.ts",
-        "src/time_chart.ts"
-    ]
+  "extends": "./tsconfig_base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": [
+    "main.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "vite.config.ts"
+  ]
 }

@@ -11,6 +11,7 @@
         "lib": ["es2022"],
         "experimentalDecorators": true,
         "useDefineForClassFields": false,
+        "skipLibCheck": true,
         "types": []
       }
 }
