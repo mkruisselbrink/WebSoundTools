@@ -172,5 +172,40 @@ describe('TransferFunctionAnalyzer & Coherence', () => {
     expect(meanH1Mag).toBeGreaterThan(0.95);
     expect(meanH1Mag).toBeLessThan(1.05);
   });
+
+  it('handles dynamic fifoDepth and coherenceDepth changes cleanly and prevents running-sum drift', () => {
+    const tf = new TransferFunctionAnalyzer({
+      fftSize: 64,
+      sampleRate: 48000,
+      averagingType: 'fifo',
+      fifoDepth: 16,
+      coherenceDepth: 16,
+      estimator: 'h1',
+    });
+
+    const B = tf.binCount;
+    const mRe = new Float32Array(B).fill(2.0);
+    const mIm = new Float32Array(B).fill(0.0);
+    const rRe = new Float32Array(B).fill(1.0);
+    const rIm = new Float32Array(B).fill(0.0);
+
+    // Fill 15 frames with gain = 2.0
+    for (let i = 0; i < 15; i++) {
+      tf.processFrame(mRe, mIm, rRe, rIm);
+    }
+    expect(tf.magnitude[4]).toBeCloseTo(2.0, 4);
+
+    // Shrink fifoDepth to 4 and coherenceDepth to 8, then feed gain = 0.5
+    tf.updateConfig({ fifoDepth: 4, coherenceDepth: 8 });
+    mRe.fill(0.5);
+
+    // Run > 1024 frames to exercise periodic running-sum recomputation
+    for (let i = 0; i < 1030; i++) {
+      tf.processFrame(mRe, mIm, rRe, rIm);
+    }
+
+    expect(tf.magnitude[4]).toBeCloseTo(0.5, 5);
+    expect(tf.coherence[4]).toBeCloseTo(1.0, 5);
+  });
 });
 

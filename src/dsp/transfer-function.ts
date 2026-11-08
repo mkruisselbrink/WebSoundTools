@@ -72,6 +72,7 @@ export class TransferFunctionAnalyzer {
   private cohSumGmm: Float32Array;
   private cohPointer: number = 0;
   private cohCount: number = 0;
+  private framesSinceRecalc: number = 0;
 
   constructor(config: Partial<TransferFunctionConfig> & { fftSize: number; sampleRate: number }) {
     this.config = {
@@ -137,9 +138,33 @@ export class TransferFunctionAnalyzer {
     const needReset =
       (partial.averagingType !== undefined && partial.averagingType !== this.config.averagingType) ||
       (partial.fifoDepth !== undefined && partial.fifoDepth !== this.config.fifoDepth) ||
+      (partial.coherenceDepth !== undefined &&
+        partial.coherenceDepth !== this.config.coherenceDepth) ||
       (partial.sampleRate !== undefined && partial.sampleRate !== this.config.sampleRate);
 
     Object.assign(this.config, partial);
+
+    const B = this.binCount;
+    if (this.config.fifoDepth > this.maxFifoCapacity) {
+      this.maxFifoCapacity = this.config.fifoDepth;
+      this.fifoGrmRe = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoGrmIm = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoGrr = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoGmm = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoMagRatio = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoPhaseRe = new Float32Array(this.maxFifoCapacity * B);
+      this.fifoPhaseIm = new Float32Array(this.maxFifoCapacity * B);
+    }
+
+    const newCohDepth = Math.max(2, this.config.coherenceDepth);
+    if (newCohDepth !== this.cohDepth) {
+      this.cohDepth = newCohDepth;
+      this.cohGrmRe = new Float32Array(this.cohDepth * B);
+      this.cohGrmIm = new Float32Array(this.cohDepth * B);
+      this.cohGrr = new Float32Array(this.cohDepth * B);
+      this.cohGmm = new Float32Array(this.cohDepth * B);
+    }
+
     if (partial.sampleRate !== undefined) {
       this.updateFrequencyAxis();
     }
@@ -177,6 +202,7 @@ export class TransferFunctionAnalyzer {
     this.cohSumGmm.fill(0);
     this.cohPointer = 0;
     this.cohCount = 0;
+    this.framesSinceRecalc = 0;
 
     this.peakSquared.fill(0);
     this.meanSquared.fill(0);
@@ -372,6 +398,62 @@ export class TransferFunctionAnalyzer {
     this.cohPointer = (this.cohPointer + 1) % this.cohDepth;
     if (this.cohCount < this.cohDepth) {
       this.cohCount++;
+    }
+
+    this.framesSinceRecalc++;
+    if (this.framesSinceRecalc >= 1024) {
+      this.recomputeRunningSums();
+      this.framesSinceRecalc = 0;
+    }
+  }
+
+  /**
+   * Periodically recomputes FIFO running sums from scratch to prevent Float32 rounding drift
+   * over long continuous measurement sessions.
+   */
+  private recomputeRunningSums(): void {
+    const B = this.binCount;
+
+    if (this.config.averagingType === 'fifo' && this.fifoCount > 0) {
+      this.sumGrmRe.fill(0);
+      this.sumGrmIm.fill(0);
+      this.sumGrr.fill(0);
+      this.sumGmm.fill(0);
+      this.sumMagRatio.fill(0);
+      this.sumPhaseRe.fill(0);
+      this.sumPhaseIm.fill(0);
+
+      for (let slot = 0; slot < this.fifoCount; slot++) {
+        const offset = slot * B;
+        for (let k = 0; k < B; k++) {
+          const idx = offset + k;
+          this.sumGrmRe[k] += this.fifoGrmRe[idx];
+          this.sumGrmIm[k] += this.fifoGrmIm[idx];
+          this.sumGrr[k] += this.fifoGrr[idx];
+          this.sumGmm[k] += this.fifoGmm[idx];
+          this.sumMagRatio[k] += this.fifoMagRatio[idx];
+          this.sumPhaseRe[k] += this.fifoPhaseRe[idx];
+          this.sumPhaseIm[k] += this.fifoPhaseIm[idx];
+        }
+      }
+    }
+
+    if (this.cohCount > 0) {
+      this.cohSumGrmRe.fill(0);
+      this.cohSumGrmIm.fill(0);
+      this.cohSumGrr.fill(0);
+      this.cohSumGmm.fill(0);
+
+      for (let slot = 0; slot < this.cohCount; slot++) {
+        const offset = slot * B;
+        for (let k = 0; k < B; k++) {
+          const idx = offset + k;
+          this.cohSumGrmRe[k] += this.cohGrmRe[idx];
+          this.cohSumGrmIm[k] += this.cohGrmIm[idx];
+          this.cohSumGrr[k] += this.cohGrr[idx];
+          this.cohSumGmm[k] += this.cohGmm[idx];
+        }
+      }
     }
   }
 }
