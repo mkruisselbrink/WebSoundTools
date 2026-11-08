@@ -67,3 +67,4 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
     </header>
   `;
 }
+

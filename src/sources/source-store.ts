@@ -373,3 +373,4 @@ export class SourceStore {
     this.notify();
   }
 }
+

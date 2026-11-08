@@ -153,3 +153,4 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
     </div>
   `;
 }
+

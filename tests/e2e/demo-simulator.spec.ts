@@ -45,7 +45,40 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
 
     // Capture a stored trace
     await app.locator('[data-testid="btn-capture-trace"]').click();
-    await expect(app.locator('[data-testid^="source-item-stored-"]')).toHaveCount(1);
+    const storedItems = app.locator('[data-testid^="source-item-stored-"]');
+    await expect(storedItems).toHaveCount(1);
+
+    // Rename the stored trace with spaces, 'c', and 'd' and ensure no duplicate traces are created
+    const nameInput = app.getByLabel('Stored Trace Name');
+    await expect(nameInput).toBeVisible();
+    await nameInput.fill('');
+    await nameInput.pressSequentially('Center Cluster Delayed');
+    await expect(nameInput).toHaveValue('Center Cluster Delayed');
+    await expect(storedItems).toHaveCount(1);
+
+    // Toggle Live Measurement visibility off and ensure it stays off across incoming frames
+    const liveVisibilityCheckbox = app.getByLabel('Toggle visibility for Live Measurement');
+    await expect(liveVisibilityCheckbox).toBeChecked();
+    await liveVisibilityCheckbox.uncheck();
+    await page.waitForTimeout(150);
+    await expect(liveVisibilityCheckbox).not.toBeChecked();
+
+    // Switch layout presets and verify chart panel count updates
+    const layoutSelect = app.locator('[data-testid="select-layout"]');
+    await layoutSelect.selectOption('tf-dual');
+    await expect(app.locator('chart-panel')).toHaveCount(2);
+    await layoutSelect.selectOption('single');
+    await expect(app.locator('chart-panel')).toHaveCount(1);
+    await layoutSelect.selectOption('pa-triple');
+    await expect(app.locator('chart-panel')).toHaveCount(3);
+
+    // Pause and resume
+    const pauseBtn = app.locator('[data-testid="btn-pause"]');
+    await expect(pauseBtn).toHaveText('Pause');
+    await pauseBtn.click();
+    await expect(pauseBtn).toHaveText('Resume');
+    await pauseBtn.click();
+    await expect(pauseBtn).toHaveText('Pause');
 
     // Add a Virtual Equalizer source and click Auto-Flatten
     await app.locator('[data-testid="btn-add-eq"]').click();
@@ -58,4 +91,3 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
   });
 });
-

@@ -83,3 +83,4 @@ export function computeDraggedEqBand(
     ) / 2;
   return { frequency, gainDb };
 }
+

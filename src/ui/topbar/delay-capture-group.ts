@@ -69,3 +69,4 @@ export function renderDelayCaptureGroup(props: DelayCaptureGroupProps): Template
     </div>
   `;
 }
+

@@ -83,3 +83,4 @@ describe('keyboard-shortcuts', () => {
     expect(onFindAndApplyDelay).toHaveBeenCalledTimes(1);
   });
 });
+

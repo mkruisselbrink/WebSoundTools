@@ -1,0 +1,222 @@
+/**
+ * WebSoundMeter
+ * Copyright (C) 2026 WebSoundMeter Contributors
+ * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+import {
+  ChartPlotBox,
+  drawCanvasTrace,
+  drawCursorCrosshair,
+  drawEqHandles,
+  drawGridAndAxes,
+  drawRtaOctaveBars,
+  drawRtaPeakLine,
+} from '../../src/charts/canvas-chart-painter.js';
+import { ChartAxisBounds } from '../../src/charts/chart-interaction.js';
+import {
+  GlTraceRenderer,
+  parseCssColorToRgba,
+} from '../../src/charts/gl-trace-renderer.js';
+import { BiquadSpec } from '../../src/dsp/biquad.js';
+import {
+  SourceData,
+  createEmptyFrequencyDomainData,
+  createEmptyTimeDomainData,
+} from '../../src/sources/source-data.js';
+
+function createMock2dContext() {
+  return {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineJoin: 'round',
+    globalAlpha: 1,
+    font: '',
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    fill: vi.fn(),
+    arc: vi.fn(),
+    fillText: vi.fn(),
+    setLineDash: vi.fn(),
+  } as unknown as CanvasRenderingContext2D;
+}
+
+const box: ChartPlotBox = {
+  plotLeft: 50,
+  plotTop: 10,
+  plotW: 600,
+  plotH: 300,
+};
+
+const freqBounds: ChartAxisBounds = {
+  xMin: 20,
+  xMax: 20000,
+  yMin: -24,
+  yMax: 24,
+};
+
+const timeBounds: ChartAxisBounds = {
+  xMin: -10,
+  xMax: 30,
+  yMin: -1,
+  yMax: 1,
+};
+
+describe('canvas-chart-painter and gl-trace-renderer', () => {
+  it('draws log-frequency and linear-time grids and axes', () => {
+    const ctx = createMock2dContext();
+    drawGridAndAxes(ctx, 'magnitude', freqBounds, box);
+    expect(ctx.fillRect).toHaveBeenCalledWith(50, 10, 600, 300);
+    expect(ctx.strokeRect).toHaveBeenCalledWith(50, 10, 600, 300);
+    expect(ctx.fillText).toHaveBeenCalled();
+
+    const timeCtx = createMock2dContext();
+    drawGridAndAxes(timeCtx, 'impulse', timeBounds, box);
+    expect(timeCtx.fillText).toHaveBeenCalled();
+  });
+
+  it('draws coherence-bucketed 2D canvas traces and breaks on zero alpha', () => {
+    const ctx = createMock2dContext();
+    const vertices = new Float32Array([
+      -0.5, 0.0, 1.0,
+      0.0, 0.2, 1.0,
+      0.2, 0.1, 0.0, // zero alpha gap
+      0.5, -0.2, 0.5,
+      0.8, -0.1, 0.5,
+    ]);
+    drawCanvasTrace(ctx, vertices, 5, '#38bdf8', box);
+    expect(ctx.beginPath).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
+    expect(ctx.globalAlpha).toBe(1.0);
+  });
+
+  it('draws RTA fractional-octave bars, RTA peak line, EQ handles, and cursor crosshair', () => {
+    const ctx = createMock2dContext();
+    const freqData = createEmptyFrequencyDomainData(257, 48000);
+    freqData.module.fill(0.5);
+    freqData.peakSquared.fill(0.8);
+    const src: SourceData = {
+      id: 'live-measurement',
+      name: 'Live',
+      kind: 'measurement',
+      color: '#38bdf8',
+      visible: true,
+      active: true,
+      sampleRate: 48000,
+      gainOffsetDb: 0,
+      delayOffsetMs: 0,
+      invertPolarity: false,
+      createdAt: new Date().toISOString(),
+      notes: '',
+      freqData,
+      timeData: createEmptyTimeDomainData(512, 48000),
+    };
+
+    drawRtaOctaveBars(ctx, [src], 3, true, { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 }, box);
+    expect(ctx.fillRect).toHaveBeenCalled();
+
+    drawRtaPeakLine(ctx, src, { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 }, box);
+    expect(ctx.stroke).toHaveBeenCalled();
+
+    const bands: BiquadSpec[] = [
+      { type: 'peaking', frequency: 1000, q: 2, gainDb: 3, enabled: true },
+      { type: 'highpass', frequency: 40, q: 0.7, gainDb: 0, enabled: false },
+    ];
+    drawEqHandles(ctx, bands, freqBounds, box);
+    expect(ctx.arc).toHaveBeenCalledTimes(1);
+    expect(ctx.fillText).toHaveBeenCalledWith('EQ1', expect.any(Number), expect.any(Number));
+
+    drawCursorCrosshair(ctx, 1000, true, freqBounds, box);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 4]);
+    expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+  });
+
+  it('parses CSS hex colors and handles WebGL2 availability and drawing', () => {
+    expect(parseCssColorToRgba('#ff0000')).toEqual([1, 0, 0, 1]);
+    expect(parseCssColorToRgba('invalid')).toEqual([0.22, 0.74, 0.97, 1.0]);
+
+    // Fallback when WebGL2 is unavailable
+    const nullCanvas = { getContext: () => null } as unknown as HTMLCanvasElement;
+    const fallbackRenderer = new GlTraceRenderer(nullCanvas);
+    expect(fallbackRenderer.isWebGlAvailable()).toBe(false);
+    fallbackRenderer.clear(0, 0, 100, 100, 100);
+    fallbackRenderer.drawTrace(new Float32Array([0, 0, 1, 1, 1, 1]), 2, '#10b981');
+
+    // Mock WebGL2 context
+    const mockGl = {
+      VERTEX_SHADER: 35633,
+      FRAGMENT_SHADER: 35632,
+      COMPILE_STATUS: 35713,
+      LINK_STATUS: 35714,
+      ARRAY_BUFFER: 34962,
+      FLOAT: 5126,
+      BLEND: 3042,
+      SRC_ALPHA: 770,
+      ONE_MINUS_SRC_ALPHA: 771,
+      COLOR_BUFFER_BIT: 16384,
+      STREAM_DRAW: 35040,
+      LINE_STRIP: 3,
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => true),
+      deleteShader: vi.fn(),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getUniformLocation: vi.fn(() => ({})),
+      createVertexArray: vi.fn(() => ({})),
+      createBuffer: vi.fn(() => ({})),
+      bindVertexArray: vi.fn(),
+      bindBuffer: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      enable: vi.fn(),
+      blendFunc: vi.fn(),
+      viewport: vi.fn(),
+      clearColor: vi.fn(),
+      clear: vi.fn(),
+      useProgram: vi.fn(),
+      uniform4f: vi.fn(),
+      bufferData: vi.fn(),
+      drawArrays: vi.fn(),
+    };
+    const glCanvas = {
+      getContext: () => mockGl,
+    } as unknown as HTMLCanvasElement;
+
+    const renderer = new GlTraceRenderer(glCanvas);
+    expect(renderer.isWebGlAvailable()).toBe(true);
+    renderer.clear(10, 10, 200, 100, 120);
+    expect(mockGl.viewport).toHaveBeenCalledWith(10, 10, 200, 100);
+
+    const verts = new Float32Array([-1, 0, 1, 1, 0, 1]);
+    renderer.drawTrace(verts, 2, '#10b981', 0.8);
+    expect(mockGl.drawArrays).toHaveBeenCalledWith(mockGl.LINE_STRIP, 0, 2);
+  });
+});
+

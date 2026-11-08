@@ -344,3 +344,4 @@ export function drawCursorCrosshair(
   ctx.stroke();
   ctx.setLineDash([]);
 }
+

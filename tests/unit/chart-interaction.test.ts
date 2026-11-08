@@ -81,3 +81,4 @@ describe('chart-interaction', () => {
     expect(clampedBottom.gainDb).toBe(-18);
   });
 });
+

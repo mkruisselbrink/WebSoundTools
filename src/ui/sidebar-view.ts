@@ -106,3 +106,4 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
     </aside>
   `;
 }
+
