@@ -89,5 +89,29 @@ describe('DualChannelRingBuffer', () => {
     expect(rb.availableRead()).toBe(0);
     expect(rb.availableWrite()).toBe(16);
   });
+
+  it('handles Uint32 index wrap-around past 2^31 and 2^32 boundaries without corruption', () => {
+    const storage = createRingBufferStorage(16, true);
+    const rb = new DualChannelRingBuffer(storage);
+    const header = new Uint32Array(storage.headerBuffer);
+
+    // Position both write and read indices 6 samples before 2^32 wrap-around (0xFFFFFFFA)
+    const startIdx = 0xfffffffa >>> 0;
+    Atomics.store(header, 0, startIdx);
+    Atomics.store(header, 1, startIdx);
+
+    const inM = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const inR = new Float32Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+
+    expect(rb.write(inM, inR)).toBe(10);
+    expect(rb.availableRead()).toBe(10);
+
+    const outM = new Float32Array(10);
+    const outR = new Float32Array(10);
+    expect(rb.read(outM, outR)).toBe(10);
+    expect(rb.availableRead()).toBe(0);
+    expect(Array.from(outM)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(Array.from(outR)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  });
 });
 

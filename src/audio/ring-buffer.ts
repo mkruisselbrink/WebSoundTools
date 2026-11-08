@@ -7,7 +7,7 @@
 
 const WRITE_INDEX_OFFSET = 0;
 const READ_INDEX_OFFSET = 1;
-const HEADER_INTS = 2; // writeIndex, readIndex (Int32Array with Atomics)
+const HEADER_INTS = 2; // writeIndex, readIndex (Uint32Array with Atomics)
 
 export interface RingBufferStorage {
   readonly headerBuffer: SharedArrayBuffer | ArrayBuffer;
@@ -25,7 +25,7 @@ export function createRingBufferStorage(
   }
   const BufferCtor = useSharedMemory ? SharedArrayBuffer : ArrayBuffer;
   return {
-    headerBuffer: new BufferCtor(HEADER_INTS * Int32Array.BYTES_PER_ELEMENT),
+    headerBuffer: new BufferCtor(HEADER_INTS * Uint32Array.BYTES_PER_ELEMENT),
     dataBufferM: new BufferCtor(capacity * Float32Array.BYTES_PER_ELEMENT),
     dataBufferR: new BufferCtor(capacity * Float32Array.BYTES_PER_ELEMENT),
     capacity,
@@ -35,7 +35,7 @@ export function createRingBufferStorage(
 export class DualChannelRingBuffer {
   readonly capacity: number;
   private readonly mask: number;
-  private readonly indices: Int32Array;
+  private readonly indices: Uint32Array;
   private readonly dataM: Float32Array;
   private readonly dataR: Float32Array;
   private readonly isShared: boolean;
@@ -46,7 +46,7 @@ export class DualChannelRingBuffer {
     }
     this.capacity = storage.capacity;
     this.mask = storage.capacity - 1;
-    this.indices = new Int32Array(storage.headerBuffer);
+    this.indices = new Uint32Array(storage.headerBuffer);
     this.dataM = new Float32Array(storage.dataBufferM);
     this.dataR = new Float32Array(storage.dataBufferR);
     this.isShared =
@@ -55,14 +55,15 @@ export class DualChannelRingBuffer {
   }
 
   private loadIndex(offset: number): number {
-    return this.isShared ? Atomics.load(this.indices, offset) : this.indices[offset];
+    return (this.isShared ? Atomics.load(this.indices, offset) : this.indices[offset]) >>> 0;
   }
 
   private storeIndex(offset: number, value: number): void {
+    const uVal = value >>> 0;
     if (this.isShared) {
-      Atomics.store(this.indices, offset, value);
+      Atomics.store(this.indices, offset, uVal);
     } else {
-      this.indices[offset] = value;
+      this.indices[offset] = uVal;
     }
   }
 
@@ -70,7 +71,7 @@ export class DualChannelRingBuffer {
   availableRead(): number {
     const writeIdx = this.loadIndex(WRITE_INDEX_OFFSET);
     const readIdx = this.loadIndex(READ_INDEX_OFFSET);
-    return (writeIdx - readIdx) | 0;
+    return (writeIdx - readIdx) >>> 0;
   }
 
   /** Number of free sample slots available to write. */
@@ -90,7 +91,7 @@ export class DualChannelRingBuffer {
     }
 
     const writeIdx = this.loadIndex(WRITE_INDEX_OFFSET);
-    const pos = writeIdx & this.mask;
+    const pos = (writeIdx & this.mask) >>> 0;
     const firstChunk = Math.min(toWrite, this.capacity - pos);
 
     this.dataM.set(inputM.subarray(0, firstChunk), pos);
@@ -102,7 +103,7 @@ export class DualChannelRingBuffer {
       this.dataR.set(inputR.subarray(firstChunk, toWrite), 0);
     }
 
-    this.storeIndex(WRITE_INDEX_OFFSET, (writeIdx + toWrite) | 0);
+    this.storeIndex(WRITE_INDEX_OFFSET, (writeIdx + toWrite) >>> 0);
     return toWrite;
   }
 
@@ -118,7 +119,7 @@ export class DualChannelRingBuffer {
     }
 
     const readIdx = this.loadIndex(READ_INDEX_OFFSET);
-    const pos = readIdx & this.mask;
+    const pos = (readIdx & this.mask) >>> 0;
     const firstChunk = Math.min(toRead, this.capacity - pos);
 
     outputM.set(this.dataM.subarray(pos, pos + firstChunk), 0);
@@ -130,7 +131,7 @@ export class DualChannelRingBuffer {
       outputR.set(this.dataR.subarray(0, secondChunk), firstChunk);
     }
 
-    this.storeIndex(READ_INDEX_OFFSET, (readIdx + toRead) | 0);
+    this.storeIndex(READ_INDEX_OFFSET, (readIdx + toRead) >>> 0);
     return toRead;
   }
 
