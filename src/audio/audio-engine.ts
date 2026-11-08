@@ -63,6 +63,7 @@ export class AudioEngine {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private splitterNode: ChannelSplitterNode | null = null;
   private captureWorkletNode: AudioWorkletNode | null = null;
+  private outputMergerNode: ChannelMergerNode | null = null;
   private ringBufferStorage: RingBufferStorage | null = null;
 
   private inputMode: InputSourceMode = 'simulator';
@@ -73,8 +74,12 @@ export class AudioEngine {
 
   private selectedDeviceId: string = '';
   private measurementChannel: number = 0;
+  /** Reference input channel index (0..N-1), or -1 to use internal Signal Generator loopback */
   private referenceChannel: number = 1;
+  /** Hardware output channel index (0..N-1), -1 for Stereo (Ch 1+2), or -2 for Muted */
+  private generatorOutputChannel: number = -1;
   private availableChannels: number = 2;
+  private availableOutputChannels: number = 2;
   private isPaused: boolean = false;
   private calibrationName: string | null = null;
 
@@ -189,6 +194,12 @@ export class AudioEngine {
   updateGeneratorConfig(partial: Partial<SignalGeneratorConfig>): void {
     this.generatorConfig = { ...this.generatorConfig, ...partial };
     this.sendToWorker({ type: 'update-generator-config', config: partial });
+    if (this.captureWorkletNode) {
+      this.captureWorkletNode.port.postMessage({
+        type: 'update-generator-config',
+        config: this.generatorConfig,
+      });
+    }
   }
 
   loadCalibrationFile(text: string, name: string): void {
@@ -258,16 +269,35 @@ export class AudioEngine {
     return this.availableChannels;
   }
 
-  getChannelRouting(): { measurementChannel: number; referenceChannel: number } {
+  getAvailableOutputChannels(): number {
+    return this.availableOutputChannels;
+  }
+
+  getChannelRouting(): {
+    measurementChannel: number;
+    referenceChannel: number;
+    generatorOutputChannel: number;
+  } {
     return {
       measurementChannel: this.measurementChannel,
       referenceChannel: this.referenceChannel,
+      generatorOutputChannel: this.generatorOutputChannel,
     };
   }
 
-  setChannelRouting(measurementChannel: number, referenceChannel: number): void {
+  setChannelRouting(
+    measurementChannel: number,
+    referenceChannel: number,
+    generatorOutputChannel: number = this.generatorOutputChannel
+  ): void {
     this.measurementChannel = measurementChannel;
     this.referenceChannel = referenceChannel;
+    this.generatorOutputChannel = generatorOutputChannel;
+    this.reconnectChannels();
+  }
+
+  setGeneratorOutputChannel(outputChannel: number): void {
+    this.generatorOutputChannel = outputChannel;
     this.reconnectChannels();
   }
 
@@ -280,6 +310,17 @@ export class AudioEngine {
     }
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
+    }
+
+    // Configure multi-channel hardware output if supported by the audio interface
+    const maxOut = Math.min(32, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
+    this.availableOutputChannels = maxOut;
+    try {
+      this.audioContext.destination.channelCount = maxOut;
+      this.audioContext.destination.channelCountMode = 'explicit';
+      this.audioContext.destination.channelInterpretation = 'discrete';
+    } catch {
+      // Fallback to default stereo destination if browser disallows explicit channelCount
     }
 
     if (this.audioContext.sampleRate !== this.measurementConfig.sampleRate) {
@@ -299,8 +340,14 @@ export class AudioEngine {
     });
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
-    this.availableChannels = Math.max(2, this.sourceNode.channelCount || 2);
+    const trackSettings = this.mediaStream.getAudioTracks()[0]?.getSettings?.();
+    this.availableChannels = Math.max(
+      2,
+      trackSettings?.channelCount || this.sourceNode.channelCount || 2
+    );
     this.splitterNode = this.audioContext.createChannelSplitter(this.availableChannels);
+    this.outputMergerNode = this.audioContext.createChannelMerger(this.availableOutputChannels);
+    this.outputMergerNode.connect(this.audioContext.destination);
 
     this.captureWorkletNode = new AudioWorkletNode(
       this.audioContext,
@@ -311,6 +358,11 @@ export class AudioEngine {
         outputChannelCount: [1],
       }
     );
+
+    this.captureWorkletNode.port.postMessage({
+      type: 'update-generator-config',
+      config: this.generatorConfig,
+    });
 
     if (
       this.ringBufferStorage &&
@@ -339,12 +391,36 @@ export class AudioEngine {
   private reconnectChannels(): void {
     if (!this.splitterNode || !this.captureWorkletNode) return;
     this.splitterNode.disconnect();
+    this.captureWorkletNode.disconnect();
 
-    const mCh = Math.min(this.measurementChannel, this.availableChannels - 1);
-    const rCh = Math.min(this.referenceChannel, this.availableChannels - 1);
-
+    const mCh = Math.max(0, Math.min(this.measurementChannel, this.availableChannels - 1));
     this.splitterNode.connect(this.captureWorkletNode, mCh, 0);
-    this.splitterNode.connect(this.captureWorkletNode, rCh, 1);
+
+    const useInternalGenAsRef = this.referenceChannel < 0;
+    this.captureWorkletNode.port.postMessage({
+      type: 'set-ref-loopback',
+      useInternalGenAsRef,
+    });
+    if (!useInternalGenAsRef) {
+      const rCh = Math.max(0, Math.min(this.referenceChannel, this.availableChannels - 1));
+      this.splitterNode.connect(this.captureWorkletNode, rCh, 1);
+    }
+
+    if (this.outputMergerNode && this.generatorOutputChannel !== -2) {
+      if (this.generatorOutputChannel === -1) {
+        // Stereo Ch 1 + Ch 2
+        this.captureWorkletNode.connect(this.outputMergerNode, 0, 0);
+        if (this.availableOutputChannels > 1) {
+          this.captureWorkletNode.connect(this.outputMergerNode, 0, 1);
+        }
+      } else {
+        const outCh = Math.max(
+          0,
+          Math.min(this.generatorOutputChannel, this.availableOutputChannels - 1)
+        );
+        this.captureWorkletNode.connect(this.outputMergerNode, 0, outCh);
+      }
+    }
   }
 
   private stopHardwareStream(): void {
@@ -359,6 +435,10 @@ export class AudioEngine {
     if (this.captureWorkletNode) {
       this.captureWorkletNode.disconnect();
       this.captureWorkletNode = null;
+    }
+    if (this.outputMergerNode) {
+      this.outputMergerNode.disconnect();
+      this.outputMergerNode = null;
     }
     if (this.mediaStream) {
       for (const track of this.mediaStream.getTracks()) {

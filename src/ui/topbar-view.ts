@@ -19,7 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, nothing, TemplateResult } from 'lit';
+import { html, TemplateResult } from 'lit';
 import { AudioDeviceOption } from '../audio/audio-engine.js';
 import { DelayEstimate } from '../dsp/deconvolution.js';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
@@ -42,6 +42,11 @@ export interface TopbarViewProps {
   readonly simulatorPreset: SimulatorPresetId;
   readonly audioDevices: readonly AudioDeviceOption[];
   readonly selectedDeviceId: string;
+  readonly availableChannels: number;
+  readonly availableOutputChannels: number;
+  readonly measurementChannel: number;
+  readonly referenceChannel: number;
+  readonly generatorOutputChannel: number;
   readonly genConfig: SignalGeneratorConfig;
   readonly isPaused: boolean;
   readonly splWeighting: WeightingCurve;
@@ -52,8 +57,11 @@ export interface TopbarViewProps {
   readonly onInputModeChange: (e: Event) => void;
   readonly onSimulatorPresetChange: (e: Event) => void;
   readonly onDeviceChange: (deviceId: string) => void;
+  readonly onChannelRoutingChange: (measCh: number, refCh: number) => void;
+  readonly onGeneratorOutputChannelChange: (outCh: number) => void;
   readonly onToggleGenerator: () => void;
   readonly onGeneratorTypeChange: (type: GeneratorSignalType) => void;
+  readonly onGeneratorLevelChange: (levelDbFs: number) => void;
   readonly onFindAndApplyDelay: () => void;
   readonly onCaptureTrace: () => void;
   readonly onTogglePause: () => void;
@@ -66,6 +74,9 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
   const currentSpl = levels ? levels.levelsDb[props.splWeighting][props.splTime] : -40.0;
   const currentLeq = levels ? levels.levelsDb[props.splWeighting].Leq : -40.0;
   const currentPeak = levels ? levels.peaksDb[props.splWeighting] : -40.0;
+
+  const inputChannelIndices = Array.from({ length: props.availableChannels }, (_, i) => i);
+  const outputChannelIndices = Array.from({ length: props.availableOutputChannels }, (_, i) => i);
 
   return html`
     <header class="topbar">
@@ -85,7 +96,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         </select>
       </div>
 
-      <!-- Input Mode & Built-in Demo Simulator Preset Selector -->
+      <!-- Input Mode & Built-in Demo Simulator / Hardware Routing Selector -->
       <div class="toolbar-group">
         <span class="toolbar-label">Input</span>
         <select
@@ -114,6 +125,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
           : html`
               <select
                 aria-label="Audio Device"
+                data-testid="select-audio-device"
                 .value=${props.selectedDeviceId}
                 @change=${(e: Event) =>
                   props.onDeviceChange((e.target as HTMLSelectElement).value)}
@@ -123,15 +135,58 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
                   (d) => html`<option value=${d.deviceId}>${d.label}</option>`
                 )}
               </select>
+              <span class="toolbar-label" title="Measurement Microphone Input Channel">M:</span>
+              <select
+                aria-label="Measurement Input Channel"
+                data-testid="select-meas-channel"
+                .value=${String(props.measurementChannel)}
+                @change=${(e: Event) =>
+                  props.onChannelRoutingChange(
+                    Number((e.target as HTMLSelectElement).value),
+                    props.referenceChannel
+                  )}
+              >
+                ${inputChannelIndices.map(
+                  (ch) =>
+                    html`<option value=${String(ch)} ?selected=${ch === props.measurementChannel}>
+                      In Ch ${ch + 1}
+                    </option>`
+                )}
+              </select>
+              <span
+                class="toolbar-label"
+                title="Reference Timing Channel (Physical Loopback Input or Internal Signal Generator)"
+                >Ref:</span
+              >
+              <select
+                aria-label="Reference Channel"
+                data-testid="select-ref-channel"
+                .value=${String(props.referenceChannel)}
+                @change=${(e: Event) =>
+                  props.onChannelRoutingChange(
+                    props.measurementChannel,
+                    Number((e.target as HTMLSelectElement).value)
+                  )}
+              >
+                <option value="-1" ?selected=${props.referenceChannel === -1}>
+                  Internal Gen
+                </option>
+                ${inputChannelIndices.map(
+                  (ch) =>
+                    html`<option value=${String(ch)} ?selected=${ch === props.referenceChannel}>
+                      In Ch ${ch + 1} (Loopback)
+                    </option>`
+                )}
+              </select>
             `}
       </div>
 
-      <!-- Signal Generator Controls -->
+      <!-- Signal Generator Controls & Hardware Output Routing -->
       <div class="toolbar-group">
         <span class="toolbar-label">Gen</span>
         <button
           data-testid="btn-generator-toggle"
-          class=${props.genConfig.enabled ? 'btn-accent' : ''}
+          class="btn-toggle-gen ${props.genConfig.enabled ? 'btn-accent' : ''}"
           @click=${props.onToggleGenerator}
         >
           ${props.genConfig.enabled ? 'ON' : 'OFF'}
@@ -149,18 +204,63 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
             ([k, label]) => html`<option value=${k}>${label}</option>`
           )}
         </select>
+        <select
+          aria-label="Generator Level (dBFS)"
+          data-testid="select-generator-level"
+          title="Generator Output Level (dBFS)"
+          .value=${String(props.genConfig.levelDbFs)}
+          @change=${(e: Event) =>
+            props.onGeneratorLevelChange(Number((e.target as HTMLSelectElement).value))}
+        >
+          <option value="-6">-6 dBFS</option>
+          <option value="-12">-12 dBFS</option>
+          <option value="-18">-18 dBFS</option>
+          <option value="-24">-24 dBFS</option>
+        </select>
+        ${props.audioInputMode === 'hardware'
+          ? html`
+              <span class="toolbar-label" title="Hardware Audio Output Channel for Signal Generator"
+                >Out:</span
+              >
+              <select
+                aria-label="Generator Output Channel"
+                data-testid="select-generator-output-channel"
+                .value=${String(props.generatorOutputChannel)}
+                @change=${(e: Event) =>
+                  props.onGeneratorOutputChannelChange(
+                    Number((e.target as HTMLSelectElement).value)
+                  )}
+              >
+                <option value="-1" ?selected=${props.generatorOutputChannel === -1}>
+                  Out Ch 1+2
+                </option>
+                ${outputChannelIndices.map(
+                  (ch) =>
+                    html`<option
+                      value=${String(ch)}
+                      ?selected=${ch === props.generatorOutputChannel}
+                    >
+                      Out Ch ${ch + 1}
+                    </option>`
+                )}
+                <option value="-2" ?selected=${props.generatorOutputChannel === -2}>
+                  Mute Out
+                </option>
+              </select>
+            `
+          : ''}
       </div>
 
       <!-- Auto Delay Finder & Capture Actions -->
       <div class="toolbar-group">
-        <span class="toolbar-label" data-testid="delay-estimate-readout">
-          Est Delay:
-          <strong data-testid="estimated-delay-ms"
+        <span class="toolbar-label delay-readout" data-testid="delay-estimate-readout">
+          <span>Est Delay:</span>
+          <strong class="delay-value" data-testid="estimated-delay-ms"
             >${delayEst ? `${delayEst.delayMs.toFixed(2)} ms` : '—'}</strong
           >
-          ${delayEst && delayEst.polarity < 0
-            ? html`<span style="color:#f43f5e">(−POL)</span>`
-            : nothing}
+          <span class="pol-badge ${delayEst && delayEst.polarity < 0 ? '' : 'hidden'}"
+            >(−POL)</span
+          >
         </span>
         <button
           class="btn-primary"
@@ -179,7 +279,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         </button>
         <button
           data-testid="btn-pause"
-          class=${props.isPaused ? 'btn-active' : ''}
+          class="btn-toggle-pause ${props.isPaused ? 'btn-active' : ''}"
           @click=${props.onTogglePause}
         >
           ${props.isPaused ? 'Resume' : 'Pause'}
@@ -215,8 +315,8 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
           ${currentSpl.toFixed(1)} dB${props.splWeighting}
         </div>
         <div class="spl-sub-value">
-          <div>Leq: <strong>${currentLeq.toFixed(1)}</strong></div>
-          <div>Pk: <strong>${currentPeak.toFixed(1)}</strong></div>
+          <div class="spl-sub-row"><span>Leq:</span><strong>${currentLeq.toFixed(1)}</strong></div>
+          <div class="spl-sub-row"><span>Pk:</span><strong>${currentPeak.toFixed(1)}</strong></div>
         </div>
       </div>
     </header>

@@ -69,6 +69,8 @@ export const appShellStyles = css`
     border-radius: 6px;
     padding: 4px 8px;
     font-size: 12px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .toolbar-label {
@@ -76,6 +78,45 @@ export const appShellStyles = css`
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .btn-toggle-gen {
+    width: 46px;
+    text-align: center;
+  }
+
+  .btn-toggle-pause {
+    width: 68px;
+    text-align: center;
+  }
+
+  .delay-readout {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: 174px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .delay-value {
+    display: inline-block;
+    width: 68px;
+    text-align: right;
+    color: #e2e8f0;
+  }
+
+  .pol-badge {
+    display: inline-block;
+    width: 38px;
+    text-align: center;
+    color: #f43f5e;
+    font-weight: 700;
+  }
+
+  .pol-badge.hidden {
+    visibility: hidden;
   }
 
   select,
@@ -133,19 +174,29 @@ export const appShellStyles = css`
     align-items: center;
     gap: 10px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
   }
 
   .spl-main-value {
     font-size: 16px;
     font-weight: 700;
     color: #38bdf8;
-    min-width: 90px;
+    width: 102px;
     text-align: right;
+    white-space: nowrap;
   }
 
   .spl-sub-value {
     font-size: 11px;
     color: #cbd5e1;
+    width: 84px;
+    white-space: nowrap;
+  }
+
+  .spl-sub-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
   }
 
   /* Main Workspace */

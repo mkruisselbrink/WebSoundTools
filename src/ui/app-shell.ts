@@ -102,6 +102,21 @@ export class WebSoundMeterApp extends LitElement {
   private selectedDeviceId: string = '';
 
   @state()
+  private availableChannels: number = 2;
+
+  @state()
+  private availableOutputChannels: number = 2;
+
+  @state()
+  private measurementChannel: number = 0;
+
+  @state()
+  private referenceChannel: number = 1;
+
+  @state()
+  private generatorOutputChannel: number = -1;
+
+  @state()
   private measConfig: MeasurementPipelineConfig = { ...DEFAULT_MEASUREMENT_CONFIG };
 
   @state()
@@ -216,10 +231,21 @@ export class WebSoundMeterApp extends LitElement {
     if (!this.engine) return;
     const mode = (e.target as HTMLSelectElement).value as InputSourceMode;
     this.audioInputMode = mode;
-    if (mode === 'hardware') {
-      this.audioDevices = await this.engine.listInputDevices();
+    try {
+      await this.engine.setInputMode(
+        mode,
+        this.selectedDeviceId,
+        this.measurementChannel,
+        this.referenceChannel
+      );
+      if (mode === 'hardware') {
+        this.audioDevices = await this.engine.listInputDevices();
+        this.availableChannels = this.engine.getAvailableChannels();
+        this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+      }
+    } catch {
+      this.audioInputMode = this.engine.getInputMode();
     }
-    await this.engine.setInputMode(mode, this.selectedDeviceId);
   };
 
   private handleSimulatorPresetChange = (e: Event): void => {
@@ -487,6 +513,11 @@ export class WebSoundMeterApp extends LitElement {
         simulatorPreset: this.simulatorPreset,
         audioDevices: this.audioDevices,
         selectedDeviceId: this.selectedDeviceId,
+        availableChannels: this.availableChannels,
+        availableOutputChannels: this.availableOutputChannels,
+        measurementChannel: this.measurementChannel,
+        referenceChannel: this.referenceChannel,
+        generatorOutputChannel: this.generatorOutputChannel,
         genConfig: this.genConfig,
         isPaused: this.isPaused,
         splWeighting: this.splWeighting,
@@ -496,9 +527,30 @@ export class WebSoundMeterApp extends LitElement {
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
         onInputModeChange: this.handleInputModeChange,
         onSimulatorPresetChange: this.handleSimulatorPresetChange,
-        onDeviceChange: (deviceId) => {
+        onDeviceChange: async (deviceId) => {
           this.selectedDeviceId = deviceId;
-          void this.engine?.setInputMode('hardware', this.selectedDeviceId);
+          if (!this.engine) return;
+          try {
+            await this.engine.setInputMode(
+              'hardware',
+              this.selectedDeviceId,
+              this.measurementChannel,
+              this.referenceChannel
+            );
+            this.availableChannels = this.engine.getAvailableChannels();
+            this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+          } catch {
+            this.audioInputMode = this.engine.getInputMode();
+          }
+        },
+        onChannelRoutingChange: (measCh, refCh) => {
+          this.measurementChannel = measCh;
+          this.referenceChannel = refCh;
+          this.engine?.setChannelRouting(measCh, refCh, this.generatorOutputChannel);
+        },
+        onGeneratorOutputChannelChange: (outCh) => {
+          this.generatorOutputChannel = outCh;
+          this.engine?.setGeneratorOutputChannel(outCh);
         },
         onToggleGenerator: () => {
           if (!this.engine) return;
@@ -508,6 +560,11 @@ export class WebSoundMeterApp extends LitElement {
         onGeneratorTypeChange: (type: GeneratorSignalType) => {
           if (!this.engine) return;
           this.engine.updateGeneratorConfig({ type });
+          this.genConfig = { ...this.engine.getGeneratorConfig() };
+        },
+        onGeneratorLevelChange: (levelDbFs: number) => {
+          if (!this.engine) return;
+          this.engine.updateGeneratorConfig({ levelDbFs });
           this.genConfig = { ...this.engine.getGeneratorConfig() };
         },
         onFindAndApplyDelay: () => this.engine?.findAndApplyDelay(),

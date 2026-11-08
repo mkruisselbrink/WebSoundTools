@@ -24,11 +24,20 @@
  * and writes them into a lock-free DualChannelRingBuffer (or posts chunks if fallback).
  */
 
+import {
+  SignalGenerator,
+  SignalGeneratorConfig,
+} from '../../dsp/signal-generator.js';
 import { DualChannelRingBuffer, RingBufferStorage } from '../ring-buffer.js';
+
+declare const sampleRate: number;
 
 class CaptureTapProcessor extends AudioWorkletProcessor {
   private ringBuffer: DualChannelRingBuffer | null = null;
+  private readonly generator: SignalGenerator;
+  private useInternalGenAsRef = false;
   private readonly zeroFallback = new Float32Array(128);
+  private readonly genScratch = new Float32Array(128);
   private readonly batchSize = 1024;
   private readonly batchM = new Float32Array(this.batchSize);
   private readonly batchR = new Float32Array(this.batchSize);
@@ -36,22 +45,43 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
+    const sr = typeof sampleRate === 'number' && sampleRate > 0 ? sampleRate : 48000;
+    this.generator = new SignalGenerator(sr);
+
     this.port.onmessage = (event: MessageEvent) => {
       const msg = event.data;
-      if (msg && msg.type === 'init-ring-buffer' && msg.storage) {
+      if (!msg) return;
+      if (msg.type === 'init-ring-buffer' && msg.storage) {
         this.ringBuffer = new DualChannelRingBuffer(msg.storage as RingBufferStorage);
+      } else if (msg.type === 'update-generator-config' && msg.config) {
+        this.generator.updateConfig(msg.config as Partial<SignalGeneratorConfig>);
+      } else if (msg.type === 'set-ref-loopback') {
+        this.useInternalGenAsRef = Boolean(msg.useInternalGenAsRef);
       }
     };
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const inputM = inputs[0]?.[0] ?? this.zeroFallback;
-    const inputR = inputs[1]?.[0] ?? inputs[0]?.[1] ?? this.zeroFallback;
+    const frameLen = inputM.length || 128;
 
-    // Pass-through generator signal to output if connected
-    if (outputs[0] && outputs[0][0] && inputs[1]?.[0]) {
-      outputs[0][0].set(inputs[1][0]);
+    const genOut = outputs[0]?.[0];
+    const genBuf =
+      genOut && genOut.length === frameLen
+        ? genOut
+        : this.genScratch.length >= frameLen
+          ? this.genScratch.subarray(0, frameLen)
+          : new Float32Array(frameLen);
+
+    // Synthesize test signal into output buffer (0 when generator is disabled)
+    this.generator.fillBuffer(genBuf, frameLen);
+    if (genOut && genBuf !== genOut) {
+      genOut.set(genBuf);
     }
+
+    const inputR = this.useInternalGenAsRef
+      ? genBuf
+      : (inputs[1]?.[0] ?? inputs[0]?.[1] ?? this.zeroFallback);
 
     if (this.ringBuffer) {
       this.ringBuffer.write(inputM, inputR, inputM.length);
