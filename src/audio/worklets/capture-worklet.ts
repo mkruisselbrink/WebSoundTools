@@ -8,6 +8,10 @@ import { DualChannelRingBuffer, RingBufferStorage } from '../ring-buffer.js';
 class CaptureTapProcessor extends AudioWorkletProcessor {
   private ringBuffer: DualChannelRingBuffer | null = null;
   private readonly zeroFallback = new Float32Array(128);
+  private readonly batchSize = 1024;
+  private readonly batchM = new Float32Array(this.batchSize);
+  private readonly batchR = new Float32Array(this.batchSize);
+  private batchOffset = 0;
 
   constructor() {
     super();
@@ -31,11 +35,26 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
     if (this.ringBuffer) {
       this.ringBuffer.write(inputM, inputR, inputM.length);
     } else if (inputM.length > 0) {
-      this.port.postMessage({
-        type: 'audio-chunk',
-        m: inputM.slice(),
-        r: inputR.slice(),
-      });
+      const len = inputM.length;
+      if (this.batchOffset + len > this.batchSize) {
+        this.port.postMessage({
+          type: 'audio-chunk',
+          m: this.batchM.slice(0, this.batchOffset),
+          r: this.batchR.slice(0, this.batchOffset),
+        });
+        this.batchOffset = 0;
+      }
+      this.batchM.set(inputM, this.batchOffset);
+      this.batchR.set(inputR, this.batchOffset);
+      this.batchOffset += len;
+      if (this.batchOffset >= this.batchSize) {
+        this.port.postMessage({
+          type: 'audio-chunk',
+          m: this.batchM.slice(0, this.batchOffset),
+          r: this.batchR.slice(0, this.batchOffset),
+        });
+        this.batchOffset = 0;
+      }
     }
 
     return true;

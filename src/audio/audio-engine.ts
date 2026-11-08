@@ -224,8 +224,13 @@ export class AudioEngine {
       this.selectedDeviceId = deviceId;
     }
 
-    await this.startHardwareStream();
-    this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
+    try {
+      await this.startHardwareStream();
+    } catch (err) {
+      this.inputMode = 'simulator';
+      this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
+      throw err;
+    }
   }
 
   getAvailableChannels(): number {
@@ -255,6 +260,11 @@ export class AudioEngine {
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
+
+    if (this.audioContext.sampleRate !== this.measurementConfig.sampleRate) {
+      this.updateMeasurementConfig({ sampleRate: this.audioContext.sampleRate });
+    }
+    this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
 
     this.mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -335,6 +345,20 @@ export class AudioEngine {
       }
       this.mediaStream = null;
     }
+  }
+
+  /**
+   * Stops hardware streams, closes the Web Audio context, and terminates the background DSP worker.
+   */
+  dispose(): void {
+    this.stopHardwareStream();
+    if (this.audioContext) {
+      void this.audioContext.close();
+      this.audioContext = null;
+    }
+    this.worker.terminate();
+    this.frameListeners.clear();
+    this.configListeners.clear();
   }
 }
 

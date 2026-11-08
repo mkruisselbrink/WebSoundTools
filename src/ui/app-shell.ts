@@ -429,6 +429,7 @@ export class WebSoundMeterApp extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
+    this.engine?.dispose();
   }
 
   private setLayoutPreset(preset: LayoutPreset): void {

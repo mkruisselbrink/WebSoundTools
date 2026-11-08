@@ -56,32 +56,46 @@ const simMeasBuf = new Float32Array(simChunkSize);
 const hwReadBufM = new Float32Array(4096);
 const hwReadBufR = new Float32Array(4096);
 
+let lastTickTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
 function tick(): void {
   if (isPaused) {
+    lastTickTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
     return;
   }
 
-  if (inputMode === 'simulator') {
-    // Synthesize ~42.6 ms (2048 samples at 48 kHz) per tick
-    generator.fillBuffer(simRefBuf, simChunkSize);
-    simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
-    pipeline.writeSamples(simMeasBuf, simRefBuf, simChunkSize);
-  } else if (ringBuffer) {
-    let avail = ringBuffer.availableRead();
-    while (avail > 0) {
-      const toRead = Math.min(avail, hwReadBufM.length);
-      const readCount = ringBuffer.read(hwReadBufM, hwReadBufR, toRead);
-      if (readCount <= 0) break;
-      pipeline.writeSamples(hwReadBufM, hwReadBufR, readCount);
-      avail -= readCount;
-    }
-  }
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const dtSeconds = Math.max(0.005, Math.min(0.25, (now - lastTickTime) / 1000.0));
+  lastTickTime = now;
 
-  const snapshot = pipeline.computeTransform(0.04);
-  self.postMessage({
-    type: 'measurement-frame',
-    sourceData: snapshot,
-  });
+  try {
+    if (inputMode === 'simulator') {
+      // Synthesize ~42.6 ms (2048 samples at 48 kHz) per tick
+      generator.fillBuffer(simRefBuf, simChunkSize);
+      simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
+      pipeline.writeSamples(simMeasBuf, simRefBuf, simChunkSize);
+    } else if (ringBuffer) {
+      let avail = ringBuffer.availableRead();
+      while (avail > 0) {
+        const toRead = Math.min(avail, hwReadBufM.length);
+        const readCount = ringBuffer.read(hwReadBufM, hwReadBufR, toRead);
+        if (readCount <= 0) break;
+        pipeline.writeSamples(hwReadBufM, hwReadBufR, readCount);
+        avail -= readCount;
+      }
+    }
+
+    const snapshot = pipeline.computeTransform(dtSeconds);
+    self.postMessage({
+      type: 'measurement-frame',
+      sourceData: snapshot,
+    });
+  } catch (err) {
+    self.postMessage({
+      type: 'worker-error',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 const intervalId = setInterval(tick, 40); // 25 FPS DSP transform rate
@@ -90,93 +104,108 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
   const msg = event.data;
   if (!msg) return;
 
-  switch (msg.type) {
-    case 'init':
-      sampleRate = msg.sampleRate || 48000;
-      pipeline.updateConfig({ sampleRate });
-      generator.setSampleRate(sampleRate);
-      simulatorRig.setSampleRate(sampleRate);
-      if (msg.ringBufferStorage) {
-        ringBuffer = new DualChannelRingBuffer(msg.ringBufferStorage);
+  try {
+    switch (msg.type) {
+      case 'init':
+        sampleRate = msg.sampleRate || 48000;
+        pipeline.updateConfig({ sampleRate });
+        generator.setSampleRate(sampleRate);
+        simulatorRig.setSampleRate(sampleRate);
+        if (msg.ringBufferStorage) {
+          ringBuffer = new DualChannelRingBuffer(msg.ringBufferStorage);
+        }
+        break;
+
+      case 'set-input-mode':
+        if (msg.mode === 'hardware' && ringBuffer) {
+          ringBuffer.clear();
+        }
+        inputMode = msg.mode;
+        pipeline.resetAveraging();
+        break;
+
+      case 'set-simulator-preset':
+        simulatorRig.setConfig(msg.preset);
+        pipeline.resetAveraging();
+        self.postMessage({
+          type: 'simulator-config-updated',
+          config: simulatorRig.getConfig(),
+        });
+        break;
+
+      case 'update-measurement-config':
+        if (msg.config.sampleRate !== undefined && msg.config.sampleRate !== sampleRate) {
+          sampleRate = msg.config.sampleRate;
+          generator.setSampleRate(sampleRate);
+          simulatorRig.setSampleRate(sampleRate);
+        }
+        pipeline.updateConfig(msg.config);
+        self.postMessage({
+          type: 'measurement-config-updated',
+          config: pipeline.getConfig(),
+        });
+        break;
+
+      case 'update-generator-config':
+        generator.updateConfig(msg.config);
+        break;
+
+      case 'load-calibration': {
+        const curve = parseCalibrationFile(msg.text, msg.name);
+        pipeline.setCalibrationCurve(curve);
+        pipeline.updateConfig({ calibrationEnabled: curve.points.length > 0 });
+        self.postMessage({
+          type: 'calibration-loaded',
+          name: curve.name,
+          pointCount: curve.points.length,
+        });
+        break;
       }
-      break;
 
-    case 'set-input-mode':
-      inputMode = msg.mode;
-      pipeline.resetAveraging();
-      break;
+      case 'clear-calibration':
+        pipeline.setCalibrationCurve(null);
+        pipeline.updateConfig({ calibrationEnabled: false });
+        break;
 
-    case 'set-simulator-preset':
-      simulatorRig.setConfig(msg.preset);
-      pipeline.resetAveraging();
-      self.postMessage({
-        type: 'simulator-config-updated',
-        config: simulatorRig.getConfig(),
-      });
-      break;
-
-    case 'update-measurement-config':
-      pipeline.updateConfig(msg.config);
-      self.postMessage({
-        type: 'measurement-config-updated',
-        config: pipeline.getConfig(),
-      });
-      break;
-
-    case 'update-generator-config':
-      generator.updateConfig(msg.config);
-      break;
-
-    case 'load-calibration': {
-      const curve = parseCalibrationFile(msg.text, msg.name);
-      pipeline.setCalibrationCurve(curve);
-      pipeline.updateConfig({ calibrationEnabled: curve.points.length > 0 });
-      self.postMessage({
-        type: 'calibration-loaded',
-        name: curve.name,
-        pointCount: curve.points.length,
-      });
-      break;
-    }
-
-    case 'clear-calibration':
-      pipeline.setCalibrationCurve(null);
-      pipeline.updateConfig({ calibrationEnabled: false });
-      break;
-
-    case 'find-delay': {
-      const est = pipeline.findDelayNow();
-      self.postMessage({
-        type: 'delay-found',
-        estimate: est,
-      });
-      break;
-    }
-
-    case 'apply-estimated-delay': {
-      const est = pipeline.findDelayNow();
-      const roundedMs = Math.round(est.delayMs * 100) / 100;
-      pipeline.updateConfig({ delayMs: roundedMs });
-      self.postMessage({
-        type: 'measurement-config-updated',
-        config: pipeline.getConfig(),
-      });
-      break;
-    }
-
-    case 'reset-averaging':
-      pipeline.resetAveraging();
-      break;
-
-    case 'audio-chunk':
-      if (inputMode === 'hardware') {
-        pipeline.writeSamples(msg.m, msg.r, msg.m.length);
+      case 'find-delay': {
+        const est = pipeline.findDelayNow();
+        self.postMessage({
+          type: 'delay-found',
+          estimate: est,
+        });
+        break;
       }
-      break;
 
-    case 'pause':
-      isPaused = msg.paused;
-      break;
+      case 'apply-estimated-delay': {
+        const est = pipeline.findDelayNow();
+        const roundedMs = Math.round(est.delayMs * 100) / 100;
+        pipeline.updateConfig({ delayMs: roundedMs });
+        self.postMessage({
+          type: 'measurement-config-updated',
+          config: pipeline.getConfig(),
+        });
+        break;
+      }
+
+      case 'reset-averaging':
+        pipeline.resetAveraging();
+        break;
+
+      case 'audio-chunk':
+        if (inputMode === 'hardware') {
+          pipeline.writeSamples(msg.m, msg.r, msg.m.length);
+        }
+        break;
+
+      case 'pause':
+        isPaused = msg.paused;
+        break;
+    }
+  } catch (err) {
+    self.postMessage({
+      type: 'worker-error',
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 };
 
