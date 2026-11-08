@@ -169,8 +169,17 @@ export class WebSoundMeterApp extends LitElement {
   } | null = null;
 
   private keydownHandler = (e: KeyboardEvent) => {
-    const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    const target = (e.composedPath?.()[0] ?? e.target) as HTMLElement | undefined;
+    const tag = target?.tagName;
+    if (
+      tag === 'INPUT' ||
+      tag === 'SELECT' ||
+      tag === 'TEXTAREA' ||
+      target?.isContentEditable
+    ) {
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space' || e.key === 'c' || e.key === 'C') {
       e.preventDefault();
       this.captureCurrentTrace();
@@ -434,9 +443,12 @@ export class WebSoundMeterApp extends LitElement {
     if (id === 'live-measurement' && this.liveSource) {
       this.liveSource = { ...this.liveSource, visible };
     } else if (id.startsWith('stored-')) {
-      this.storedSources = this.storedSources.map((s) =>
-        s.id === id ? { ...s, visible } : s
-      );
+      this.storedSources = this.storedSources.map((s) => {
+        if (s.id !== id) return s;
+        const updated = { ...s, visible };
+        saveStoredTraceToDb(updated);
+        return updated;
+      });
     } else if (id.startsWith('eq-')) {
       this.eqSources = this.eqSources.map((s) =>
         s.id === id ? { ...s, visible } : s
@@ -465,9 +477,12 @@ export class WebSoundMeterApp extends LitElement {
       return renderStoredInspector(stored, {
         onDelete: (id) => this.deleteStoredSource(id),
         onUpdateStored: (id, partial) => {
-          this.storedSources = this.storedSources.map((s) =>
-            s.id === id ? { ...s, ...partial } : s
-          );
+          this.storedSources = this.storedSources.map((s) => {
+            if (s.id !== id) return s;
+            const updated = { ...s, ...partial };
+            saveStoredTraceToDb(updated);
+            return updated;
+          });
         },
       });
     }
