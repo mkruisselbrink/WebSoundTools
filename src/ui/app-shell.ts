@@ -135,6 +135,9 @@ export class WebSoundMeterApp extends LitElement {
   private liveSource: SourceData | null = null;
 
   @state()
+  private liveSourceVisible: boolean = true;
+
+  @state()
   private storedSources: SourceData[] = [];
 
   @state()
@@ -196,7 +199,9 @@ export class WebSoundMeterApp extends LitElement {
     this.genConfig = this.engine.getGeneratorConfig();
 
     this.engine.onFrame((live) => {
-      this.liveSource = live;
+      this.liveSource = this.liveSourceVisible
+        ? live
+        : { ...live, visible: false };
     });
     this.engine.onMeasurementConfigChange((cfg) => {
       this.measConfig = { ...cfg };
@@ -440,8 +445,11 @@ export class WebSoundMeterApp extends LitElement {
   };
 
   private toggleSourceVisibility(id: string, visible: boolean): void {
-    if (id === 'live-measurement' && this.liveSource) {
-      this.liveSource = { ...this.liveSource, visible };
+    if (id === 'live-measurement') {
+      this.liveSourceVisible = visible;
+      if (this.liveSource) {
+        this.liveSource = { ...this.liveSource, visible };
+      }
     } else if (id.startsWith('stored-')) {
       this.storedSources = this.storedSources.map((s) => {
         if (s.id !== id) return s;
