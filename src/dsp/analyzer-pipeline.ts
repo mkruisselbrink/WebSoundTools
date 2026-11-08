@@ -290,10 +290,12 @@ export class MeasurementPipeline {
       Math.pow(10.0, this.config.gainDb / 20.0) * (this.config.invertPolarity ? -1.0 : 1.0);
     const mask = this.bufferMask;
 
-    // Feed broadband meters with gain-adjusted Measurement and raw Reference
+    // Feed broadband meters with gain-adjusted (unweighted) Measurement and raw Reference
     for (let i = 0; i < length; i++) {
       const rawM = samplesM[i] * gainLinear;
       const rawR = samplesR[i];
+
+      this.meters.processSample(rawM, rawR);
 
       const filtM = this.preFilterM.processSample(rawM);
       const filtR = this.preFilterR.processSample(rawR);
@@ -303,7 +305,6 @@ export class MeasurementPipeline {
       this.writePtr = (this.writePtr + 1) & mask;
     }
 
-    this.meters.processBlock(samplesM, samplesR, length);
     this.totalWritten += length;
   }
 

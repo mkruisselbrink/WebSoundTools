@@ -81,4 +81,25 @@ describe('MeasurementPipeline End-to-End Integration', () => {
     expect(snapshot.levels).toBeDefined();
     expect(snapshot.levels!.levelsDb.A.Fast).toBeGreaterThan(50);
   });
+
+  it('applies gainDb to broadband SPL meters without double-weighting when inputFilter is active', () => {
+    const sampleRate = 48000;
+    const len = 24000; // 0.5 s of 100 Hz sine (where A-weighting is ~ -19.1 dB)
+    const sig = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      sig[i] = 0.5 * Math.sin((2 * Math.PI * 100 * i) / sampleRate);
+    }
+
+    const pipe0 = new MeasurementPipeline({ sampleRate, gainDb: 0, inputFilter: 'Z' });
+    pipe0.writeSamples(sig, sig);
+    const snap0 = pipe0.computeTransform();
+
+    const pipePlus6 = new MeasurementPipeline({ sampleRate, gainDb: 6.0, inputFilter: 'A' });
+    pipePlus6.writeSamples(sig, sig);
+    const snapPlus6 = pipePlus6.computeTransform();
+
+    // +6 dB gain should increase Z and A meter Leq by ~6.0 dB, and inputFilter='A' must not double-attenuate A meter
+    expect(snapPlus6.levels!.levelsDb.Z.Leq - snap0.levels!.levelsDb.Z.Leq).toBeCloseTo(6.0, 1);
+    expect(snapPlus6.levels!.levelsDb.A.Leq - snap0.levels!.levelsDb.A.Leq).toBeCloseTo(6.0, 1);
+  });
 });

@@ -263,13 +263,16 @@ export class BroadbandMeterBank {
     this.meterRef.reset();
   }
 
+  processSample(sampleM: number, sampleR: number): void {
+    this.meterZ.processSample(sampleM);
+    this.meterA.processSample(sampleM);
+    this.meterC.processSample(sampleM);
+    this.meterRef.processSample(sampleR);
+  }
+
   processBlock(samplesM: Float32Array, samplesR: Float32Array, length: number = samplesM.length): void {
     for (let i = 0; i < length; i++) {
-      const m = samplesM[i];
-      this.meterZ.processSample(m);
-      this.meterA.processSample(m);
-      this.meterC.processSample(m);
-      this.meterRef.processSample(samplesR[i]);
+      this.processSample(samplesM[i], samplesR[i]);
     }
   }
 
