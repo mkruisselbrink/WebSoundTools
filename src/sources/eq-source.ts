@@ -41,6 +41,59 @@ export function createDefaultEqBands(): BiquadSpec[] {
   ];
 }
 
+interface CachedBandCascadeCurve {
+  readonly sampleRate: number;
+  readonly binCount: number;
+  readonly eqMag: Float32Array;
+  readonly eqPhRe: Float32Array;
+  readonly eqPhIm: Float32Array;
+}
+
+const bandCascadeCache = new WeakMap<BiquadSpec[], CachedBandCascadeCurve>();
+
+function getOrComputeBandCascadeCurve(
+  bands: BiquadSpec[],
+  frequencies: Float32Array,
+  sampleRate: number
+): CachedBandCascadeCurve {
+  const B = frequencies.length;
+  const cached = bandCascadeCache.get(bands);
+  if (cached && cached.sampleRate === sampleRate && cached.binCount === B) {
+    return cached;
+  }
+
+  const eqMag = new Float32Array(B);
+  const eqPhRe = new Float32Array(B);
+  const eqPhIm = new Float32Array(B);
+
+  const cascade: BiquadCoefficients[] = bands
+    .filter((b) => b.enabled !== false)
+    .map((b) => computeBiquadCoefficients(b, sampleRate));
+
+  for (let i = 0; i < B; i++) {
+    const f = frequencies[i];
+    const eqResp =
+      f > 0
+        ? evaluateBiquadCascadeResponse(cascade, f, sampleRate)
+        : { re: 1.0, im: 0.0, magnitude: 1.0, phaseRad: 0.0 };
+
+    const mag = eqResp.magnitude;
+    eqMag[i] = mag;
+    eqPhRe[i] = mag > 1e-12 ? eqResp.re / mag : 1.0;
+    eqPhIm[i] = mag > 1e-12 ? eqResp.im / mag : 0.0;
+  }
+
+  const entry: CachedBandCascadeCurve = {
+    sampleRate,
+    binCount: B,
+    eqMag,
+    eqPhRe,
+    eqPhIm,
+  };
+  bandCascadeCache.set(bands, entry);
+  return entry;
+}
+
 export function computeEqualizerSourceData(
   config: EqualizerSourceConfig,
   targetSource?: SourceData | null,
@@ -57,35 +110,30 @@ export function computeEqualizerSourceData(
   }
   const timeData = createEmptyTimeDomainData(T, sr);
 
-  const cascade: BiquadCoefficients[] = config.bands
-    .filter((b) => b.enabled !== false)
-    .map((b) => computeBiquadCoefficients(b, sr));
+  const { eqMag, eqPhRe, eqPhIm } = getOrComputeBandCascadeCurve(
+    config.bands,
+    freqData.frequency,
+    sr
+  );
 
-  for (let i = 0; i < B; i++) {
-    const f = freqData.frequency[i];
-    const eqResp =
-      f > 0
-        ? evaluateBiquadCascadeResponse(cascade, f, sr)
-        : { re: 1.0, im: 0.0, magnitude: 1.0, phaseRad: 0.0 };
-
-    const eqMag = eqResp.magnitude;
-    const eqPhRe = eqMag > 1e-12 ? eqResp.re / eqMag : 1.0;
-    const eqPhIm = eqMag > 1e-12 ? eqResp.im / eqMag : 0.0;
-
-    if (targetSource) {
+  if (targetSource) {
+    for (let i = 0; i < B; i++) {
+      const mag = eqMag[i];
+      const phRe = eqPhRe[i];
+      const phIm = eqPhIm[i];
       const base = getEffectiveBinResponse(targetSource, i);
-      freqData.module[i] = base.module * eqMag;
-      freqData.magnitude[i] = base.magnitude * eqMag;
-      freqData.phaseReal[i] = base.phaseRe * eqPhRe - base.phaseIm * eqPhIm;
-      freqData.phaseImag[i] = base.phaseRe * eqPhIm + base.phaseIm * eqPhRe;
+      freqData.module[i] = base.module * mag;
+      freqData.magnitude[i] = base.magnitude * mag;
+      freqData.phaseReal[i] = base.phaseRe * phRe - base.phaseIm * phIm;
+      freqData.phaseImag[i] = base.phaseRe * phIm + base.phaseIm * phRe;
       freqData.coherence[i] = base.coherence;
-    } else {
-      freqData.module[i] = eqMag;
-      freqData.magnitude[i] = eqMag;
-      freqData.phaseReal[i] = eqPhRe;
-      freqData.phaseImag[i] = eqPhIm;
-      freqData.coherence[i] = 1.0;
     }
+  } else {
+    freqData.module.set(eqMag);
+    freqData.magnitude.set(eqMag);
+    freqData.phaseReal.set(eqPhRe);
+    freqData.phaseImag.set(eqPhIm);
+    freqData.coherence.fill(1.0);
   }
 
   return {

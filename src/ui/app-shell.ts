@@ -492,7 +492,11 @@ export class WebSoundMeterApp extends LitElement {
   }
 
   private addVirtualEqSource(): void {
-    const id = `eq-${Date.now()}`;
+    const uid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().slice(0, 8)
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const id = `eq-${uid}`;
     const newEq: EqualizerSourceConfig = {
       id,
       name: `Virtual EQ #${this.eqSources.length + 1}`,
@@ -524,7 +528,11 @@ export class WebSoundMeterApp extends LitElement {
   }
 
   private addUnionSource(): void {
-    const id = `union-${Date.now()}`;
+    const uid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().slice(0, 8)
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const id = `union-${uid}`;
     const allIds = ['live-measurement', ...this.storedSources.map((s) => s.id)];
     const newUnion: UnionSourceConfig = {
       id,
@@ -553,28 +561,80 @@ export class WebSoundMeterApp extends LitElement {
     });
   }
 
+  private eqEvalCache = new Map<
+    string,
+    { cfg: EqualizerSourceConfig; target: SourceData | null; data: SourceData }
+  >();
+  private unionEvalCache = new Map<
+    string,
+    { cfg: UnionSourceConfig; inputs: SourceData[]; data: SourceData }
+  >();
+  private lastAllSourcesRef: {
+    live: SourceData | null;
+    stored: SourceData[];
+    eq: EqualizerSourceConfig[];
+    union: UnionSourceConfig[];
+    result: SourceData[];
+  } | null = null;
+
   private computeAllSources(): SourceData[] {
+    if (
+      this.lastAllSourcesRef &&
+      this.lastAllSourcesRef.live === this.liveSource &&
+      this.lastAllSourcesRef.stored === this.storedSources &&
+      this.lastAllSourcesRef.eq === this.eqSources &&
+      this.lastAllSourcesRef.union === this.unionSources
+    ) {
+      return this.lastAllSourcesRef.result;
+    }
+
     const list: SourceData[] = [];
     if (this.liveSource) {
       list.push(this.liveSource);
     }
     list.push(...this.storedSources);
 
-    // Evaluate Virtual EQ sources
+    // Evaluate Virtual EQ sources (memoized by config + target reference)
     for (const eqCfg of this.eqSources) {
       const target = eqCfg.targetSourceId
         ? list.find((s) => s.id === eqCfg.targetSourceId) ?? null
         : null;
-      list.push(computeEqualizerSourceData(eqCfg, target));
+      const cached = this.eqEvalCache.get(eqCfg.id);
+      if (cached && cached.cfg === eqCfg && cached.target === target) {
+        list.push(cached.data);
+      } else {
+        const data = computeEqualizerSourceData(eqCfg, target);
+        this.eqEvalCache.set(eqCfg.id, { cfg: eqCfg, target, data });
+        list.push(data);
+      }
     }
 
-    // Evaluate Math / Union sources
+    // Evaluate Math / Union sources (memoized by config + input references)
     for (const uCfg of this.unionSources) {
       const inputs = uCfg.sourceIds
         .map((id) => list.find((s) => s.id === id))
         .filter((s): s is SourceData => Boolean(s));
-      list.push(computeUnionSourceData(uCfg, inputs));
+      const cached = this.unionEvalCache.get(uCfg.id);
+      const inputsMatch =
+        cached &&
+        cached.inputs.length === inputs.length &&
+        cached.inputs.every((inp, idx) => inp === inputs[idx]);
+      if (cached && cached.cfg === uCfg && inputsMatch) {
+        list.push(cached.data);
+      } else {
+        const data = computeUnionSourceData(uCfg, inputs);
+        this.unionEvalCache.set(uCfg.id, { cfg: uCfg, inputs, data });
+        list.push(data);
+      }
     }
+
+    this.lastAllSourcesRef = {
+      live: this.liveSource,
+      stored: this.storedSources,
+      eq: this.eqSources,
+      union: this.unionSources,
+      result: list,
+    };
 
     return list;
   }
