@@ -286,6 +286,16 @@ export class SyntheticAcousticRig {
 
     const reflections = cfg.reflections;
     const numRefl = reflections.length;
+    const tapDelays = new Float32Array(numRefl);
+    const tapSubDelays = new Float32Array(numRefl);
+    const tapGains = new Float32Array(numRefl);
+    for (let t = 0; t < numRefl; t++) {
+      const tap = reflections[t];
+      const extraDelay = (tap.delayMs * sr) / 1000.0;
+      tapDelays[t] = baseDelaySamples + extraDelay;
+      tapSubDelays[t] = subDelaySamples + extraDelay;
+      tapGains[t] = Math.pow(10.0, tap.gainDb / 20.0) * (tap.polarity ?? 1);
+    }
 
     for (let i = 0; i < length; i++) {
       const r = inputR[i];
@@ -307,13 +317,14 @@ export class SyntheticAcousticRig {
         directSample = this.mainDelayLine.readDelayed(baseDelaySamples);
       }
 
-      // Add early reflections from the main delay line
+      // Add early reflections from the acoustic output (including sub when crossover is active)
       let totalSample = directSample;
       for (let t = 0; t < numRefl; t++) {
-        const tap = reflections[t];
-        const tapDelaySamples = baseDelaySamples + (tap.delayMs * sr) / 1000.0;
-        const tapGain = Math.pow(10.0, tap.gainDb / 20.0) * (tap.polarity ?? 1);
-        totalSample += this.mainDelayLine.readDelayed(tapDelaySamples) * tapGain;
+        const reflSample = hasXover
+          ? this.mainDelayLine.readDelayed(tapDelays[t]) +
+            this.subDelayLine.readDelayed(tapSubDelays[t])
+          : this.mainDelayLine.readDelayed(tapDelays[t]);
+        totalSample += reflSample * tapGains[t];
       }
 
       // Mix uncorrelated ambient room/crowd noise
