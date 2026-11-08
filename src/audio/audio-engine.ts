@@ -173,6 +173,9 @@ export class AudioEngine {
   setPaused(paused: boolean): void {
     this.isPaused = paused;
     this.sendToWorker({ type: 'pause', paused });
+    if (this.captureWorkletNode) {
+      this.captureWorkletNode.port.postMessage({ type: 'pause', paused });
+    }
   }
 
   setSimulatorPreset(presetId: SimulatorPresetId): void {
@@ -363,6 +366,12 @@ export class AudioEngine {
       type: 'update-generator-config',
       config: this.generatorConfig,
     });
+    if (this.isPaused) {
+      this.captureWorkletNode.port.postMessage({
+        type: 'pause',
+        paused: true,
+      });
+    }
 
     if (
       this.ringBufferStorage &&

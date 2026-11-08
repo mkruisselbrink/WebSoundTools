@@ -36,6 +36,7 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
   private ringBuffer: DualChannelRingBuffer | null = null;
   private readonly generator: SignalGenerator;
   private useInternalGenAsRef = false;
+  private isPaused = false;
   private readonly zeroFallback = new Float32Array(128);
   private readonly genScratch = new Float32Array(128);
   private readonly batchSize = 1024;
@@ -57,11 +58,22 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
         this.generator.updateConfig(msg.config as Partial<SignalGeneratorConfig>);
       } else if (msg.type === 'set-ref-loopback') {
         this.useInternalGenAsRef = Boolean(msg.useInternalGenAsRef);
+      } else if (msg.type === 'pause') {
+        this.isPaused = Boolean(msg.paused);
+        this.batchOffset = 0;
       }
     };
   }
 
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+    if (this.isPaused) {
+      const genOut = outputs[0]?.[0];
+      if (genOut) {
+        genOut.fill(0);
+      }
+      return true;
+    }
+
     const inputM = inputs[0]?.[0] ?? this.zeroFallback;
     const frameLen = inputM.length || 128;
 

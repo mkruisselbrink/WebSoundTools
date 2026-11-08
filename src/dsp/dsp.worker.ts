@@ -213,13 +213,16 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         break;
 
       case 'audio-chunk':
-        if (inputMode === 'hardware') {
+        if (inputMode === 'hardware' && !isPaused) {
           pipeline.writeSamples(msg.m, msg.r, msg.m.length);
         }
         break;
 
       case 'pause':
         isPaused = msg.paused;
+        if (ringBuffer) {
+          ringBuffer.clear();
+        }
         break;
     }
   } catch (err) {
