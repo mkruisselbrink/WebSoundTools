@@ -13,8 +13,8 @@ export class Radix2FFT {
   readonly size: number;
   readonly halfSize: number;
   private readonly bitRev: Uint32Array;
-  private readonly cosTable: Float32Array;
-  private readonly sinTable: Float32Array;
+  private readonly cosTable: Float64Array;
+  private readonly sinTable: Float64Array;
   private windowTable: WindowTable;
 
   // Scratch buffers for in-place complex transform
@@ -28,8 +28,8 @@ export class Radix2FFT {
     this.size = size;
     this.halfSize = size >>> 1;
     this.bitRev = new Uint32Array(size);
-    this.cosTable = new Float32Array(this.halfSize);
-    this.sinTable = new Float32Array(this.halfSize);
+    this.cosTable = new Float64Array(this.halfSize);
+    this.sinTable = new Float64Array(this.halfSize);
     this.workRe = new Float32Array(size);
     this.workIm = new Float32Array(size);
     this.windowTable = createWindowTable(windowType, size);
