@@ -77,7 +77,7 @@ import { renderEqInspector } from './inspectors/eq-source-inspector.js';
 import { renderLiveMeasurementInspector } from './inspectors/live-measurement-inspector.js';
 import { renderStoredInspector } from './inspectors/stored-source-inspector.js';
 import { renderUnionInspector } from './inspectors/union-source-inspector.js';
-import { renderTopbar } from './topbar-view.js';
+import { renderTopbar } from './topbar/topbar-view.js';
 
 export type LayoutPreset = 'tf-dual' | 'pa-triple' | 'rta-mix' | 'single';
 
