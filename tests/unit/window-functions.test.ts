@@ -47,3 +47,4 @@ describe('Spectral Window Functions', () => {
     expect(evaluateWindowSample('blackman', 0, N)).toBeCloseTo(0.0, 6);
   });
 });
+
