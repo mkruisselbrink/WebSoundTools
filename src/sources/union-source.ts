@@ -220,22 +220,24 @@ export function computeUnionSourceData(
     }
   }
 
-  // Time-domain impulse combination for vector operations
-  for (let t = 0; t < T; t++) {
-    let sumImp = primary.timeData.impulse[t];
-    for (let sIdx = 1; sIdx < count; sIdx++) {
-      const s = validInputs[sIdx];
-      if (t >= s.timeData.length) continue;
-      if (op === 'subtract') {
-        sumImp -= s.timeData.impulse[t];
-      } else {
-        sumImp += s.timeData.impulse[t];
+  // Time-domain impulse combination for linear time-domain operations only
+  if (op === 'sum' || op === 'subtract' || op === 'vector-avg' || op === 'power-avg') {
+    for (let t = 0; t < T; t++) {
+      let sumImp = primary.timeData.impulse[t];
+      for (let sIdx = 1; sIdx < count; sIdx++) {
+        const s = validInputs[sIdx];
+        if (t >= s.timeData.length) continue;
+        if (op === 'subtract') {
+          sumImp -= s.timeData.impulse[t];
+        } else {
+          sumImp += s.timeData.impulse[t];
+        }
       }
+      if (op === 'vector-avg' || op === 'power-avg') {
+        sumImp /= count;
+      }
+      timeData.impulse[t] = sumImp;
     }
-    if (op === 'vector-avg' || op === 'power-avg') {
-      sumImp /= count;
-    }
-    timeData.impulse[t] = sumImp;
   }
 
   return {

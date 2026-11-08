@@ -105,6 +105,8 @@ describe('SourceData, UnionSource & EqualizerSource', () => {
 
     // Vector sum of two in-phase sources -> 2.0 (+6 dB)
     const srcC = createTestSource('c', 'Speaker C (in phase)', 1.0, 0);
+    srcA.timeData.impulse[10] = 0.5;
+    srcC.timeData.impulse[10] = 0.5;
     const summed = computeUnionSourceData(
       {
         id: 'u3',
@@ -117,6 +119,21 @@ describe('SourceData, UnionSource & EqualizerSource', () => {
       [srcA, srcC]
     );
     expect(summed.freqData.magnitude[50]).toBeCloseTo(2.0, 4);
+    expect(summed.timeData.impulse[10]).toBeCloseTo(1.0, 4);
+
+    // Non-linear operations ('apply', 'diff-db', 'min', 'max') leave timeData.impulse zeroed
+    const applied = computeUnionSourceData(
+      {
+        id: 'u4',
+        name: 'Apply',
+        color: '#fff',
+        visible: true,
+        operation: 'apply',
+        sourceIds: ['a', 'c'],
+      },
+      [srcA, srcC]
+    );
+    expect(applied.timeData.impulse[10]).toBe(0);
   });
 
   it('flattens a speaker resonance when applying an inverse band in EqualizerSource', () => {
