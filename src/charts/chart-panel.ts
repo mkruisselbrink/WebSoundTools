@@ -187,6 +187,7 @@ export class ChartPanelElement extends LitElement {
   private glRenderer: GlTraceRenderer | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private draggingEqBandIndex: number | null = null;
+  private rafId: number | null = null;
 
   private readonly padLeft = 52;
   private readonly padRight = 16;
@@ -202,6 +203,10 @@ export class ChartPanelElement extends LitElement {
     super.disconnectedCallback();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
+    }
+    if (this.rafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
   }
 
@@ -220,7 +225,19 @@ export class ChartPanelElement extends LitElement {
     if (changed.has('plotType')) {
       this.applyDefaultBoundsForPlot(this.plotType);
     }
-    this.drawFrame();
+    this.scheduleDrawFrame();
+  }
+
+  private scheduleDrawFrame(): void {
+    if (this.rafId !== null) return;
+    if (typeof requestAnimationFrame === 'function') {
+      this.rafId = requestAnimationFrame(() => {
+        this.rafId = null;
+        this.drawFrame();
+      });
+    } else {
+      this.drawFrame();
+    }
   }
 
   private applyDefaultBoundsForPlot(type: PlotType): void {
