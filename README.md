@@ -76,3 +76,12 @@ npm test
 npm run test:e2e
 ```
 
+---
+
+## License & Acknowledgements
+
+This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see the [`LICENSE`](./LICENSE) file for details.
+
+Inspired by [Open Sound Meter (OSM)](https://opensoundmeter.com/) by Pavel Smokotnin (also licensed under GPLv3).
+
+
