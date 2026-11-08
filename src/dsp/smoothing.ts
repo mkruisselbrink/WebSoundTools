@@ -177,3 +177,4 @@ export function aggregateFractionalOctaveBands(
 
   return { centerFrequencies, magnitudes, peaks };
 }
+

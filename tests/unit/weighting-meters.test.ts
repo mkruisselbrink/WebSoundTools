@@ -70,3 +70,4 @@ describe('IEC 61672-1 Weighting Filters & Broadband SPL / Leq Meters', () => {
     expect(snap.referenceRmsDb).toBeCloseTo(-3.0103 - 6.0206, 1);
   });
 });
+

@@ -37,3 +37,4 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
   });
 });
+

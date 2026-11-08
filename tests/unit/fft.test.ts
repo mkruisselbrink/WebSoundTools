@@ -103,3 +103,4 @@ describe('Radix2FFT & Window Functions', () => {
     expect(createWindowTable('blackman', N).coherentGain).toBeCloseTo(0.42, 4);
   });
 });
+

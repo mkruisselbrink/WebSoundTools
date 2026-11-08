@@ -90,3 +90,4 @@ describe('DualChannelRingBuffer', () => {
     expect(rb.availableWrite()).toBe(16);
   });
 });
+

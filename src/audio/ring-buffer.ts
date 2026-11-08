@@ -140,3 +140,4 @@ export class DualChannelRingBuffer {
     this.storeIndex(READ_INDEX_OFFSET, 0);
   }
 }
+

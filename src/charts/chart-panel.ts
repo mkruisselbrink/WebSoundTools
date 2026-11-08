@@ -824,3 +824,4 @@ export class ChartPanelElement extends LitElement {
     `;
   }
 }
+

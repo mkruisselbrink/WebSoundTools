@@ -71,3 +71,4 @@ describe('DeconvolutionAnalyzer & Auto Delay Finder', () => {
     expect(deconv.stepResponse[800]).toBeCloseTo(1.0, 2);
   });
 });
+

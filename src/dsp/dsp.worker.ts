@@ -181,3 +181,4 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
 };
 
 export { intervalId, SIMULATOR_PRESETS };
+

@@ -105,3 +105,4 @@ describe('Plot Coordinate Mappers, Phase Wrap Break & Cursor Readout', () => {
     expect(readout.sourceValues[0].coherencePct).toBe(95);
   });
 });
+

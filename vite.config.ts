@@ -6,6 +6,9 @@ const crossOriginIsolationHeaders = {
 };
 
 export default defineConfig({
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     headers: crossOriginIsolationHeaders,
   },
@@ -20,3 +23,4 @@ export default defineConfig({
     environment: 'node',
   },
 });
+

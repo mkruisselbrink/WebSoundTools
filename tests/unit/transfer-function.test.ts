@@ -173,3 +173,4 @@ describe('TransferFunctionAnalyzer & Coherence', () => {
     expect(meanH1Mag).toBeLessThan(1.05);
   });
 });
+

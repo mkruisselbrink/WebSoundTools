@@ -156,3 +156,4 @@ export class GlTraceRenderer {
     gl.bindVertexArray(null);
   }
 }
+

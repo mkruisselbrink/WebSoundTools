@@ -84,3 +84,4 @@ export function createWindowTable(type: WindowFunctionType, size: number): Windo
     energyGain: Math.sqrt(sumSq / size),
   };
 }
+
