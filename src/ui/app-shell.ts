@@ -73,12 +73,10 @@ import {
   computeUnionSourceData,
 } from '../sources/union-source.js';
 import { appShellStyles } from './app-shell-styles.js';
-import {
-  renderEqInspector,
-  renderLiveMeasurementInspector,
-  renderStoredInspector,
-  renderUnionInspector,
-} from './inspector-views.js';
+import { renderEqInspector } from './inspectors/eq-source-inspector.js';
+import { renderLiveMeasurementInspector } from './inspectors/live-measurement-inspector.js';
+import { renderStoredInspector } from './inspectors/stored-source-inspector.js';
+import { renderUnionInspector } from './inspectors/union-source-inspector.js';
 import { renderTopbar } from './topbar-view.js';
 
 export type LayoutPreset = 'tf-dual' | 'pa-triple' | 'rta-mix' | 'single';
