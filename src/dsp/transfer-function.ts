@@ -96,7 +96,7 @@ export class TransferFunctionAnalyzer {
     this.peakSquared = new Float32Array(B);
     this.meanSquared = new Float32Array(B);
 
-    this.maxFifoCapacity = Math.max(128, this.config.fifoDepth);
+    this.maxFifoCapacity = Math.max(16, this.config.fifoDepth);
     this.fifoGrmRe = new Float32Array(this.maxFifoCapacity * B);
     this.fifoGrmIm = new Float32Array(this.maxFifoCapacity * B);
     this.fifoGrr = new Float32Array(this.maxFifoCapacity * B);
