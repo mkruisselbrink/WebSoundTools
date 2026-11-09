@@ -30,8 +30,10 @@ export interface InputRoutingGroupProps {
   readonly selectedDeviceLabel?: string;
   readonly availableChannels: number;
   readonly globalReferenceChannel: number;
+  readonly isPaused: boolean;
   readonly onInputSourceSelect: (mode: InputSourceMode, deviceId: string) => void;
   readonly onGlobalReferenceChannelChange: (refCh: number) => void;
+  readonly onTogglePause: () => void;
 }
 
 export function renderInputRoutingGroup(props: InputRoutingGroupProps): TemplateResult {
@@ -123,6 +125,15 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
             </select>
           `
         : nothing}
+
+      <button
+        data-testid="btn-pause"
+        class="btn-toggle-pause ${props.isPaused ? 'btn-active' : ''}"
+        title="Pause / Resume Live Measurement (Shortcut: Space)"
+        @click=${props.onTogglePause}
+      >
+        ${props.isPaused ? 'Resume' : 'Pause'}
+      </button>
     </div>
   `;
 }

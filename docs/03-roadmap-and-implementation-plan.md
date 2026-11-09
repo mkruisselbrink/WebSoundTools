@@ -104,7 +104,8 @@ All keyboard shortcuts inspect `e.composedPath()[0]` so typing inside Shadow DOM
 
 | Key | Action |
 | :--- | :--- |
-| `Space` / `C` | **Capture** current active trace into a new `StoredSource` snapshot |
+| `Space` | **Pause / Resume** live measurement and hardware signal generator |
+| `C` | **Capture** current active trace into a new `StoredSource` snapshot |
 | `D` | **Apply** the Auto Delay Finder's estimated propagation delay to the active Live Measurement |
 | `M` | Add a new simultaneous **Live Measurement** source (`+ Meas`) |
 | `R` | **Reset** averaging buffers and peak hold accumulators |

@@ -26,6 +26,7 @@
 export interface AppShortcutActions {
   readonly onCaptureTrace: () => void;
   readonly onFindAndApplyDelay: () => void;
+  readonly onTogglePause?: () => void;
   readonly onAddLiveSource?: () => void;
 }
 
@@ -68,7 +69,12 @@ export function dispatchAppKeydown(
   if (shouldIgnoreShortcutEvent(e)) {
     return false;
   }
-  if (e.code === 'Space' || e.key === 'c' || e.key === 'C') {
+  if (e.code === 'Space' && actions.onTogglePause) {
+    e.preventDefault?.();
+    actions.onTogglePause();
+    return true;
+  }
+  if (e.key === 'c' || e.key === 'C') {
     e.preventDefault?.();
     actions.onCaptureTrace();
     return true;

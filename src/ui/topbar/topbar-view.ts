@@ -21,10 +21,6 @@
 
 import { html, TemplateResult } from 'lit';
 import type { LayoutPreset } from '../app-shell.js';
-import {
-  DelayCaptureGroupProps,
-  renderDelayCaptureGroup,
-} from './delay-capture-group.js';
 import { GeneratorGroupProps, renderGeneratorGroup } from './generator-group.js';
 import {
   InputRoutingGroupProps,
@@ -35,7 +31,6 @@ import { renderSplMeterGroup, SplMeterGroupProps } from './spl-meter-group.js';
 export interface TopbarViewProps
   extends InputRoutingGroupProps,
     GeneratorGroupProps,
-    DelayCaptureGroupProps,
     SplMeterGroupProps {
   readonly layoutPreset: LayoutPreset;
   readonly onLayoutPresetChange: (preset: LayoutPreset) => void;
@@ -62,7 +57,6 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
 
       ${renderInputRoutingGroup(props)}
       ${renderGeneratorGroup(props)}
-      ${renderDelayCaptureGroup(props)}
       ${renderSplMeterGroup(props)}
     </header>
   `;

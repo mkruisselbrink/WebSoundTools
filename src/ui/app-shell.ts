@@ -147,6 +147,9 @@ export class WebSoundMeterApp extends LitElement {
         const activeId = this.sourceStore.getActiveLiveSourceId();
         this.engine?.findAndApplyDelay(activeId);
       },
+      onTogglePause: () => {
+        void this.handleTogglePause();
+      },
       onAddLiveSource: () => this.handleAddLiveSource(),
     });
   };
@@ -451,14 +454,39 @@ export class WebSoundMeterApp extends LitElement {
     this.requestUpdate();
   };
 
+  private handleTogglePause = async (): Promise<void> => {
+    const nextPaused = !this.isPaused;
+    if (
+      !nextPaused &&
+      this.audioInputMode === 'hardware' &&
+      this.hardwareStreamDeferred &&
+      this.engine
+    ) {
+      try {
+        await this.engine.setInputMode('hardware', this.selectedDeviceId);
+        this.hardwareStreamDeferred = false;
+        this.audioDevices = await this.engine.listInputDevices();
+        this.availableChannels = this.engine.getAvailableChannels();
+        this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+      } catch {
+        this.audioInputMode = this.engine.getInputMode();
+        this.persistState('replace');
+      }
+    }
+    this.isPaused = nextPaused;
+    this.engine?.setPaused(this.isPaused);
+  };
+
   private renderSelectedSourceInspector(allSources: SourceData[]) {
     const selectedId = this.sourceStore.getSelectedSourceId();
     const activeLiveId = this.sourceStore.getActiveLiveSourceId();
     const liveSlot = this.engine!.getLiveSlot(activeLiveId);
+    const activeLiveSource = this.sourceStore.getLiveSource(activeLiveId);
     const canDeleteSlot = (this.engine?.getLiveSlots().length ?? 1) > 1;
 
     const liveHandlers = {
       slot: liveSlot,
+      delayEstimate: activeLiveSource?.delayEstimate,
       audioInputMode: this.audioInputMode,
       availableChannels: this.availableChannels,
       globalReferenceChannel: this.globalReferenceChannel,
@@ -480,6 +508,11 @@ export class WebSoundMeterApp extends LitElement {
         this.requestUpdate();
       },
       onDeleteSlot: () => this.handleDeleteLiveSlot(liveSlot.id),
+      onFindAndApplyDelay: () => this.engine?.findAndApplyDelay(liveSlot.id),
+      onCaptureTrace: () => {
+        this.sourceStore.captureCurrentTrace();
+        this.persistState('replace');
+      },
       savedCalibrations: this.savedCalibrations,
       activeCalibrationId: liveSlot.activeCalibrationId,
       onSelectCalibration: (calId: string | null) =>
@@ -564,7 +597,6 @@ export class WebSoundMeterApp extends LitElement {
         splWeighting: this.splWeighting,
         splTime: this.splTime,
         levels: activeLiveSource?.levels,
-        delayEstimate: activeLiveSource?.delayEstimate,
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
         onInputSourceSelect: this.handleInputSourceSelect,
         onGlobalReferenceChannelChange: (refCh) => {
@@ -596,32 +628,8 @@ export class WebSoundMeterApp extends LitElement {
           this.genConfig = { ...this.engine.getGeneratorConfig() };
           this.persistState('none');
         },
-        onFindAndApplyDelay: () => this.engine?.findAndApplyDelay(activeLiveId),
-        onCaptureTrace: () => {
-          this.sourceStore.captureCurrentTrace();
-          this.persistState('replace');
-        },
-        onTogglePause: async () => {
-          const nextPaused = !this.isPaused;
-          if (
-            !nextPaused &&
-            this.audioInputMode === 'hardware' &&
-            this.hardwareStreamDeferred &&
-            this.engine
-          ) {
-            try {
-              await this.engine.setInputMode('hardware', this.selectedDeviceId);
-              this.hardwareStreamDeferred = false;
-              this.audioDevices = await this.engine.listInputDevices();
-              this.availableChannels = this.engine.getAvailableChannels();
-              this.availableOutputChannels = this.engine.getAvailableOutputChannels();
-            } catch {
-              this.audioInputMode = this.engine.getInputMode();
-              this.persistState('replace');
-            }
-          }
-          this.isPaused = nextPaused;
-          this.engine?.setPaused(this.isPaused);
+        onTogglePause: () => {
+          void this.handleTogglePause();
         },
         onSplWeightingChange: (curve) => {
           this.splWeighting = curve;

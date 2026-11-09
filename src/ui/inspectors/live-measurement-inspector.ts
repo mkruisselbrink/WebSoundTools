@@ -25,6 +25,7 @@ import {
   MeasurementPipelineConfig,
   REFERENCE_CHANNEL_GLOBAL,
 } from '../../dsp/analyzer-pipeline.js';
+import { DelayEstimate } from '../../dsp/deconvolution.js';
 import type {
   InputSourceMode,
   LiveMeasurementSlotConfig,
@@ -43,6 +44,7 @@ import { StoredCalibrationFile } from '../../sources/session-storage.js';
 
 export interface LiveMeasurementInspectorHandlers {
   readonly slot?: LiveMeasurementSlotConfig;
+  readonly delayEstimate?: DelayEstimate;
   readonly audioInputMode?: InputSourceMode;
   readonly availableChannels?: number;
   readonly globalReferenceChannel?: number;
@@ -58,6 +60,8 @@ export interface LiveMeasurementInspectorHandlers {
     >
   ) => void;
   readonly onDeleteSlot?: () => void;
+  readonly onFindAndApplyDelay?: () => void;
+  readonly onCaptureTrace?: () => void;
   readonly savedCalibrations?: readonly StoredCalibrationFile[];
   readonly activeCalibrationId?: string | null;
   readonly onSelectCalibration?: (calibrationId: string | null) => void;
@@ -74,6 +78,7 @@ export function renderLiveMeasurementInspector(
   const savedCals = handlers.savedCalibrations ?? [];
   const activeCalId = handlers.activeCalibrationId ?? '';
   const slot = handlers.slot;
+  const delayEst = handlers.delayEstimate;
   const inputMode = handlers.audioInputMode ?? 'simulator';
   const availCh = Math.max(2, handlers.availableChannels ?? 2);
   const channelOptions = Array.from({ length: availCh }, (_, i) => i);
@@ -87,6 +92,17 @@ export function renderLiveMeasurementInspector(
       <div class="section-header">
         <span>${slot ? `${slot.name} Settings` : 'Live Measurement Settings'}</span>
         <div style="display:flex;gap:4px;">
+          ${handlers.onCaptureTrace
+            ? html`
+                <button
+                  data-testid="btn-capture-trace"
+                  title="Capture current trace into Stored Sources (Shortcut: C)"
+                  @click=${handlers.onCaptureTrace}
+                >
+                  Capture
+                </button>
+              `
+            : nothing}
           <button @click=${handlers.onResetAveraging}>Reset Avg</button>
           ${handlers.canDeleteSlot
             ? html`
@@ -191,6 +207,29 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field">
+          <label
+            data-testid="delay-estimate-readout"
+            style="font-variant-numeric:tabular-nums;white-space:nowrap;"
+          >
+            Est Delay:
+            <strong style="color:#e2e8f0;" data-testid="estimated-delay-ms"
+              >${delayEst ? `${delayEst.delayMs.toFixed(2)} ms` : '—'}</strong
+            >
+            ${delayEst && delayEst.polarity < 0
+              ? html`<span style="color:#f43f5e;font-weight:700;">(−POL)</span>`
+              : nothing}
+          </label>
+          <button
+            class="btn-primary"
+            data-testid="btn-apply-delay"
+            title="Find propagation delay via cross-correlation and apply to Reference channel (Shortcut: D)"
+            @click=${handlers.onFindAndApplyDelay}
+          >
+            Find & Apply Delay
+          </button>
+        </div>
+
+        <div class="prop-field">
           <label>Input Gain (dB)</label>
           <input
             type="number"
@@ -204,7 +243,7 @@ export function renderLiveMeasurementInspector(
           />
         </div>
 
-        <div class="prop-field full-width">
+        <div class="prop-field">
           <label>Polarity</label>
           <button
             class=${cfg.invertPolarity ? 'btn-active' : ''}

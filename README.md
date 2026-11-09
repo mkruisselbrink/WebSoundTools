@@ -62,7 +62,8 @@ Detailed architecture and design documentation is available in [`docs/`](./docs/
 
 | Key | Action |
 | :--- | :--- |
-| `Space` or `C` | Capture current active trace to Stored Sources |
+| `Space` | Pause / Resume live measurement and hardware signal generator |
+| `C` | Capture current active trace to Stored Sources |
 | `D` | Run Auto Delay Finder and apply estimated delay to active Live Measurement |
 | `M` | Add a new simultaneous Live Measurement source (`+ Meas`) |
 
