@@ -19,7 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AudioEngine,
   REFERENCE_CHANNEL_GLOBAL,
@@ -29,6 +29,11 @@ import { HardwareAudioRouter } from '../../src/audio/hardware-audio-router.js';
 import { DEFAULT_GENERATOR_CONFIG } from '../../src/dsp/signal-generator.js';
 
 describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
+  const origWorker = globalThis.Worker;
+  const origAudioContext = globalThis.AudioContext;
+  const origAudioWorkletNode = globalThis.AudioWorkletNode;
+  const origNavigator = globalThis.navigator;
+
   let mockSplitterConnect: ReturnType<typeof vi.fn>;
   let mockWorkletConnect: ReturnType<typeof vi.fn>;
   let mockWorkletPostMessage: ReturnType<typeof vi.fn>;
@@ -38,6 +43,29 @@ describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
     postMessage: ReturnType<typeof vi.fn>;
     terminate: ReturnType<typeof vi.fn>;
   } | null = null;
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'Worker', {
+      value: origWorker,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'AudioContext', {
+      value: origAudioContext,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'AudioWorkletNode', {
+      value: origAudioWorkletNode,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'navigator', {
+      value: origNavigator,
+      configurable: true,
+      writable: true,
+    });
+  });
 
   beforeEach(() => {
     mockSplitterConnect = vi.fn();

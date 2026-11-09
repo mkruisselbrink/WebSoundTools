@@ -124,6 +124,19 @@ describe('Plot Coordinate Mappers, Phase Wrap Break & Cursor Readout', () => {
     expect(readout.wavelengthMeters).toBeCloseTo(0.343, 3);
     expect(readout.sourceValues[0].formattedValue).toBe('+6.0 dB');
     expect(readout.sourceValues[0].coherencePct).toBe(95);
+
+    // Time-domain cursor readout (binary search over timeMs with delayOffsetMs)
+    const centerIdx = 512; // 0.0 ms for 1024-sample centered window
+    src.timeData.impulse[centerIdx] = 0.825;
+    src.timeData.stepResponse[centerIdx] = 0.45;
+    src.delayOffsetMs = 2.5;
+    const impReadout = computeCursorReadout('impulse', 2.5, [src]);
+    expect(impReadout.isFrequencyDomain).toBe(false);
+    expect(impReadout.xValue).toBe(2.5);
+    expect(impReadout.sourceValues[0].formattedValue).toBe('0.825');
+
+    const stepReadout = computeCursorReadout('step', 2.5, [src]);
+    expect(stepReadout.sourceValues[0].formattedValue).toBe('0.450');
   });
 });
 

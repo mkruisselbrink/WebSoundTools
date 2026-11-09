@@ -135,7 +135,24 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
       timeData: createEmptyTimeDomainData(512, 48000),
     };
 
-    drawRtaOctaveBars(ctx, [src], 3, true, { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 }, box);
+    const src2: SourceData = {
+      ...src,
+      id: 'stored-1',
+      name: 'Stored',
+      color: '#f43f5e',
+      freqData: createEmptyFrequencyDomainData(257, 48000),
+    };
+    src2.freqData.module.fill(0.25);
+    src2.freqData.peakSquared.fill(0.4);
+
+    drawRtaOctaveBars(
+      ctx,
+      [src, src2],
+      3,
+      true,
+      { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 },
+      box
+    );
     expect(ctx.fillRect).toHaveBeenCalled();
 
     drawRtaPeakLine(ctx, src, { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 }, box);
@@ -174,6 +191,7 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
       ARRAY_BUFFER: 34962,
       FLOAT: 5126,
       BLEND: 3042,
+      SCISSOR_TEST: 3089,
       SRC_ALPHA: 770,
       ONE_MINUS_SRC_ALPHA: 771,
       COLOR_BUFFER_BIT: 16384,
@@ -185,12 +203,15 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
       getShaderParameter: vi.fn(() => true),
       deleteShader: vi.fn(),
       createProgram: vi.fn(() => ({})),
+      deleteProgram: vi.fn(),
       attachShader: vi.fn(),
       linkProgram: vi.fn(),
       getProgramParameter: vi.fn(() => true),
       getUniformLocation: vi.fn(() => ({})),
       createVertexArray: vi.fn(() => ({})),
+      deleteVertexArray: vi.fn(),
       createBuffer: vi.fn(() => ({})),
+      deleteBuffer: vi.fn(),
       bindVertexArray: vi.fn(),
       bindBuffer: vi.fn(),
       enableVertexAttribArray: vi.fn(),
@@ -198,6 +219,7 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
       enable: vi.fn(),
       blendFunc: vi.fn(),
       viewport: vi.fn(),
+      scissor: vi.fn(),
       clearColor: vi.fn(),
       clear: vi.fn(),
       useProgram: vi.fn(),
@@ -211,12 +233,20 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
 
     const renderer = new GlTraceRenderer(glCanvas);
     expect(renderer.isWebGlAvailable()).toBe(true);
-    renderer.clear(10, 10, 200, 100, 120);
-    expect(mockGl.viewport).toHaveBeenCalledWith(10, 10, 200, 100);
+    // Asymmetric plotTopPx (12) vs bottom margin (300 - 12 - 200 = 88) verifies Y-flip formula
+    renderer.clear(52, 12, 400, 200, 300);
+    expect(mockGl.viewport).toHaveBeenCalledWith(52, 88, 400, 200);
+    expect(mockGl.scissor).toHaveBeenCalledWith(52, 88, 400, 200);
 
     const verts = new Float32Array([-1, 0, 1, 1, 0, 1]);
     renderer.drawTrace(verts, 2, '#10b981', 0.8);
     expect(mockGl.drawArrays).toHaveBeenCalledWith(mockGl.LINE_STRIP, 0, 2);
+
+    renderer.dispose();
+    expect(mockGl.deleteBuffer).toHaveBeenCalledTimes(1);
+    expect(mockGl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(mockGl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(renderer.isWebGlAvailable()).toBe(false);
   });
 });
 
