@@ -139,7 +139,9 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
               )}
             </div>
           `
-        : html`<span class="label-muted"
+        : html`<span
+            class="label-muted"
+            style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
             >Hover chart for acoustic cursor (${meta.xUnit} / ${meta.yUnit})</span
           >`}
 

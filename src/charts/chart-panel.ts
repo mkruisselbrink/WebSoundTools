@@ -80,12 +80,15 @@ export class ChartPanelElement extends LitElement {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      padding: 5px 10px;
+      height: 34px;
+      min-height: 34px;
+      padding: 0 10px;
       background: #1e293b;
       border-bottom: 1px solid #334155;
       font-size: 12px;
       color: #e2e8f0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow: hidden;
     }
 
     .header-left,
@@ -93,7 +96,8 @@ export class ChartPanelElement extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
     select,
@@ -116,13 +120,24 @@ export class ChartPanelElement extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+      white-space: nowrap;
       background: #090d16;
       border: 1px solid #334155;
       border-radius: 4px;
       padding: 2px 8px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 11px;
       color: #cbd5e1;
+    }
+
+    .cursor-pill::-webkit-scrollbar {
+      display: none;
     }
 
     .cursor-source-badge {
@@ -130,6 +145,8 @@ export class ChartPanelElement extends LitElement {
       align-items: center;
       gap: 4px;
       font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
     .swatch {
