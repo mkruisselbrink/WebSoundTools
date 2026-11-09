@@ -300,7 +300,7 @@ export class TransferFunctionAnalyzer {
       const mAbs = Math.sqrt(gmm);
       const rAbs = Math.sqrt(grr);
       const instRatio = rAbs > 1e-12 ? mAbs / rAbs : 0;
-      const grmAbs = Math.hypot(grmRe, grmIm);
+      const grmAbs = Math.sqrt(grmRe * grmRe + grmIm * grmIm);
       const unitPhRe = grmAbs > 1e-18 ? grmRe / grmAbs : 1.0;
       const unitPhIm = grmAbs > 1e-18 ? grmIm / grmAbs : 0.0;
 
@@ -389,7 +389,7 @@ export class TransferFunctionAnalyzer {
       if (estimator === 'h1') {
         const hRe = avgGrr > EPS ? avgGrmRe / avgGrr : 0;
         const hIm = avgGrr > EPS ? avgGrmIm / avgGrr : 0;
-        const hMag = Math.hypot(hRe, hIm);
+        const hMag = Math.sqrt(hRe * hRe + hIm * hIm);
         this.magnitude[k] = hMag;
         if (hMag > 1e-12) {
           this.phaseReal[k] = hRe / hMag;
@@ -400,7 +400,7 @@ export class TransferFunctionAnalyzer {
         }
       } else {
         this.magnitude[k] = avgRatio;
-        const phLen = Math.hypot(avgPhRe, avgPhIm);
+        const phLen = Math.sqrt(avgPhRe * avgPhRe + avgPhIm * avgPhIm);
         if (phLen > 1e-12) {
           this.phaseReal[k] = avgPhRe / phLen;
           this.phaseImag[k] = avgPhIm / phLen;

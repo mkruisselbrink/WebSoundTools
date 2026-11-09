@@ -114,6 +114,8 @@ export class SourceStore {
 
   private readonly persistence: SourcePersistenceAdapter;
   private readonly listeners = new Set<() => void>();
+  private eqDragSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingDraggedEq: EqualizerSourceConfig | null = null;
 
   private readonly eqEvalCache = new Map<
     string,
@@ -424,6 +426,7 @@ export class SourceStore {
       visible: true,
       bands: createDefaultEqBands(),
       targetSourceId: this.getActiveLiveSourceId(),
+      createdAt: new Date().toISOString(),
     };
     this.eqSources = [...this.eqSources, newEq];
     this.selectedSourceId = id;
@@ -433,6 +436,13 @@ export class SourceStore {
   }
 
   deleteEqSource(id: string): void {
+    if (this.pendingDraggedEq?.id === id) {
+      if (this.eqDragSaveTimer !== null) {
+        clearTimeout(this.eqDragSaveTimer);
+        this.eqDragSaveTimer = null;
+      }
+      this.pendingDraggedEq = null;
+    }
     this.eqSources = this.eqSources.filter((s) => s.id !== id);
     this.eqEvalCache.delete(id);
     void this.persistence.removeEq?.(id);
@@ -486,10 +496,29 @@ export class SourceStore {
         i === bandIndex ? { ...b, frequency, gainDb } : b
       );
       const updated = { ...eq, bands };
-      void this.persistence.saveEq?.(updated);
+      this.scheduleDebouncedEqSave(updated);
       return updated;
     });
     this.notify();
+  }
+
+  private scheduleDebouncedEqSave(updated: EqualizerSourceConfig): void {
+    if (this.eqDragSaveTimer === null) {
+      // Leading edge: persist immediately and open a 150ms throttle window
+      void this.persistence.saveEq?.(updated);
+      this.pendingDraggedEq = null;
+      this.eqDragSaveTimer = setTimeout(() => {
+        this.eqDragSaveTimer = null;
+        const toSave = this.pendingDraggedEq;
+        this.pendingDraggedEq = null;
+        if (toSave) {
+          void this.persistence.saveEq?.(toSave);
+        }
+      }, 150);
+    } else {
+      // Within throttle window: coalesce for trailing-edge save
+      this.pendingDraggedEq = updated;
+    }
   }
 
   addUnionSource(): UnionSourceConfig {
@@ -506,6 +535,7 @@ export class SourceStore {
       visible: true,
       operation: 'vector-avg',
       sourceIds: [allIds[0], allIds[1] ?? allIds[0]],
+      createdAt: new Date().toISOString(),
     };
     this.unionSources = [...this.unionSources, newUnion];
     this.selectedSourceId = id;

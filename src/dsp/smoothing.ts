@@ -97,7 +97,9 @@ export function smoothPhaseOctave(
   phaseIm: Float32Array,
   outRe: Float32Array,
   outIm: Float32Array,
-  fraction: number
+  fraction: number,
+  scratchPrefixRe?: Float64Array,
+  scratchPrefixIm?: Float64Array
 ): void {
   const N = phaseRe.length;
   if (fraction <= 0 || N <= 2) {
@@ -106,8 +108,14 @@ export function smoothPhaseOctave(
     return;
   }
 
-  const prefixRe = new Float64Array(N + 1);
-  const prefixIm = new Float64Array(N + 1);
+  const prefixRe =
+    scratchPrefixRe && scratchPrefixRe.length >= N + 1
+      ? scratchPrefixRe
+      : new Float64Array(N + 1);
+  const prefixIm =
+    scratchPrefixIm && scratchPrefixIm.length >= N + 1
+      ? scratchPrefixIm
+      : new Float64Array(N + 1);
   prefixRe[0] = 0;
   prefixIm[0] = 0;
   for (let i = 0; i < N; i++) {
@@ -126,7 +134,7 @@ export function smoothPhaseOctave(
     const highIdx = Math.min(N - 1, Math.ceil(i * halfBandFactor));
     const sumR = prefixRe[highIdx + 1] - prefixRe[lowIdx];
     const sumI = prefixIm[highIdx + 1] - prefixIm[lowIdx];
-    const len = Math.hypot(sumR, sumI);
+    const len = Math.sqrt(sumR * sumR + sumI * sumI);
     if (len > 1e-12) {
       outRe[i] = sumR / len;
       outIm[i] = sumI / len;

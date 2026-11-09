@@ -60,12 +60,22 @@ const ALL_STORES = [
   STORE_CALIBRATIONS,
 ] as const;
 
+let cachedDbPromise: Promise<IDBDatabase> | null = null;
+let cachedIndexedDbRef: IDBFactory | null = null;
+
 function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB is not available in this environment'));
-      return;
-    }
+  if (typeof indexedDB === 'undefined') {
+    cachedDbPromise = null;
+    cachedIndexedDbRef = null;
+    return Promise.reject(
+      new Error('IndexedDB is not available in this environment')
+    );
+  }
+  if (cachedDbPromise && cachedIndexedDbRef === indexedDB) {
+    return cachedDbPromise;
+  }
+  cachedIndexedDbRef = indexedDB;
+  const promise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -75,9 +85,24 @@ function openDatabase(): Promise<IDBDatabase> {
         }
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onclose = () => {
+        if (cachedDbPromise === promise) cachedDbPromise = null;
+      };
+      db.onversionchange = () => {
+        db.close();
+        if (cachedDbPromise === promise) cachedDbPromise = null;
+      };
+      resolve(db);
+    };
+    req.onerror = () => {
+      if (cachedDbPromise === promise) cachedDbPromise = null;
+      reject(req.error);
+    };
   });
+  cachedDbPromise = promise;
+  return promise;
 }
 
 async function putRecord<T>(storeName: string, record: T): Promise<void> {

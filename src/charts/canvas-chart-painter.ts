@@ -28,7 +28,7 @@
  */
 
 import { BiquadSpec } from '../dsp/biquad.js';
-import { aggregateFractionalOctaveBands } from '../dsp/smoothing.js';
+import { OctaveBandData, aggregateFractionalOctaveBands } from '../dsp/smoothing.js';
 import { SourceData } from '../sources/source-data.js';
 import { ChartAxisBounds } from './chart-interaction.js';
 import {
@@ -198,6 +198,30 @@ export function drawCanvasTrace(
   ctx.globalAlpha = 1.0;
 }
 
+const rtaOctaveBandsCache = new WeakMap<SourceData, Map<number, OctaveBandData>>();
+
+function getCachedOctaveBands(
+  src: SourceData,
+  bandsPerOctave: 3 | 6 | 12
+): OctaveBandData {
+  let byBpo = rtaOctaveBandsCache.get(src);
+  if (!byBpo) {
+    byBpo = new Map<number, OctaveBandData>();
+    rtaOctaveBandsCache.set(src, byBpo);
+  }
+  let bands = byBpo.get(bandsPerOctave);
+  if (!bands) {
+    bands = aggregateFractionalOctaveBands(
+      src.freqData.frequency,
+      src.freqData.module,
+      src.freqData.peakSquared,
+      bandsPerOctave
+    );
+    byBpo.set(bandsPerOctave, bands);
+  }
+  return bands;
+}
+
 export function drawRtaOctaveBars(
   ctx: CanvasRenderingContext2D,
   sources: readonly SourceData[],
@@ -212,12 +236,7 @@ export function drawRtaOctaveBars(
   const { xMin, xMax, yMin, yMax } = bounds;
 
   sources.forEach((src, sIdx) => {
-    const bands = aggregateFractionalOctaveBands(
-      src.freqData.frequency,
-      src.freqData.module,
-      src.freqData.peakSquared,
-      bandsPerOctave
-    );
+    const bands = getCachedOctaveBands(src, bandsPerOctave);
     const count = bands.centerFrequencies.length;
     const totalBarSlotW = (plotW / Math.max(10, count)) * 0.78;
     const singleBarW = Math.max(2, totalBarSlotW / numSources);

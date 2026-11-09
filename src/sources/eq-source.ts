@@ -35,10 +35,11 @@ import {
   evaluateBiquadCascadeResponse,
 } from '../dsp/biquad.js';
 import {
+  EffectiveBinResponse,
   SourceData,
   createEmptyFrequencyDomainData,
   createEmptyTimeDomainData,
-  getEffectiveBinResponse,
+  writeEffectiveBinResponse,
 } from './source-data.js';
 
 export interface EqualizerSourceConfig {
@@ -49,6 +50,7 @@ export interface EqualizerSourceConfig {
   bands: BiquadSpec[];
   /** Optional ID of a live Measurement or Stored source to apply this EQ onto */
   targetSourceId?: string | null;
+  createdAt?: string;
 }
 
 export function createDefaultEqBands(): BiquadSpec[] {
@@ -126,6 +128,15 @@ function getOrComputeBandCascadeCurve(
   return entry;
 }
 
+const eqScratchBin: EffectiveBinResponse = {
+  frequency: 0,
+  module: 0,
+  magnitude: 0,
+  phaseRe: 1,
+  phaseIm: 0,
+  coherence: 0,
+};
+
 export function computeEqualizerSourceData(
   config: EqualizerSourceConfig,
   targetSource?: SourceData | null,
@@ -153,12 +164,14 @@ export function computeEqualizerSourceData(
       const mag = eqMag[i];
       const phRe = eqPhRe[i];
       const phIm = eqPhIm[i];
-      const base = getEffectiveBinResponse(targetSource, i);
-      freqData.module[i] = base.module * mag;
-      freqData.magnitude[i] = base.magnitude * mag;
-      freqData.phaseReal[i] = base.phaseRe * phRe - base.phaseIm * phIm;
-      freqData.phaseImag[i] = base.phaseRe * phIm + base.phaseIm * phRe;
-      freqData.coherence[i] = base.coherence;
+      writeEffectiveBinResponse(targetSource, i, eqScratchBin);
+      freqData.module[i] = eqScratchBin.module * mag;
+      freqData.magnitude[i] = eqScratchBin.magnitude * mag;
+      freqData.phaseReal[i] =
+        eqScratchBin.phaseRe * phRe - eqScratchBin.phaseIm * phIm;
+      freqData.phaseImag[i] =
+        eqScratchBin.phaseRe * phIm + eqScratchBin.phaseIm * phRe;
+      freqData.coherence[i] = eqScratchBin.coherence;
     }
   } else {
     freqData.module.set(eqMag);
@@ -181,7 +194,7 @@ export function computeEqualizerSourceData(
     notes: targetSource
       ? `Virtual EQ applied to ${targetSource.name}`
       : 'Standalone Virtual EQ Curve',
-    createdAt: new Date().toISOString(),
+    createdAt: config.createdAt ?? '',
     sampleRate: sr,
     freqData,
     timeData,

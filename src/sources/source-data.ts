@@ -167,21 +167,24 @@ export function cloneSourceDataAsStored(
   };
 }
 
-/**
- * Evaluates effective complex phase `(re, im)` and linear magnitude at bin `i`
- * taking into account `source.gainOffsetDb`, `source.delayOffsetMs`, and `source.invertPolarity`.
- */
-export function getEffectiveBinResponse(
-  source: SourceData,
-  binIndex: number
-): {
+export interface EffectiveBinResponse {
   frequency: number;
   module: number;
   magnitude: number;
   phaseRe: number;
   phaseIm: number;
   coherence: number;
-} {
+}
+
+/**
+ * Evaluates effective complex phase `(re, im)` and linear magnitude at bin `i`
+ * into a reusable `out` object without per-bin heap allocations.
+ */
+export function writeEffectiveBinResponse(
+  source: SourceData,
+  binIndex: number,
+  out: EffectiveBinResponse
+): void {
   const fd = source.freqData;
   const f = fd.frequency[binIndex];
   const gainLinear =
@@ -202,14 +205,32 @@ export function getEffectiveBinResponse(
     phIm = rotIm;
   }
 
-  return {
-    frequency: f,
-    module: fd.module[binIndex] * gainLinear,
-    magnitude: fd.magnitude[binIndex] * gainLinear,
-    phaseRe: phRe,
-    phaseIm: phIm,
-    coherence: fd.coherence[binIndex],
+  out.frequency = f;
+  out.module = fd.module[binIndex] * gainLinear;
+  out.magnitude = fd.magnitude[binIndex] * gainLinear;
+  out.phaseRe = phRe;
+  out.phaseIm = phIm;
+  out.coherence = fd.coherence[binIndex];
+}
+
+/**
+ * Evaluates effective complex phase `(re, im)` and linear magnitude at bin `i`
+ * taking into account `source.gainOffsetDb`, `source.delayOffsetMs`, and `source.invertPolarity`.
+ */
+export function getEffectiveBinResponse(
+  source: SourceData,
+  binIndex: number
+): EffectiveBinResponse {
+  const out: EffectiveBinResponse = {
+    frequency: 0,
+    module: 0,
+    magnitude: 0,
+    phaseRe: 1,
+    phaseIm: 0,
+    coherence: 0,
   };
+  writeEffectiveBinResponse(source, binIndex, out);
+  return out;
 }
 
 export interface SerializedSourceData {

@@ -387,15 +387,24 @@ export function computeCursorReadout(
     const sourceValues = visibleSources.map((src) => {
       const td = src.timeData;
       const N = td.length;
-      // Find closest sample to xValue
-      let bestIdx = 0;
-      let bestDist = Infinity;
-      for (let i = 0; i < N; i++) {
-        const d = Math.abs(td.timeMs[i] + src.delayOffsetMs - xValue);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx = i;
+      const targetTimeMs = xValue - src.delayOffsetMs;
+      let lo = 0;
+      let hi = Math.max(0, N - 1);
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (td.timeMs[mid] < targetTimeMs) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
         }
+      }
+      let bestIdx = lo;
+      if (
+        lo > 0 &&
+        Math.abs(td.timeMs[lo - 1] - targetTimeMs) <=
+          Math.abs(td.timeMs[lo] - targetTimeMs)
+      ) {
+        bestIdx = lo - 1;
       }
       const amp = td.impulse[bestIdx];
       let formattedValue = '';

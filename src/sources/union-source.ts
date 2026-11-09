@@ -33,10 +33,11 @@
  */
 
 import {
+  EffectiveBinResponse,
   SourceData,
   createEmptyFrequencyDomainData,
   createEmptyTimeDomainData,
-  getEffectiveBinResponse,
+  writeEffectiveBinResponse,
 } from './source-data.js';
 
 export type UnionOperation =
@@ -67,7 +68,26 @@ export interface UnionSourceConfig {
   visible: boolean;
   operation: UnionOperation;
   sourceIds: string[];
+  createdAt?: string;
 }
+
+const unionFirstBin: EffectiveBinResponse = {
+  frequency: 0,
+  module: 0,
+  magnitude: 0,
+  phaseRe: 1,
+  phaseIm: 0,
+  coherence: 0,
+};
+
+const unionOtherBin: EffectiveBinResponse = {
+  frequency: 0,
+  module: 0,
+  magnitude: 0,
+  phaseRe: 1,
+  phaseIm: 0,
+  coherence: 0,
+};
 
 export function computeUnionSourceData(
   config: UnionSourceConfig,
@@ -86,7 +106,7 @@ export function computeUnionSourceData(
       delayOffsetMs: 0,
       invertPolarity: false,
       notes: `Union (${UNION_OPERATION_LABELS[config.operation]})`,
-      createdAt: new Date().toISOString(),
+      createdAt: config.createdAt ?? '',
       sampleRate: 48000,
       freqData: createEmptyFrequencyDomainData(1025, 48000),
       timeData: createEmptyTimeDomainData(2048, 48000),
@@ -105,9 +125,11 @@ export function computeUnionSourceData(
 
   const count = validInputs.length;
   const op = config.operation;
+  const first = unionFirstBin;
+  const bin = unionOtherBin;
 
   for (let i = 0; i < B; i++) {
-    const first = getEffectiveBinResponse(primary, i);
+    writeEffectiveBinResponse(primary, i, first);
 
     if (op === 'vector-avg' || op === 'sum' || op === 'subtract') {
       let vecModRe = first.module * first.phaseRe;
@@ -120,7 +142,7 @@ export function computeUnionSourceData(
       for (let sIdx = 1; sIdx < count; sIdx++) {
         const s = validInputs[sIdx];
         if (i >= s.freqData.length) continue;
-        const bin = getEffectiveBinResponse(s, i);
+        writeEffectiveBinResponse(s, i, bin);
         const sign = op === 'subtract' ? -1.0 : 1.0;
 
         vecModRe += sign * bin.module * bin.phaseRe;
@@ -138,8 +160,8 @@ export function computeUnionSourceData(
         vecMagIm /= count;
       }
 
-      const outMod = Math.hypot(vecModRe, vecModIm);
-      const outMag = Math.hypot(vecMagRe, vecMagIm);
+      const outMod = Math.sqrt(vecModRe * vecModRe + vecModIm * vecModIm);
+      const outMag = Math.sqrt(vecMagRe * vecMagRe + vecMagIm * vecMagIm);
       freqData.module[i] = outMod;
       freqData.magnitude[i] = outMag;
       if (outMag > 1e-12) {
@@ -160,7 +182,7 @@ export function computeUnionSourceData(
       for (let sIdx = 1; sIdx < count; sIdx++) {
         const s = validInputs[sIdx];
         if (i >= s.freqData.length) continue;
-        const bin = getEffectiveBinResponse(s, i);
+        writeEffectiveBinResponse(s, i, bin);
         sumModSq += bin.module * bin.module;
         sumMagSq += bin.magnitude * bin.magnitude;
         sumPhRe += bin.phaseRe;
@@ -170,7 +192,7 @@ export function computeUnionSourceData(
 
       freqData.module[i] = Math.sqrt(sumModSq / count);
       freqData.magnitude[i] = Math.sqrt(sumMagSq / count);
-      const phLen = Math.hypot(sumPhRe, sumPhIm);
+      const phLen = Math.sqrt(sumPhRe * sumPhRe + sumPhIm * sumPhIm);
       freqData.phaseReal[i] = phLen > 1e-12 ? sumPhRe / phLen : 1.0;
       freqData.phaseImag[i] = phLen > 1e-12 ? sumPhIm / phLen : 0.0;
       freqData.coherence[i] = sumCoh / count;
@@ -184,7 +206,7 @@ export function computeUnionSourceData(
       for (let sIdx = 1; sIdx < count; sIdx++) {
         const s = validInputs[sIdx];
         if (i >= s.freqData.length) continue;
-        const bin = getEffectiveBinResponse(s, i);
+        writeEffectiveBinResponse(s, i, bin);
 
         if (op === 'apply') {
           mod *= bin.magnitude;
@@ -209,7 +231,7 @@ export function computeUnionSourceData(
 
       freqData.module[i] = mod;
       freqData.magnitude[i] = mag;
-      const len = Math.hypot(phRe, phIm);
+      const len = Math.sqrt(phRe * phRe + phIm * phIm);
       freqData.phaseReal[i] = len > 1e-12 ? phRe / len : 1.0;
       freqData.phaseImag[i] = len > 1e-12 ? phIm / len : 0.0;
       freqData.coherence[i] = minCoh;
@@ -221,7 +243,7 @@ export function computeUnionSourceData(
       for (let sIdx = 1; sIdx < count; sIdx++) {
         const s = validInputs[sIdx];
         if (i >= s.freqData.length) continue;
-        const bin = getEffectiveBinResponse(s, i);
+        writeEffectiveBinResponse(s, i, bin);
         if (op === 'min') {
           mod = Math.min(mod, bin.module);
           mag = Math.min(mag, bin.magnitude);
@@ -272,7 +294,7 @@ export function computeUnionSourceData(
     delayOffsetMs: 0,
     invertPolarity: false,
     notes: `${UNION_OPERATION_LABELS[config.operation]} of ${validInputs.map((s) => s.name).join(', ')}`,
-    createdAt: new Date().toISOString(),
+    createdAt: config.createdAt ?? '',
     sampleRate: sr,
     freqData,
     timeData,

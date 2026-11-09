@@ -168,10 +168,14 @@ export class MeasurementPipeline {
   // Scratch buffers
   private blockM: Float32Array;
   private blockR: Float32Array;
+  private readonly delayFinderBufM: Float32Array;
+  private readonly delayFinderBufR: Float32Array;
   private specMRe: Float32Array;
   private specMIm: Float32Array;
   private specRRe: Float32Array;
   private specRIm: Float32Array;
+  private smoothPrefixA: Float64Array;
+  private smoothPrefixB: Float64Array;
 
   // Smoothed output buffers
   private outModule: Float32Array;
@@ -220,10 +224,14 @@ export class MeasurementPipeline {
 
     this.blockM = new Float32Array(N);
     this.blockR = new Float32Array(N);
+    this.delayFinderBufM = new Float32Array(16384);
+    this.delayFinderBufR = new Float32Array(16384);
     this.specMRe = new Float32Array(B);
     this.specMIm = new Float32Array(B);
     this.specRRe = new Float32Array(B);
     this.specRIm = new Float32Array(B);
+    this.smoothPrefixA = new Float64Array(B + 1);
+    this.smoothPrefixB = new Float64Array(B + 1);
 
     this.outModule = new Float32Array(B);
     this.outMagnitude = new Float32Array(B);
@@ -261,6 +269,8 @@ export class MeasurementPipeline {
       this.specMIm = new Float32Array(B);
       this.specRRe = new Float32Array(B);
       this.specRIm = new Float32Array(B);
+      this.smoothPrefixA = new Float64Array(B + 1);
+      this.smoothPrefixB = new Float64Array(B + 1);
       this.outModule = new Float32Array(B);
       this.outMagnitude = new Float32Array(B);
       this.outPhaseRe = new Float32Array(B);
@@ -401,8 +411,8 @@ export class MeasurementPipeline {
    */
   findDelayNow(): DelayEstimate {
     const N = this.delayFinder.size;
-    const bufM = new Float32Array(N);
-    const bufR = new Float32Array(N);
+    const bufM = this.delayFinderBufM;
+    const bufR = this.delayFinderBufR;
     const currentDelaySamples = Math.round(
       (this.config.delayMs * this.config.sampleRate) / 1000.0
     );
@@ -483,21 +493,31 @@ export class MeasurementPipeline {
 
     // Apply optional fractional-octave smoothing
     const smoothFrac = OCTAVE_SMOOTHING_FRACTIONS[this.config.octaveSmoothing];
+    let moduleOut = this.tf.module;
+    let magnitudeOut = this.tf.magnitude;
+    let phaseReOut = this.tf.phaseReal;
+    let phaseImOut = this.tf.phaseImag;
     if (smoothFrac > 0) {
-      smoothMagnitudeOctave(this.tf.module, this.outModule, smoothFrac);
-      smoothMagnitudeOctave(this.tf.magnitude, this.outMagnitude, smoothFrac);
+      smoothMagnitudeOctave(this.tf.module, this.outModule, smoothFrac, this.smoothPrefixA);
+      smoothMagnitudeOctave(
+        this.tf.magnitude,
+        this.outMagnitude,
+        smoothFrac,
+        this.smoothPrefixA
+      );
       smoothPhaseOctave(
         this.tf.phaseReal,
         this.tf.phaseImag,
         this.outPhaseRe,
         this.outPhaseIm,
-        smoothFrac
+        smoothFrac,
+        this.smoothPrefixA,
+        this.smoothPrefixB
       );
-    } else {
-      this.outModule.set(this.tf.module);
-      this.outMagnitude.set(this.tf.magnitude);
-      this.outPhaseRe.set(this.tf.phaseReal);
-      this.outPhaseIm.set(this.tf.phaseImag);
+      moduleOut = this.outModule;
+      magnitudeOut = this.outMagnitude;
+      phaseReOut = this.outPhaseRe;
+      phaseImOut = this.outPhaseIm;
     }
 
     return {
@@ -516,10 +536,10 @@ export class MeasurementPipeline {
       freqData: {
         length: this.tf.binCount,
         frequency: this.tf.frequency,
-        module: this.outModule,
-        magnitude: this.outMagnitude,
-        phaseReal: this.outPhaseRe,
-        phaseImag: this.outPhaseIm,
+        module: moduleOut,
+        magnitude: magnitudeOut,
+        phaseReal: phaseReOut,
+        phaseImag: phaseImOut,
         coherence: this.tf.coherence,
         peakSquared: this.tf.peakSquared,
         meanSquared: this.tf.meanSquared,

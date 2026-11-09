@@ -81,10 +81,7 @@ export function renderEqInspector(
         >
           <option value="">None (Show Filter Curve Only)</option>
           ${candidateTargets.map(
-            (s) =>
-              html`<option value=${s.id} ?selected=${s.id === eq.targetSourceId}>
-                ${s.name}
-              </option>`
+            (s) => html`<option value=${s.id}>${s.name}</option>`
           )}
         </select>
       </div>
@@ -125,7 +122,7 @@ export function renderEqInspector(
               aria-label="EQ Band ${idx + 1} Frequency (Hz)"
               title="Frequency (Hz)"
               .value=${String(b.frequency)}
-              @input=${(e: Event) =>
+              @change=${(e: Event) =>
                 handlers.onUpdateEqBand(eq.id, idx, {
                   frequency: Number((e.target as HTMLInputElement).value),
                 })}
@@ -136,7 +133,7 @@ export function renderEqInspector(
               aria-label="EQ Band ${idx + 1} Gain (dB)"
               title="Gain (dB)"
               .value=${String(b.gainDb ?? 0)}
-              @input=${(e: Event) =>
+              @change=${(e: Event) =>
                 handlers.onUpdateEqBand(eq.id, idx, {
                   gainDb: Number((e.target as HTMLInputElement).value),
                 })}
@@ -147,7 +144,7 @@ export function renderEqInspector(
               aria-label="EQ Band ${idx + 1} Q Factor"
               title="Q Factor"
               .value=${String(b.q ?? 0.7)}
-              @input=${(e: Event) =>
+              @change=${(e: Event) =>
                 handlers.onUpdateEqBand(eq.id, idx, {
                   q: Number((e.target as HTMLInputElement).value),
                 })}
