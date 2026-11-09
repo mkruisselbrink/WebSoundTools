@@ -316,14 +316,29 @@ export class SourceStore {
 
   captureCurrentTrace(): SourceData | null {
     const allSources = this.getAllSources();
-    const target =
-      allSources.find((s) => s.id === this.selectedSourceId) ?? this.getLiveSource();
+    const candidate = !this.selectedSourceId.startsWith('stored-')
+      ? allSources.find((s) => s.id === this.selectedSourceId)
+      : undefined;
+    const target = candidate ?? this.getLiveSource();
     if (!target) return null;
 
-    const paletteIdx = (this.storedSources.length + 1) % DEFAULT_SOURCE_PALETTE.length;
+    // Do not capture an unpopulated skeleton frame before any DSP transform has run
+    const hasSignal =
+      target.levels !== undefined ||
+      target.freqData.magnitude.some((v) => v !== 0);
+    if (!hasSignal) return null;
+
+    const captureNum = this.storedSources.length + 1;
+    const baseName = target.name.replace(/\s+#\d+$/, '');
+    const capturedName =
+      baseName === target.name
+        ? `${target.name} #${captureNum}`
+        : `${target.name} (Cap #${captureNum})`;
+
+    const paletteIdx = captureNum % DEFAULT_SOURCE_PALETTE.length;
     const captured = cloneSourceDataAsStored(
       target,
-      `${target.name} #${this.storedSources.length + 1}`,
+      capturedName,
       DEFAULT_SOURCE_PALETTE[paletteIdx]
     );
 

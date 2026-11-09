@@ -53,6 +53,7 @@ export function shouldIgnoreShortcutEvent(e: ShortcutKeyboardEventLike): boolean
     tag === 'INPUT' ||
     tag === 'SELECT' ||
     tag === 'TEXTAREA' ||
+    (tag === 'BUTTON' && e.code === 'Space') ||
     rawTarget?.isContentEditable
   ) {
     return true;

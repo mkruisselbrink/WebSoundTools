@@ -149,8 +149,16 @@ describe('SourceStore', () => {
     store.setLiveFrame(createMockLiveFrame());
     const captured = store.captureCurrentTrace();
     expect(captured).not.toBeNull();
+    expect(captured!.name).toBe('Live Measurement #1');
     expect(store.getStoredSources().length).toBe(1);
     expect(saved.has(captured!.id)).toBe(true);
+
+    // Capturing again while a stored trace is selected captures the live source, not the stored trace
+    const captured2 = store.captureCurrentTrace();
+    expect(captured2).not.toBeNull();
+    expect(captured2!.name).toBe('Live Measurement #2');
+    expect(store.getStoredSources().length).toBe(2);
+    store.deleteStoredSource(captured2!.id);
 
     store.updateStoredSource(captured!.id, { name: 'Main PA Left', gainOffsetDb: -2.5 });
     expect(store.getStoredSources()[0].name).toBe('Main PA Left');
