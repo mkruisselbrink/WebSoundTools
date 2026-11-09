@@ -1,60 +1,59 @@
-# 02. Web Technical Architecture & DSP Design
+# 02. System Architecture & DSP Design
 
-## 1. High-Level System Architecture
+## 1. Three-Thread Real-Time Architecture
 
-A browser-based acoustic analyzer faces a critical real-time constraint: **Web Audio's `AudioWorkletProcessor.process()` runs on a real-time audio thread in 128-sample quanta (~2.67 ms at 48 kHz)**. Running a 16,384-point or 65,536-point FFT, deconvolution, and LFT inside `process()` will cause audio glitches/dropouts whenever a transform frame triggers.
-
-Instead, just as OSM separates its audio callback thread (`writeData` writing into lock-free/mutex circular buffers) from its transform timer thread (`Measurement::transform()` running every ~40–80 ms), `WebSoundMeter` should split responsibilities across **three threads**:
+Web Audio's `AudioWorkletProcessor.process()` runs on a real-time audio thread in 128-sample quanta (~2.67 ms at 48 kHz). Running large FFTs and deconvolutions inside `process()` would cause audio dropouts. `WebSoundMeter` separates responsibilities across three execution contexts:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ 1. AUDIO THREAD (Web Audio API / AudioWorkletGlobalScope - 128-sample tick)│
 │                                                                            │
-│  [Mic / Multi-ch Input] ──► [ChannelSplitter] ────────────┐                │
-│                                                           ▼                │
-│  [Generator Worklet] ──┬──► [Virtual PA/Room Simulator] ─► [CaptureWorklet]│
-│   (Pink/White/Sine)    └──► [Physical Output]                              │
-│                                                           │ Interleaved    │
-│                                                           │ [M, R] float32 │
-└───────────────────────────────────────────────────────────┼────────────────┘
-                                                            │
-                         Lock-Free SPSC RingBuffer (SharedArrayBuffer)
-                         (Fallback: chunked Float32Array via MessagePort)
-                                                            │
-┌───────────────────────────────────────────────────────────▼────────────────┐
-│ 2. DSP WORKER THREAD (Dedicated Web Worker - Pure TypeScript Float32Array) │
+│  [Hardware Input] ──► [ChannelSplitterNode] ───────┬──────► [CaptureWorklet]
+│                                                    │         (inputs[0]=M, │
+│  [CaptureWorklet SignalGenerator] ──► [ChannelMergerNode]     inputs[1]=R) │
+│   (Pink / White / Sine / Sweep)    └► [Physical Output]          │         │
+└──────────────────────────────────────────────────────────────────┼─────────┘
+                                                                   │
+                    Lock-Free SPSC RingBuffer (SharedArrayBuffer)  │
+                    or chunked Float32Array via MessagePort        │
+                                                                   ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 2. DSP WORKER THREAD (src/dsp/dsp.worker.ts - Pure TypeScript Float32Array)│
 │                                                                            │
-│  • Reads M (Measurement) & R (Reference) samples into 64k Circular Buffers │
-│  • Applies Input Filters (A/C/Z weighting, 1kHz Notch) & SPL/Leq Meters    │
-│  • Applies sample-accurate Delay Compensation (m_delay)                    │
-│  • Runs Transform Tick (~25–30 Hz):                                        │
-│      - Fixed FFT (1k..64k) in Phase 1; LFT / MTW in Phase 2                │
-│      - Cross-Spectrum H1(f) = <G_rm>/<G_rr>, Module, Complex Phase         │
-│      - Coherence γ²(f), Peak Hold, Crest Factor                            │
-│      - Deconvolution IFFT → Impulse Response & Step Response               │
-│      - Periodic 64k Cross-Correlation → Auto Delay Finder                  │
-│  • Evaluates Virtual Sources (Union/Math, Virtual EQ, Crossover, Window)   │
-│  • Publishes Double-Buffered `SourceData` snapshots                        │
-└───────────────────────────────────────────────────────────┬────────────────┘
-                                                            │
-                         SharedArrayBuffer Views / Transferable Snapshots
-                                                            │
-┌───────────────────────────────────────────────────────────▼────────────────┐
-│ 3. UI & RENDERING THREAD (Main Thread / OffscreenCanvas)                   │
+│  • Ingests hardware [M, R] blocks OR synthesizes blocks via                │
+│    `SyntheticAcousticRig` when running in Built-in Demo Simulator mode     │
+│  • Runs `AnalyzerPipeline` (`src/dsp/analyzer-pipeline.ts`):               │
+│      - Input Filtering (A/C/Z weighting or 1 kHz Notch) & SPL/Leq Meters   │
+│      - Sample-accurate Delay Compensation (`delayMs`) & Polarity/Gain      │
+│      - Radix-2 FFT (1024..32768) with selectable Window Functions          │
+│      - Transfer Function (`H1` cross-spectrum or `OSM` |M|/|R| + Bessel)   │
+│      - Magnitude-Squared Coherence γ²(f), Peak Hold, Mean Squared          │
+│      - Fractional-Octave Smoothing (O(1) prefix-sum integral array)        │
+│      - Microphone Calibration curve interpolation (Mag dB & Phase deg)     │
+│      - Regularized Deconvolution IFFT → Impulse & Step Response            │
+│      - Auto Delay Finder (cross-correlation peak + parabolic interpolation)│
+└──────────────────────────────────────────────────────────────────┬─────────┘
+                                                                   │
+                                       `SourceData` Frame Snapshot │
+                                                                   ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 3. UI & RENDERING THREAD (Main Thread - Lit 3 + WebGL2 / 2D Canvas)        │
 │                                                                            │
-│  • Lit 3 Reactive UI Shell (OSM-style Sidebar, Drawer, Generator, SPL Bar) │
-│  • Hybrid Chart Renderer (60 FPS requestAnimationFrame):                   │
-│      - WebGL2 Layer: Traces, Coherence Alpha, Phase Wrap, Spectrogram      │
-│      - 2D Canvas Overlay: Crisp Log/Lin Grids, Labels, Cursors, EQ Nodes   │
+│  • `<wsm-app-shell>` orchestrates Top Bar, Chart Panels, and Source Drawer │
+│  • `SourceStore` evaluates Virtual EQ (`EqualizerSource`) and Math Union   │
+│    (`UnionSource`) graphs whenever live or stored sources update           │
+│  • `<wsm-chart-panel>` renders traces via WebGL2 (`GlTraceRenderer`) and   │
+│    crisp logarithmic/linear grids, cursors, and interactive EQ handles     │
+│    via 2D Canvas (`CanvasChartPainter`)                                    │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Audio I/O & Routing Layer
+## 2. Audio I/O & Routing Layer (`src/audio/`)
 
-### 2.1 Raw Measurement Input Acquisition
-Browsers apply aggressive voice-processing DSP to `getUserMedia` streams by default. For acoustic measurement, we must request raw, unprocessed multi-channel audio:
+### 2.1 Hardware Audio Router (`src/audio/hardware-audio-router.ts`)
+When Hardware Audio mode is active, `HardwareAudioRouter` requests raw, unprocessed multi-channel audio from `navigator.mediaDevices.getUserMedia`:
 
 ```ts
 const stream = await navigator.mediaDevices.getUserMedia({
@@ -63,141 +62,70 @@ const stream = await navigator.mediaDevices.getUserMedia({
     echoCancellation: { exact: false },
     noiseSuppression: { exact: false },
     autoGainControl: { exact: false },
-    channelCount: { ideal: 32 }, // Request all available interface channels
+    channelCount: { ideal: 32 },
     sampleRate: { ideal: 48000 },
-    sampleSize: { ideal: 24 },
-  }
+  },
 });
 ```
 
-After creating the `MediaStreamAudioSourceNode`, we inspect `sourceNode.channelCount` (or `stream.getAudioTracks()[0].getSettings().channelCount`) and connect a `ChannelSplitterNode(context, { numberOfOutputs: maxChannels })` so the user can assign any physical input channel as **Measurement ($M$)** or **Reference ($R$)**.
+- **Arbitrary Channel Routing**: A `ChannelSplitterNode` splits all available input channels so any physical channel can be routed to **Measurement ($M$)** (`inputs[0]`) and **Reference ($R$)** (`inputs[1]`).
+- **Internal Loopback Reference (`referenceChannel = 0`)**: Selecting `Internal Generator Loopback` connects the `CaptureTapProcessor`'s internal signal generator directly into the Reference buffer inside the worklet, providing sample-synchronous digital reference without an external loopback cable.
+- **Pause Behavior**: Pausing measurement (`Space` or **Pause** button) halts both sample capture and hardware Signal Generator output so the room falls silent immediately while inspecting traces.
 
-### 2.2 Internal Loopback Reference vs. External Hardware Reference
-In OSM (`measurement.cpp:477-508`), if the user selects the internal generator as the Reference channel (or in single-interface setups without a physical loopback cable), the generator's digital output samples are fed directly into the Reference buffer (`m_loopBuffer`).
-- In Web Audio, this is even cleaner: the `CaptureTapWorklet` has **2 inputs**:
-  - `inputs[0]`: Selected Measurement channel from the `ChannelSplitterNode`
-  - `inputs[1]`: Either a selected Reference channel from the `ChannelSplitterNode` **or** a direct Web Audio connection from the internal `GeneratorManager` node!
-- Because both `inputs[0]` and `inputs[1]` arrive in the exact same `CaptureTapWorklet.process()` call, internal reference loopback is sample-synchronous within the Web Audio graph, and external hardware latency is handled by the Delay Finder.
+### 2.2 Lock-Free SPSC Ring Buffer (`src/audio/ring-buffer.ts`)
+When `SharedArrayBuffer` is available (via `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers configured in `vite.config.ts`), `CaptureTapProcessor` writes interleaved `[M, R]` stereo frames into a lock-free Single-Producer Single-Consumer (`SPSC`) ring buffer synchronized with `Atomics.load` and `Atomics.store`. When `SharedArrayBuffer` is unavailable, `CaptureTapProcessor` automatically falls back to posting chunked `Float32Array` pairs over its `MessagePort`.
 
-### 2.3 Built-in Virtual Acoustic Rig (Hardware-Free Demo & Test Simulator)
-To allow full interactive demos, development, and automated end-to-end testing without an external audio interface, microphone, or loudspeaker, the Audio Engine exposes a built-in **"Simulated Acoustic Rig"** selectable as a virtual input device.
-
-When selected, the Reference channel ($R$) receives the internal Signal Generator output directly, while the Measurement channel ($M$) is synthesized through a configurable Web Audio / DSP graph modeling a real PA and room:
-1. **Propagation Delay Line (`DelayNode` / fractional delay)**: Configurable air flight time (e.g., `11.8 ms` ≈ `4.05 m`) to exercise the **Auto Delay Finder** and **Phase alignment**.
-2. **Loudspeaker Crossover & Driver Model**: Configurable 2-way (Sub + Main) Linkwitz-Riley / Butterworth crossover with independent Sub gain, Sub delay, and Sub polarity inversion switch—allowing users to practice **Sub/Top phase alignment** visually.
-3. **Room/Cabinet Resonances (`BiquadFilterNode` cascade)**: 2–4 peaking/shelving filters modeling room modes and HF air absorption—allowing users to practice flattening a system using the **Virtual EQ** source.
-4. **Early Reflections (Tapped Delay Lines)**: 1–3 secondary delay taps (e.g., `+2.4 ms` floor bounce at `-6 dB`, `+22 ms` back-wall reflection at `-12 dB`)—creating realistic comb filtering in Magnitude/Phase, visible secondary spikes in the **Impulse / ETC** plot, and exercising **IR Time Windowing**.
-5. **Uncorrelated Ambient Noise Injection**: An independent noise generator mixed into $M$ at a selectable SNR (e.g., `∞ dB`, `+20 dB`, `+10 dB`, `0 dB`)—causing realistic **Coherence ($\gamma^2$)** drop-offs and demonstrating how $H_1$ averaging recovers the clean transfer function from background noise.
+### 2.3 Built-in Virtual Acoustic Rig (`src/dsp/synthetic-rig.ts`)
+In **Built-in Demo Simulator** mode, `dsp.worker.ts` generates sample-accurate `[M, R]` streams using `SyntheticAcousticRig`. It models:
+1. **Fractional Propagation Delay Line**: Air flight time (e.g., `11.5 ms` / `3.95 m`) using linear/all-pass interpolation.
+2. **2-Way Loudspeaker Crossover**: Linkwitz-Riley 4th-order (`LR24`) crossover with independent Sub gain, Sub delay, and Sub polarity inversion.
+3. **Room Modes & Air Absorption**: Cascaded RBJ biquad filters (`peaking`, `lowshelf`, `highshelf`).
+4. **Early Reflections**: Multi-tap delay lines creating realistic comb filtering in Magnitude/Phase and secondary spikes in the Impulse Response.
+5. **Uncorrelated Ambient Noise**: Independent noise generator mixed into $M$ at a configurable SNR to exercise Coherence ($\gamma^2$) drop-offs and $H_1$ noise rejection.
 
 ---
 
-## 3. Unified Data Model (`SourceData`)
+## 3. DSP Pipeline Specification (`src/dsp/`)
 
-Directly adopting OSM's `Abstract::Data` + `Abstract::Source` design (`osm/src/abstract/data.h`), every source in `WebSoundMeter` (live measurement, stored trace, math union, virtual EQ, crossover filter, windowed IR) exposes a uniform typed-array-backed `SourceData` structure:
+### 3.1 Radix-2 FFT & Window Functions (`src/dsp/fft.ts`, `src/dsp/window-functions.ts`)
+- Precomputes bit-reversal permutation tables and complex twiddle factors for any power-of-two size from `1024` to `32768`.
+- Removes DC offset prior to windowing and supports `hann`, `hamming`, `blackman`, `flattop`, and `rectangular` windows with exact coherent-gain normalization.
 
-```ts
-export interface FrequencyDomainData {
-  readonly length: number;
-  readonly frequency: Float32Array;    // Hz per bin/point
-  readonly module: Float32Array;       // Linear RTA amplitude |M(f)|
-  readonly magnitude: Float32Array;    // Linear Transfer Function |H(f)|
-  readonly phaseReal: Float32Array;    // cos(φ) of unit phase vector
-  readonly phaseImag: Float32Array;    // sin(φ) of unit phase vector
-  readonly coherence: Float32Array;    // γ²(f) or |γ(f)| in [0, 1]
-  readonly peakSquared: Float32Array;  // Peak hold |M(f)|²
-  readonly meanSquared: Float32Array;  // RMS |M(f)|² (for Crest Factor)
-}
-
-export interface TimeDomainData {
-  readonly length: number;
-  readonly timeMs: Float32Array;       // Time in ms (centered at 0 ms)
-  readonly impulse: Float32Array;      // Deconvolved impulse h(t)
-}
-
-export interface BroadbandLevels {
-  // Indexed by Weighting ('Z' | 'A' | 'C') and Integration ('Fast' | 'Slow' | 'Impulse' | 'Leq')
-  readonly levelsDb: Record<'Z' | 'A' | 'C', Record<'Fast' | 'Slow' | 'Impulse' | 'Leq', number>>;
-  readonly peaksDb: Record<'Z' | 'A' | 'C', number>;
-  readonly referenceRmsDb: number;
-  readonly referencePeakDb: number;
-}
-```
-
-### Why `SoA` (Structure of Arrays) Instead of `AoS` (Array of Structs)?
-In C++, OSM uses `std::vector<FTData>` (Array of Structs). In JavaScript/TypeScript + WebGL, **Structure of Arrays (`Float32Array` per field)** has two massive advantages:
-1. **Zero-Allocation SIMD / DSP Loops**: Tight loops over contiguous `Float32Array`s JIT-compile to native vector instructions in V8/SpiderMonkey/JavaScriptCore (and map 1:1 to WebAssembly linear memory).
-2. **Direct GPU Buffer Upload**: `gl.bufferSubData(gl.ARRAY_BUFFER, 0, sourceData.frequencyDomain.magnitude)` uploads an entire trace to WebGL2/WebGPU in a single call with zero object traversal or marshaling!
-
----
-
-## 4. Mathematical & DSP Pipeline Specification
-
-### 4.1 Transform Modes: Fixed STFT vs. Log/Multi-Time Window (LFT / MTW)
-We should support two transform families:
-1. **Fixed Radix-2 FFT (`FFT10` = 1024 to `FFT16` = 65536)**:
-   - Uses a precomputed bit-reversal permutation table and twiddle factors (or a tiny WASM/SIMD radix-2/split-radix FFT kernel).
-   - Trick from OSM (`fouriertransform.cpp:204`): Pack real channel $M[n]$ and real channel $R[n]$ into a single complex vector $Z[n] = M[n] + i R[n]$ (or SIMD 4-float vector `[M.re, M.im, R.re, R.im]`) so both channels are transformed in a single pass.
-2. **Multi-Time Window (MTW) / Log Fourier Transform (LFT)**:
-   - Provides 24 or 48 points per octave from 20 Hz to 20 kHz.
-   - **Recommended Web Implementation**: Smaart-style **Cascaded Half-Band Decimation + Small FFTs** (or OSM's precomputed `m_logBasis` dot-product for lower octaves + FFT for upper octaves). Running a 2048-point FFT at 48 kHz (top 2 octaves), downsampling 2× with an anti-aliasing IIR/FIR filter and running a 2048-point FFT at 24 kHz, 12 kHz, 6 kHz, 3 kHz, 1.5 kHz, etc., achieves 1/48th-octave resolution down to 10 Hz with <10% of the CPU cost of a 65,536-point FFT!
-
-### 4.2 Transfer Function ($H_1$) & Coherence ($\gamma^2$)
+### 3.2 Transfer Function Estimators & Averaging (`src/dsp/transfer-function.ts`)
 For each frequency bin $k$ at frame $t$, given complex spectra $M_t(k)$ and $R_t(k)$:
-1. **Instantaneous Auto- and Cross-Power Spectra**:
-   $$G_{rr, t}(k) = |R_t(k)|^2, \quad G_{mm, t}(k) = |M_t(k)|^2, \quad G_{rm, t}(k) = R_t^*(k) \cdot M_t(k)$$
-2. **Temporal Averaging (FIFO Ring Buffer of depth $N$, or EMA / Bessel LPF)**:
-   Maintain smoothed accumulators $\overline{G}_{rr}(k)$, $\overline{G}_{mm}(k)$, and complex $\overline{G}_{rm}(k)$:
-   - **$H_1$ Transfer Function Complex Estimate**:
-     $$H_1(k) = \frac{\overline{G}_{rm}(k)}{\overline{G}_{rr}(k) + \epsilon}$$
-   - **Magnitude**: $|H_1(k)|$ (displayed as $20 \log_{10}|H_1(k)|$)
-   - **Phase**: Unit vector $\hat{\phi}(k) = \frac{\overline{G}_{rm}(k)}{|\overline{G}_{rm}(k)|} = (\cos\phi, \sin\phi)$, displayed as $\text{atan2}(\sin\phi, \cos\phi) \cdot \frac{180}{\pi}$.
-   - **Magnitude-Squared Coherence**:
-     $$\gamma^2(k) = \frac{|\overline{G}_{rm}(k)|^2}{\overline{G}_{rr}(k) \cdot \overline{G}_{mm}(k) + \epsilon} \in [0, 1]$$
-   *(Note: We can also offer OSM's per-frame $|M|/|R|$ + Bessel LPF mode as a selectable option in Measurement settings so traces match OSM 1:1 when desired.)*
+- **Auto- and Cross-Power Spectra**:
+  $$G_{rr, t}(k) = |R_t(k)|^2, \quad G_{mm, t}(k) = |M_t(k)|^2, \quad G_{rm, t}(k) = R_t^*(k) \cdot M_t(k)$$
+- **$H_1$ Cross-Spectral Estimator (`estimator: 'H1'`)**:
+  Maintains temporally averaged $\overline{G}_{rr}(k)$, $\overline{G}_{mm}(k)$, and $\overline{G}_{rm}(k)$ (via FIFO ring buffer of depth $N$, 4th-order Bessel LPF, or infinite cumulative average):
+  $$H_1(k) = \frac{\overline{G}_{rm}(k)}{\overline{G}_{rr}(k) + \epsilon}$$
+  Uncorrelated noise in $M$ averages toward zero in $\overline{G}_{rm}(k)$, rejecting room/crowd noise from both magnitude and phase.
+- **OSM Ratio Estimator (`estimator: 'OSM'`)**:
+  Computes per-frame $|M_t(k)| / |R_t(k)|$ and unit phase vector $(\cos\phi, \sin\phi)$, then averages across frames using FIFO or 4th-order cascaded Bessel low-pass filters (`0.25 Hz`, `0.5 Hz`, `1 Hz`, `2 Hz`).
+- **Magnitude-Squared Coherence**:
+  $$\gamma^2(k) = \frac{|\overline{G}_{rm}(k)|^2}{\overline{G}_{rr}(k) \cdot \overline{G}_{mm}(k) + \epsilon} \in [0, 1]$$
 
-### 4.3 Deconvolution (Impulse Response) & Auto Delay Finder
-- **Live Impulse Response (`Deconvolution`)**:
-  - For each bin $k$, compute regularised complex division:
-    $$H_{\text{deconv}}(k) = \frac{M(k) \cdot R^*(k)}{|R(k)|^2 + \lambda}$$
-    where $\lambda$ is a small regularization floor (prevents division-by-zero blowup at frequencies where the reference signal has no energy, e.g., band-limited sub signals).
-  - Run `IFFT(H_deconv)` and circular-shift by $N/2$ so $t = 0\text{ ms}$ sits at the center of the buffer (`[-T/2, +T/2]`).
-- **Auto Delay Finder**:
-  - Runs on a $2^{15}$ or $2^{16}$ window (~680 ms to 1.36 s range at 48 kHz) every ~1–2 seconds (or on user click of **"Find Delay"**).
-  - Finds $\arg\max_n |h[n]|$ and uses parabolic 3-point interpolation around the peak for sub-sample delay accuracy (in ms and samples).
+### 3.3 Deconvolution & Auto Delay Finder (`src/dsp/deconvolution.ts`)
+- **Impulse & Step Response**:
+  Computes regularized point-wise frequency deconvolution:
+  $$H_{\text{deconv}}(k) = \frac{M(k) \cdot R^*(k)}{|R(k)|^2 + \lambda}$$
+  Applies `IFFT`, circular-shifts $t = 0\text{ ms}$ to the center of the window, normalizes to percentage amplitude, and integrates $h(t)$ to produce the Step Response.
+- **Sub-Sample Auto Delay Finder**:
+  Locates the peak index $n_{\text{peak}} = \arg\max_n |h[n]|$ and applies 3-point parabolic interpolation over $(|h[n_{\text{peak}}-1]|, |h[n_{\text{peak}}]|, |h[n_{\text{peak}}+1]|)$ to estimate propagation delay with sub-sample accuracy (`delayMs` and `delaySamples`).
 
-### 4.4 Fractional-Octave Smoothing (1/1 to 1/48 Octave)
-- Using OSM's `IntegrationTree` (`osm/src/math/integration_tree.h`) or a **Prefix-Sum (Integral Array)** over power values:
-  - Build a prefix sum array $P[i] = \sum_{m=0}^{i} |X[m]|^2$ in $O(K)$ time.
-  - For any bin $i$ at frequency $f_i$, the lower and upper bin indices for $1/B$-octave smoothing are $i_{\text{low}} = \lfloor i \cdot 2^{-1/(2B)} \rfloor$ and $i_{\text{high}} = \lceil i \cdot 2^{+1/(2B)} \rceil$.
-  - The smoothed value is simply $\sqrt{\frac{P[i_{\text{high}}] - P[i_{\text{low}} - 1]}{i_{\text{high}} - i_{\text{low}} + 1}}$ in **$O(1)$ time per bin**, regardless of FFT size or smoothing width!
+### 3.4 $O(1)$ Prefix-Sum Fractional-Octave Smoothing (`src/dsp/smoothing.ts`)
+- Builds a cumulative prefix-sum array $P[i] = \sum_{m=0}^{i} X[m]$ in $O(K)$ time.
+- For each bin $i$ and fractional bandwidth $1/B$ octave (`1/1` through `1/48`), computes lower and upper bin bounds $i_{\text{low}} = \lfloor i \cdot 2^{-1/(2B)} \rfloor$ and $i_{\text{high}} = \lceil i \cdot 2^{+1/(2B)} \rceil$ and evaluates the smoothed value in $O(1)$ time per bin. Phase vectors $(\cos\phi, \sin\phi)$ are smoothed as unit complex vectors and re-normalized so $\pm 180^\circ$ wrap boundaries never average toward $0^\circ$.
 
----
-
-## 5. High-Performance Chart Rendering Architecture
-
-### Why a Two-Layer Canvas (WebGL2 + 2D/HTML Overlay) is Ideal
-Rendering acoustic charts has two very different visual requirements:
-1. **Heavy Dynamic Data (60 FPS)**: Multiple traces of 4,096–32,768 vertices, per-vertex coherence opacity, phase wrap-around detection, RTA bars, and scrolling 2D spectrograms.
-2. **Crisp UI & Typography (Event-driven)**: Axis ticks, logarithmic grid lines, frequency/dB readouts, cursor crosshairs, and draggable Parametric EQ nodes.
-
-By stacking a **WebGL2 `<canvas>`** (bottom) and a **2D `<canvas>` or SVG overlay** (top) inside a `<chart-viewport>` Lit component:
-- **Logarithmic X-Axis on the GPU**: Just like OSM's `shaders/logx.vert`, the vertex shader transforms frequency $f$ directly into normalized device coordinates:
-  ```glsl
-  float x_ndc = 2.0 * (log(freq / u_fMin) / log(u_fMax / u_fMin)) - 1.0;
-  ```
-- **Coherence Alpha Blending**: The fragment shader receives `v_coherence` from the vertex attribute buffer and computes trace opacity:
-  ```glsl
-  float alpha = smoothstep(u_coherenceThreshold, 1.0, v_coherence);
-  fragColor = vec4(u_traceColor.rgb, u_traceColor.a * alpha);
-  ```
-- **Artifact-Free Phase Wrapping**: In the vertex/instanced line shader (matching OSM's `shaders/phase.geom`), if $|\phi_{i+1} - \phi_i| > \pi$, the segment between bin $i$ and $i+1$ is either split at $\pm 180^\circ$ or discarded so vertical wrap lines never clutter the phase plot.
+### 3.5 Broadband Weighting & SPL/Leq Metering (`src/dsp/weighting-meters.ts`)
+- Implements bilinear-transformed IEC 61672-1 Class 1 **A-weighting** and **C-weighting** IIR biquad cascades alongside flat **Z-weighting**.
+- Tracks exponential time-weighted **Fast** ($\tau = 125\text{ ms}$), **Slow** ($\tau = 1000\text{ ms}$), **Impulse** ($\tau_{\text{attack}} = 35\text{ ms}$, $\tau_{\text{decay}} = 1500\text{ ms}$), true energy-equivalent **$L_{\text{eq}}$**, and instantaneous **Peak** across all three weightings simultaneously.
 
 ---
 
-## 6. Storage, Calibration & File Formats
+## 4. Hybrid WebGL2 + 2D Canvas Chart Engine (`src/charts/`)
 
-All persistence works 100% locally in the browser (offline-capable PWA) with optional file import/export:
-- **Session & Stored Trace Persistence**: `IndexedDB` stores active layout, measurement settings, and unlimited `Stored` traces (serialized in a compact binary/JSON format compatible with OSM `.osm` JSON exports where practical).
-- **Calibration Files (`.cal` / `.txt` / `.frd`)**: Drag-and-drop parser supporting standard 2-column (`Freq`, `dB`) and 3-column (`Freq`, `dB`, `Phase`) microphone calibration files, interpolated onto the active frequency vector.
-- **Trace Export/Import**: CSV/FRD text export, PNG chart snapshot export, and WAV impulse response export.
-
+Each `<wsm-chart-panel>` (`src/charts/chart-panel.ts`) delegates responsibilities across four focused modules:
+1. **`plot-types.ts`**: Coordinate transforms (logarithmic frequency X-axis, linear ms X-axis, dB/degree/percent Y-axis), wavelength/period calculations, and derived plot extractors (Group Delay $-\frac{d\phi}{d\omega}$ and Crest Factor $\text{Peak}/\text{RMS}$).
+2. **`gl-trace-renderer.ts`**: GPU-accelerated WebGL2 line renderer that uploads trace vertices with per-bin coherence alpha (`smoothstep` opacity fade) and suppresses vertical wrap-around artifacts when Phase jumps across $\pm 180^\circ$.
+3. **`canvas-chart-painter.ts`**: Renders crisp logarithmic/linear grid lines, axis labels, trace legends, hover crosshair readouts, RTA peak-hold overlays, and interactive Parametric EQ node handles.
+4. **`chart-interaction.ts`**: Pure state and math controller for cursor hover readouts, Y-axis scroll-wheel zoom, Y-axis drag pan, and direct dragging of Virtual EQ bands (frequency on X, gain dB on Y, and $Q$ factor via `Shift`+wheel).

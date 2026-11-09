@@ -1,155 +1,108 @@
-# 03. Implementation Plan, Project Structure & Roadmap
+# 03. Codebase Structure & Module Reference
 
-## 1. Design Decisions (Resolved from Discussion)
+## 1. Technology Stack
 
-Based on your feedback:
-1. **Primary Target**: A combination of **PA / sound system alignment & EQ tuning** (Transfer Function, Phase, Coherence, Auto Delay Finder, Virtual EQ) and **live mixing RTA / SPL monitoring** (Fractional-octave RTA + calibrated A/C/Z Fast/Slow/Leq broadband metering in the primary view).
-2. **Transform Strategy**: Start with **Fixed Radix-2 FFT sizes (`1024` to `65536`)** in Phase 1; add Log Fourier Transform / Multi-Time Window (`LFT` / `MTW`) in Phase 2.
-3. **UI Layout**: Use the **simpler, cleaner Open Sound Meter style layout**—a persistent top bar (Generator controls + Audio I/O & Demo Simulator selector + live broadband SPL/Leq readout), a main area with 1–3 stacked charts, and a collapsible right-hand Source list with an inline/slide-out properties panel.
-4. **Pure TypeScript DSP + Licensing**:
-   - Implement the entire DSP engine in **pure TypeScript (`Float32Array`)** inside a dedicated Web Worker, avoiding C++/WASM build complexity unless a specific bottleneck ever requires it.
-   - Write all DSP algorithms cleanly from standard textbook equations (Cooley–Tukey FFT, RBJ Audio EQ Cookbook biquads, IEC 61672 weighting, Bendat & Piersol $H_1$ cross-spectral transfer function) so the codebase stays self-contained, testable, and license-clean (see [`01-overview-and-comparison.md` §5](./01-overview-and-comparison.md#5-licensing--clean-room-dsp-considerations)).
-5. **Automated Testing for ~Everything & Built-in Demo Simulator**:
-   - Every DSP module, virtual source, worker pipeline, and UI component is backed by automated tests (`Vitest` + `Playwright`), and a **Built-in Virtual Acoustic Rig (PA/Room Simulator)** is included from Phase 0/1 so every feature can be demoed and tested without external audio hardware (detailed in [`04-testing-and-simulation-design.md`](./04-testing-and-simulation-design.md)).
-
----
-
-## 2. Recommended Technology Stack
-
-| Layer | Choice | Rationale |
+| Layer | Technology | Role |
 | :--- | :--- | :--- |
-| **Build Tool & Dev Server** | **Vite** + TypeScript | Native support for `AudioWorklet` & `Web Worker` bundling, fast HMR, and `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers for `SharedArrayBuffer`. |
-| **Unit & Component Testing** | **Vitest** (`@vitest/browser`) | Instant Node/V8 execution for pure TypeScript DSP math tests + headless browser mode for Lit Web Components and Worker integration tests. |
-| **E2E & Visual Testing** | **Playwright** | Full browser automation with WebGL2 canvas screenshot comparisons and end-to-end user flows driven by the built-in Acoustic Simulator. |
-| **UI Components** | **Lit 3** (`lit`) | Already in `package.json`. Zero-overhead Web Components, ideal for chart viewports, sidebar source items, and high-frequency meter updates. |
-| **Audio Capture, Sim & Gen** | **Web Audio API + `AudioWorklet`** | Extends [`noise-worklet.ts`](../audio-worklets/noise-worklet.ts), adds `capture-worklet.ts` (`SharedArrayBuffer` ring buffer), and includes `simulator-rig.ts` for hardware-free PA/room simulation. |
-| **DSP Engine** | **Dedicated Web Worker (Pure TS)** | Runs off the main UI thread and off the 2.67ms audio thread. Pure TypeScript over `Float32Array` easily runs 16k–64k FFT + Deconvolution + Coherence + SPL/Leq at 30 Hz. |
-| **Chart Rendering** | **WebGL2 + 2D Canvas Overlay** | Custom WebGL2 renderer for traces, RTA bars, coherence alpha, phase wrap handling, and spectrograms; 2D Canvas overlay for crisp text, log grids, cursors, and interactive EQ nodes. |
-| **Local Persistence** | **`IndexedDB`** + File/Blob API | Auto-saves workspace layout, generator state, measurement configs, `.cal` calibration curves, and stored traces (`Stored` sources) locally in the browser. |
+| **Build & Dev Server** | **Vite** + TypeScript (`strict: true`) | Native `AudioWorklet` & `Web Worker` bundling, fast HMR, and `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers for `SharedArrayBuffer`. |
+| **UI Components** | **Lit 3** (`lit`) | Reactive Web Components (`<wsm-app-shell>`, `<wsm-chart-panel>`) plus pure functional sub-views for topbar groups, sidebar, and source inspectors. |
+| **Audio I/O & Worklets** | **Web Audio API + `AudioWorklet`** | Raw multi-channel `getUserMedia` routing (`HardwareAudioRouter`), worklet signal generator & dual-channel tap (`CaptureTapProcessor`), and lock-free `SPSC` `RingBuffer`. |
+| **DSP Engine** | **Dedicated Web Worker (Pure TS)** | Runs off the main UI thread and off the 2.67 ms audio thread (`src/dsp/dsp.worker.ts`). Pure TypeScript over `Float32Array` buffers. |
+| **Chart Rendering** | **WebGL2 + 2D Canvas Overlay** | `GlTraceRenderer` for GPU-accelerated traces with coherence alpha and phase-wrap suppression; `CanvasChartPainter` for grids, cursors, and draggable EQ nodes. |
+| **Persistence** | **URL History + `localStorage` + `IndexedDB`** | 3-tier persistence across URL query parameters (`url-state.ts`), synchronous workspace config (`workspace-session.ts`), and IndexedDB v2 (`session-storage.ts`). |
+| **Automated Testing** | **Vitest** + **Playwright** | 23 Vitest unit & integration test suites (68 tests) + Playwright E2E browser tests driven by the built-in Acoustic Simulator. |
 
 ---
 
-## 3. Proposed Directory Structure
+## 2. Repository Directory Structure
+
+Every file in `src/` is organized around a single responsibility so modules remain concise and independently testable:
 
 ```text
 WebSoundMeter/
 ├── index.html
-├── vite.config.ts               # Configures COOP/COEP headers & Vitest config
-├── playwright.config.ts         # E2E & WebGL visual regression config
+├── vite.config.ts                       # Configures COOP/COEP headers & Vitest
+├── playwright.config.ts                 # Headless Chromium E2E test configuration
 ├── package.json
 ├── tsconfig.json
+├── LICENSE                              # GNU General Public License v3.0 (GPLv3)
 ├── docs/
 │   ├── 01-overview-and-comparison.md
 │   ├── 02-architecture-and-dsp-design.md
 │   ├── 03-roadmap-and-implementation-plan.md
-│   └── 04-testing-and-simulation-design.md
+│   ├── 04-testing-and-simulation-design.md
+│   └── 05-persistence-and-state-management.md
 ├── src/
-│   ├── main.ts                  # App bootstrap
+│   ├── main.ts                          # Application bootstrap (<wsm-app-shell>)
 │   ├── audio/
-│   │   ├── audio-engine.ts      # AudioContext, device enumeration, raw getUserMedia, routing
-│   │   ├── generator-manager.ts # Signal generator controller (Pink, White, Sine, Sweep, Burst)
-│   │   ├── simulator-rig.ts     # Web Audio Virtual PA/Room Simulator (delay, crossover, reflections, noise)
-│   │   ├── ring-buffer.ts       # Lock-free SPSC RingBuffer backed by SharedArrayBuffer
+│   │   ├── audio-engine.ts              # High-level coordinator between DSP Worker & HardwareAudioRouter
+│   │   ├── hardware-audio-router.ts     # AudioContext, device enumeration, raw getUserMedia, channel splitter/merger
+│   │   ├── ring-buffer.ts               # Lock-free SPSC RingBuffer backed by SharedArrayBuffer
 │   │   └── worklets/
-│   │       ├── generator-worklet.ts  # Evolved from audio-worklets/noise-worklet.ts
-│   │       └── capture-worklet.ts    # Taps [M, R] channels into SharedArrayBuffer
-│   ├── dsp/                     # 100% Pure TypeScript (Zero DOM/WebAudio deps → Fast Unit Tests)
-│   │   ├── dsp.worker.ts        # Background DSP orchestrator running at ~25-30 Hz
-│   │   ├── synthetic-rig.ts     # Deterministic sample-accurate PA/Room simulator for unit tests
-│   │   ├── fft.ts               # Radix-2 FFT / IFFT & Window functions (Hann, Blackman, FlatTop...)
-│   │   ├── biquad.ts            # RBJ Cookbook biquads (PEQ, shelves, crossover, notch) + H(e^jw) eval
-│   │   ├── transfer-function.ts # H1 cross-spectrum, magnitude, complex phase, coherence
-│   │   ├── deconvolution.ts     # Impulse response IFFT, Step response, & 64k Auto Delay Finder
-│   │   ├── averaging.ts         # FIFO ring-buffer & Exponential / 4th-order Bessel LPF averaging
-│   │   ├── smoothing.ts         # O(1) prefix-sum fractional-octave smoothing (1/1 .. 1/48 oct)
-│   │   ├── weighting-meters.ts  # IEC 61672 A/C/Z filters, Fast/Slow/Peak/Leq broadband meters
-│   │   └── calibration.ts       # .cal/.txt parser & log-frequency interpolator
-│   ├── sources/                 # Unified SourceData & Virtual Sources
-│   │   ├── source-data.ts       # Unified SoA Float32Array data model (FTData, TimeData, Levels)
-│   │   ├── base-source.ts       # Common properties: uuid, name, color, active, visible
-│   │   ├── measurement-source.ts# Live measurement configuration & state
-│   │   ├── stored-source.ts     # Frozen trace snapshot + notes + gain/delay offset
-│   │   ├── union-source.ts      # Trace math: Vector Avg, Power Avg, A-B Subtract, Min, Max
-│   │   └── eq-source.ts         # Virtual Parametric EQ & Crossover modeling source
-│   ├── charts/
-│   │   ├── chart-container.ts   # Lit wrapper: plot type switcher, axis range controls, cursors
-│   │   ├── gl-renderer.ts       # WebGL2 trace, bar, coherence-alpha, phase-wrap & spectrogram
-│   │   ├── grid-overlay.ts      # 2D Canvas log/linear grid, labels, crosshair readouts
-│   │   └── plots/               # Plot-specific coordinate mappers & shaders
-│   │       ├── rta-plot.ts
-│   │       ├── magnitude-plot.ts
-│   │       ├── phase-plot.ts
-│   │       ├── coherence-plot.ts
-│   │       ├── impulse-plot.ts
-│   │       ├── level-history-plot.ts
-│   │       └── spectrogram-plot.ts
-│   └── ui/
-│       ├── app-shell.ts         # Simple OSM-style layout: Top Bar (Gen + Sim + SPL), Charts, Sidebar
-│       ├── spl-meter-bar.ts     # Always-visible A/C/Z Fast/Slow/Leq/Peak numeric + bar readout
-│       ├── simulator-panel.ts   # Preset selector & live controls for Demo Mode
-│       ├── source-sidebar.ts    # Source list (Live, Stored, Math, EQ) with color/visibility toggles
-│       └── properties-drawer.ts # Context-sensitive settings for selected Source or Chart
+│   │       └── capture-worklet.ts       # AudioWorkletProcessor: signal generator + [M, R] capture tap
+│   ├── dsp/                             # 100% Pure TypeScript (Zero DOM/WebAudio dependencies)
+│   │   ├── dsp.worker.ts                # Background Web Worker running AnalyzerPipeline & SyntheticAcousticRig
+│   │   ├── analyzer-pipeline.ts         # Full dual-channel measurement pipeline orchestrator
+│   │   ├── synthetic-rig.ts             # Deterministic PA/Room simulator (5 presets)
+│   │   ├── signal-generator.ts          # Pink (Voss-McCartney), White, Sine, and Log Sweep synthesis
+│   │   ├── fft.ts                       # Radix-2 FFT / IFFT with precomputed twiddle & bit-reversal tables
+│   │   ├── window-functions.ts          # Hann, Hamming, Blackman, FlatTop, Rectangular windows + coherent gain
+│   │   ├── biquad.ts                    # RBJ Cookbook biquads (PEQ, shelves, LPF/HPF, notch, allpass, LR24)
+│   │   ├── transfer-function.ts         # H1 & OSM estimators, FIFO/Bessel LPF averaging, coherence γ²(f)
+│   │   ├── deconvolution.ts             # Regularized IFFT impulse response, step response & auto delay finder
+│   │   ├── smoothing.ts                 # O(1) prefix-sum fractional-octave smoothing (1/1 .. 1/48 oct)
+│   │   ├── weighting-meters.ts          # IEC 61672 A/C/Z weighting filters & Fast/Slow/Impulse/Leq/Peak meters
+│   │   └── calibration.ts               # 2/3-column .cal/.txt/.frd parser & log-frequency interpolator
+│   ├── sources/                         # Unified SourceData Model, Virtual Sources & Persistence
+│   │   ├── source-data.ts               # Structure-of-Arrays (SoA) Float32Array data structures & helpers
+│   │   ├── source-store.ts              # Reactive store managing Stored, Virtual EQ, and Math Union sources
+│   │   ├── eq-source.ts                 # Virtual Parametric EQ evaluation (up to 8 bands)
+│   │   ├── union-source.ts              # Multi-source math (Vector Avg, Power Avg, RMS Avg, Subtract, Min, Max)
+│   │   ├── workspace-session.ts         # Tier 2 localStorage persistence (DSP config, gen config, audio routing)
+│   │   └── session-storage.ts           # Tier 3 IndexedDB v2 persistence (Stored, EQ, Union, Calibration curves)
+│   ├── charts/                          # Hybrid WebGL2 + 2D Canvas Chart Engine
+│   │   ├── chart-panel.ts               # <wsm-chart-panel> Lit element coordinating canvas layers & resize
+│   │   ├── chart-header-view.ts         # Plot type selector, alignment badge, and cursor readout bar
+│   │   ├── chart-interaction.ts         # Pure cursor hover, Y-axis zoom/pan, and EQ band drag state machine
+│   │   ├── canvas-chart-painter.ts      # 2D Canvas grid, axes, traces fallback, peak hold, and EQ handles
+│   │   ├── gl-trace-renderer.ts         # WebGL2 shader pipeline for traces, coherence alpha & phase wrapping
+│   │   └── plot-types.ts                # Plot metadata, coordinate mappers, Group Delay & Crest Factor math
+│   └── ui/                              # Application Shell, Topbar, Sidebar & Inspector Views
+│       ├── app-shell.ts                 # <wsm-app-shell> root coordinator
+│       ├── app-shell-styles.ts          # Scoped CSS design tokens and layout styles
+│       ├── url-state.ts                 # Tier 1 URL query parser, serializer & History API integration
+│       ├── keyboard-shortcuts.ts        # Global keyboard shortcut dispatcher (Space, C, D, R, E, U, 1-3, Esc)
+│       ├── sidebar-view.ts              # Right-hand source list (Live, Stored, Virtual EQ, Math Union)
+│       ├── topbar/
+│       │   ├── topbar-view.ts           # Top bar container composing the 4 functional toolbar groups
+│       │   ├── input-routing-group.ts   # Simulator preset selector vs. Hardware device & channel routing
+│       │   ├── generator-group.ts       # Signal generator controls (type, frequency, level dBFS, enable)
+│       │   ├── delay-capture-group.ts   # Auto Delay Finder readout, Apply Delay, Pause, Capture, Layout 1/2/3
+│       │   └── spl-meter-group.ts       # Live broadband SPL / Leq / Peak meter & crest factor badge
+│       └── inspectors/
+│           ├── live-measurement-inspector.ts # FFT, window, averaging, smoothing, delay, filter & calibration UI
+│           ├── stored-source-inspector.ts    # Rename, color, gain/delay offsets, notes & JSON export
+│           ├── eq-source-inspector.ts        # Target source selector & 8-band parametric EQ editor table
+│           └── union-source-inspector.ts     # Math mode selector & multi-source checkbox matrix
 └── tests/
-    ├── unit/                    # Tier 1: Fast Vitest DSP & Source Math tests
-    │   ├── fft.test.ts
-    │   ├── biquad.test.ts
-    │   ├── transfer-function.test.ts
-    │   ├── coherence.test.ts
-    │   ├── deconvolution.test.ts
-    │   ├── weighting-meters.test.ts
-    │   ├── smoothing.test.ts
-    │   └── sources.test.ts
-    ├── integration/             # Tier 2 & 3: RingBuffer, Worker & Lit Component tests
-    │   ├── ring-buffer.test.ts
-    │   ├── dsp-worker.test.ts
-    │   └── ui-components.test.ts
-    └── e2e/                     # Tier 4: Playwright E2E + WebGL visual tests using Demo Simulator
-        ├── demo-simulator.spec.ts
-        └── charts-visual.spec.ts
+    ├── unit/                            # 20 fast Vitest unit test suites
+    ├── integration/                     # 3 Vitest multi-module pipeline & workflow test suites
+    └── e2e/                             # Playwright full-browser E2E & persistence tests
 ```
 
 ---
 
-## 4. Phased Implementation Roadmap
+## 3. Keyboard Shortcuts (`src/ui/keyboard-shortcuts.ts`)
 
-### Phase 0: Tooling, Test Harness & Audio/Simulator Pipeline
-1. **Vite + Vitest + Playwright Setup**:
-   - Configure `vite.config.ts` with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so `SharedArrayBuffer` works seamlessly in dev, preview, and test modes.
-   - Set up `npm test` (`vitest`) and `npm run test:e2e` (`playwright`).
-2. **Lock-Free `RingBuffer` & Pure-TS Synthetic Test Rig**:
-   - Implement `src/audio/ring-buffer.ts` + `tests/integration/ring-buffer.test.ts`.
-   - Implement `src/dsp/biquad.ts` and `src/dsp/synthetic-rig.ts` so every subsequent DSP module can be tested against known synthetic speakers/rooms immediately.
-3. **Audio Engine & Web Audio Demo Simulator (`simulator-rig.ts`)**:
-   - Build `AudioEngine` supporting both real multi-channel `getUserMedia` devices (with `echoCancellation: false`, `noiseSuppression: false`, `autoGainControl: false`) and the **Built-in Demo Simulator** (with presets for Flat Delayed, Room Modes, Sub+Top Crossover, Comb Filtering, and Noisy Venue).
+All keyboard shortcuts inspect `e.composedPath()[0]` so typing inside Shadow DOM `<input>`, `<textarea>`, or `<select>` elements never triggers global commands:
 
-### Phase 1: Core PA Alignment & Live Mixing RTA/SPL MVP
-1. **Pure-TS DSP Core + Exhaustive Unit Tests (`src/dsp/`)**:
-   - Fixed Radix-2 FFT (`1024` to `65536`) + Windows (`Hann`, `Hamming`, `Blackman`, `FlatTop`, `Rectangular`) + `fft.test.ts`.
-   - Dual-channel Transfer Function ($H_1(f) = \langle G_{rm} \rangle / \langle G_{rr} \rangle$), Complex Phase, and Coherence ($\gamma^2(f)$) + `transfer-function.test.ts` & `coherence.test.ts`.
-   - Temporal averaging (`Off`, `FIFO`, Exponential/`LPF`) and $O(1)$ prefix-sum fractional-octave smoothing (`1/1` to `1/48` oct) + `smoothing.test.ts`.
-   - Deconvolution Impulse Response ($h(t)$ linear % and ETC dB) + **Auto Delay Finder** (with sub-sample parabolic interpolation) + `deconvolution.test.ts`.
-   - **Broadband SPL / Leq Metering**: IEC 61672 A/C/Z weighting biquads, Fast (125 ms), Slow (1000 ms), Peak, and $L_{\text{eq}}$ integration + `weighting-meters.test.ts`.
-2. **Hybrid WebGL2 + 2D Overlay Chart Engine (`src/charts/`)**:
-   - Build `<chart-container>` with pan/zoom, logarithmic/linear grid overlay, and interactive cursor readouts (Hz, ms, wavelength, dB, Phase, Coherence).
-   - Implement the 5 core live plots:
-     1. **RTA / Spectrum** (Line + Fractional-Octave Bars + Peak Hold)
-     2. **Magnitude** (dB vs. Log Hz, with Coherence alpha fade/blanking)
-     3. **Phase** (Wrapped $\pm 180^\circ$ vs. Log Hz, with wrap-jump suppression & Coherence alpha)
-     4. **Coherence** (0–100% vs. Log Hz)
-     5. **Impulse / ETC** (Amplitude % or dB vs. ms)
-3. **Simple OSM-Style App Shell, Stored Traces & Calibration (`src/ui/`)**:
-   - Top bar with Signal Generator, Input/Simulator Preset selector, **"Find & Apply Delay"** button, and live **SPL / Leq / Peak Meter Bar**.
-   - Collapsible right sidebar for Sources (Live Measurement + captured `Stored` traces), `IndexedDB` session persistence, and `.cal` / `.txt` mic calibration import.
-   - Playwright E2E test suite verifying the full PA alignment and RTA/SPL workflow using the Demo Simulator.
-
-### Phase 2: Virtual EQ, Trace Math, Spectrogram & SPL History
-1. **Virtual Parametric EQ (`EqualizerSource`) & Crossover Modeling**:
-   - Interactive EQ nodes draggable directly on the Magnitude chart, showing the predicted combined Magnitude and Phase response on any live or stored trace in real time.
-2. **Trace Math (`UnionSource`) & IR Time Windowing (`WindowingSource`)**:
-   - Vector average multiple mic positions (e.g., FOH spatial average), compute $A - B$ difference, and apply reflection-free time gating to Impulse Responses.
-3. **Live Mixing Monitoring Additions**:
-   - Scrolling **Spectrogram (Waterfall)** plot and scrolling **SPL / Leq Level History** strip chart with configurable threshold alerts.
-4. **Log Fourier Transform / Multi-Time Window (`LFT` / `MTW`)**:
-   - Add multi-window log-frequency resolution mode alongside fixed FFT sizes.
-5. **Expanded Signal Generators**:
-   - Logarithmic Sine Sweep, Burst Noise, Brown Noise, and shaped high-crest-factor noise.
+| Key | Action |
+| :--- | :--- |
+| `Space` | Toggle **Pause / Resume** (pauses both capture and hardware signal generator output; or initializes hardware stream after reload) |
+| `C` | **Capture** current Live Measurement into a new `StoredSource` trace |
+| `D` | **Apply** the Auto Delay Finder's estimated propagation delay to the Live Measurement |
+| `R` | **Reset** averaging buffers and peak hold accumulators |
+| `E` | Create a new **Virtual Parametric EQ** source targeting the active trace |
+| `U` | Create a new **Math Union** source |
+| `1` / `2` / `3` | Switch viewport between **1**, **2**, or **3** stacked charts |
+| `Escape` | Close the Source Properties Inspector drawer |
