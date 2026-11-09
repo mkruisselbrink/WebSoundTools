@@ -20,6 +20,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { EqualizerSourceConfig } from '../../src/sources/eq-source.js';
 import {
   SourceData,
   createEmptyFrequencyDomainData,
@@ -29,6 +30,7 @@ import {
   SourcePersistenceAdapter,
   SourceStore,
 } from '../../src/sources/source-store.js';
+import { UnionSourceConfig } from '../../src/sources/union-source.js';
 
 function createMockLiveFrame(sampleRate = 48000): SourceData {
   const freqData = createEmptyFrequencyDomainData(65, sampleRate);
@@ -56,10 +58,16 @@ function createMockLiveFrame(sampleRate = 48000): SourceData {
 function createMemoryPersistence(): {
   adapter: SourcePersistenceAdapter;
   saved: Map<string, SourceData>;
+  savedEq: Map<string, EqualizerSourceConfig>;
+  savedUnion: Map<string, UnionSourceConfig>;
 } {
   const saved = new Map<string, SourceData>();
+  const savedEq = new Map<string, EqualizerSourceConfig>();
+  const savedUnion = new Map<string, UnionSourceConfig>();
   return {
     saved,
+    savedEq,
+    savedUnion,
     adapter: {
       loadAll: async () => Array.from(saved.values()),
       save: (src) => {
@@ -67,6 +75,20 @@ function createMemoryPersistence(): {
       },
       remove: (id) => {
         saved.delete(id);
+      },
+      loadAllEq: async () => Array.from(savedEq.values()),
+      saveEq: (eq) => {
+        savedEq.set(eq.id, eq);
+      },
+      removeEq: (id) => {
+        savedEq.delete(id);
+      },
+      loadAllUnion: async () => Array.from(savedUnion.values()),
+      saveUnion: (u) => {
+        savedUnion.set(u.id, u);
+      },
+      removeUnion: (id) => {
+        savedUnion.delete(id);
       },
     },
   };
@@ -113,13 +135,15 @@ describe('SourceStore', () => {
     expect(listener).toHaveBeenCalled();
   });
 
-  it('memoizes Virtual EQ and Union source evaluations unless inputs change', () => {
-    const { adapter } = createMemoryPersistence();
+  it('memoizes Virtual EQ and Union source evaluations and persists them across reloads', async () => {
+    const { adapter, savedEq, savedUnion } = createMemoryPersistence();
     const store = new SourceStore(adapter);
     store.setLiveFrame(createMockLiveFrame());
 
     const eq = store.addVirtualEqSource();
     const union = store.addUnionSource();
+    expect(savedEq.has(eq.id)).toBe(true);
+    expect(savedUnion.has(union.id)).toBe(true);
 
     const firstEval = store.getAllSources();
     const secondEval = store.getAllSources();
@@ -130,13 +154,22 @@ describe('SourceStore', () => {
     expect(eqData1).toBeDefined();
     expect(unionData1).toBeDefined();
 
-    // Dragging an EQ band invalidates EQ evaluation
+    // Dragging an EQ band invalidates EQ evaluation and updates persisted EQ
     store.setSelectedSourceId(eq.id);
     store.dragActiveEqBand(1, 250, -4.5);
     const thirdEval = store.getAllSources();
     const eqData2 = thirdEval.find((s) => s.id === eq.id);
     expect(eqData2).not.toBe(eqData1);
     expect(store.getEqSources()[0].bands[1].frequency).toBe(250);
-    expect(store.getEqSources()[0].bands[1].gainDb).toBe(-4.5);
+    expect(savedEq.get(eq.id)?.bands[1].gainDb).toBe(-4.5);
+
+    // Hydrate a second store from the same persistence adapter
+    const reloadedStore = new SourceStore(adapter);
+    reloadedStore.setSelectedSourceId('non-existent-id');
+    await reloadedStore.loadFromPersistence();
+    expect(reloadedStore.getEqSources()).toHaveLength(1);
+    expect(reloadedStore.getUnionSources()).toHaveLength(1);
+    // Orphaned selectedSourceId is reset to live-measurement
+    expect(reloadedStore.getSelectedSourceId()).toBe('live-measurement');
   });
 });

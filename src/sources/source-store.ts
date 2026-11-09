@@ -23,8 +23,8 @@
  * Pure reactive store managing the acoustic source graph:
  *  - Live measurement frame + persistent visibility state
  *  - Stored trace snapshots + IndexedDB persistence
- *  - Virtual Parametric EQ sources with memoized frequency/impulse evaluation
- *  - Math / Union sources with memoized vector/power evaluation
+ *  - Virtual Parametric EQ sources with memoized frequency/impulse evaluation + IndexedDB persistence
+ *  - Math / Union sources with memoized vector/power evaluation + IndexedDB persistence
  */
 
 import { BiquadSpec } from '../dsp/biquad.js';
@@ -34,9 +34,15 @@ import {
   createDefaultEqBands,
 } from './eq-source.js';
 import {
+  deleteEqSourceFromDb,
   deleteStoredTraceFromDb,
+  deleteUnionSourceFromDb,
+  loadAllEqSourcesFromDb,
   loadAllStoredTracesFromDb,
+  loadAllUnionSourcesFromDb,
+  saveEqSourceToDb,
   saveStoredTraceToDb,
+  saveUnionSourceToDb,
 } from './session-storage.js';
 import {
   DEFAULT_SOURCE_PALETTE,
@@ -49,12 +55,24 @@ export interface SourcePersistenceAdapter {
   readonly loadAll: () => Promise<SourceData[]>;
   readonly save: (source: SourceData) => void | Promise<void>;
   readonly remove: (id: string) => void | Promise<void>;
+  readonly loadAllEq?: () => Promise<EqualizerSourceConfig[]>;
+  readonly saveEq?: (eq: EqualizerSourceConfig) => void | Promise<void>;
+  readonly removeEq?: (id: string) => void | Promise<void>;
+  readonly loadAllUnion?: () => Promise<UnionSourceConfig[]>;
+  readonly saveUnion?: (union: UnionSourceConfig) => void | Promise<void>;
+  readonly removeUnion?: (id: string) => void | Promise<void>;
 }
 
 const defaultPersistenceAdapter: SourcePersistenceAdapter = {
   loadAll: loadAllStoredTracesFromDb,
   save: saveStoredTraceToDb,
   remove: deleteStoredTraceFromDb,
+  loadAllEq: loadAllEqSourcesFromDb,
+  saveEq: saveEqSourceToDb,
+  removeEq: deleteEqSourceFromDb,
+  loadAllUnion: loadAllUnionSourcesFromDb,
+  saveUnion: saveUnionSourceToDb,
+  removeUnion: deleteUnionSourceFromDb,
 };
 
 function generateShortId(prefix: string): string {
@@ -108,15 +126,62 @@ export class SourceStore {
   }
 
   async loadFromPersistence(): Promise<void> {
-    const loaded = await this.persistence.loadAll();
-    if (loaded.length > 0) {
-      this.storedSources = loaded;
+    const [loadedStored, loadedEq, loadedUnion] = await Promise.all([
+      this.persistence.loadAll(),
+      this.persistence.loadAllEq ? this.persistence.loadAllEq() : Promise.resolve([]),
+      this.persistence.loadAllUnion
+        ? this.persistence.loadAllUnion()
+        : Promise.resolve([]),
+    ]);
+
+    let changed = false;
+    if (loadedStored.length > 0) {
+      this.storedSources = loadedStored;
+      changed = true;
+    }
+    if (loadedEq.length > 0) {
+      this.eqSources = loadedEq;
+      changed = true;
+    }
+    if (loadedUnion.length > 0) {
+      this.unionSources = loadedUnion;
+      changed = true;
+    }
+
+    if (this.ensureValidSelectedSourceId()) {
+      changed = true;
+    }
+
+    if (changed) {
       this.notify();
     }
   }
 
+  ensureValidSelectedSourceId(): boolean {
+    if (this.selectedSourceId === 'live-measurement') {
+      return false;
+    }
+    const exists =
+      this.storedSources.some((s) => s.id === this.selectedSourceId) ||
+      this.eqSources.some((s) => s.id === this.selectedSourceId) ||
+      this.unionSources.some((s) => s.id === this.selectedSourceId);
+    if (!exists) {
+      this.selectedSourceId = 'live-measurement';
+      return true;
+    }
+    return false;
+  }
+
   getLiveSource(): SourceData | null {
     return this.liveSource;
+  }
+
+  getLiveSourceVisible(): boolean {
+    return this.liveSourceVisible;
+  }
+
+  setLiveSourceVisible(visible: boolean): void {
+    this.toggleVisibility('live-measurement', visible);
   }
 
   getStoredSources(): readonly SourceData[] {
@@ -270,13 +335,19 @@ export class SourceStore {
         return updated;
       });
     } else if (id.startsWith('eq-')) {
-      this.eqSources = this.eqSources.map((s) =>
-        s.id === id ? { ...s, visible } : s
-      );
+      this.eqSources = this.eqSources.map((s) => {
+        if (s.id !== id) return s;
+        const updated = { ...s, visible };
+        void this.persistence.saveEq?.(updated);
+        return updated;
+      });
     } else if (id.startsWith('union-')) {
-      this.unionSources = this.unionSources.map((s) =>
-        s.id === id ? { ...s, visible } : s
-      );
+      this.unionSources = this.unionSources.map((s) => {
+        if (s.id !== id) return s;
+        const updated = { ...s, visible };
+        void this.persistence.saveUnion?.(updated);
+        return updated;
+      });
     }
     this.notify();
   }
@@ -293,14 +364,25 @@ export class SourceStore {
     };
     this.eqSources = [...this.eqSources, newEq];
     this.selectedSourceId = id;
+    void this.persistence.saveEq?.(newEq);
     this.notify();
     return newEq;
+  }
+
+  deleteEqSource(id: string): void {
+    this.eqSources = this.eqSources.filter((s) => s.id !== id);
+    this.eqEvalCache.delete(id);
+    void this.persistence.removeEq?.(id);
+    if (this.selectedSourceId === id) {
+      this.selectedSourceId = 'live-measurement';
+    }
+    this.notify();
   }
 
   autoFlattenRoomModesWithEq(eqId: string): void {
     this.eqSources = this.eqSources.map((eq) => {
       if (eq.id !== eqId) return eq;
-      return {
+      const updated: EqualizerSourceConfig = {
         ...eq,
         bands: [
           { type: 'highpass', frequency: 35, q: 0.707, gainDb: 0, enabled: false },
@@ -311,14 +393,19 @@ export class SourceStore {
           { type: 'highshelf', frequency: 9000, q: 0.707, gainDb: 6.0, enabled: true },
         ],
       };
+      void this.persistence.saveEq?.(updated);
+      return updated;
     });
     this.notify();
   }
 
   setEqTargetSource(eqId: string, targetSourceId: string | null): void {
-    this.eqSources = this.eqSources.map((item) =>
-      item.id === eqId ? { ...item, targetSourceId } : item
-    );
+    this.eqSources = this.eqSources.map((item) => {
+      if (item.id !== eqId) return item;
+      const updated = { ...item, targetSourceId };
+      void this.persistence.saveEq?.(updated);
+      return updated;
+    });
     this.notify();
   }
 
@@ -326,7 +413,9 @@ export class SourceStore {
     this.eqSources = this.eqSources.map((eq) => {
       if (eq.id !== eqId) return eq;
       const bands = eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b));
-      return { ...eq, bands };
+      const updated = { ...eq, bands };
+      void this.persistence.saveEq?.(updated);
+      return updated;
     });
     this.notify();
   }
@@ -341,7 +430,9 @@ export class SourceStore {
       const bands = eq.bands.map((b, i) =>
         i === bandIndex ? { ...b, frequency, gainDb } : b
       );
-      return { ...eq, bands };
+      const updated = { ...eq, bands };
+      void this.persistence.saveEq?.(updated);
+      return updated;
     });
     this.notify();
   }
@@ -359,18 +450,31 @@ export class SourceStore {
     };
     this.unionSources = [...this.unionSources, newUnion];
     this.selectedSourceId = id;
+    void this.persistence.saveUnion?.(newUnion);
     this.notify();
     return newUnion;
+  }
+
+  deleteUnionSource(id: string): void {
+    this.unionSources = this.unionSources.filter((s) => s.id !== id);
+    this.unionEvalCache.delete(id);
+    void this.persistence.removeUnion?.(id);
+    if (this.selectedSourceId === id) {
+      this.selectedSourceId = 'live-measurement';
+    }
+    this.notify();
   }
 
   updateUnionSource(
     unionId: string,
     partial: Partial<Pick<UnionSourceConfig, 'operation' | 'sourceIds'>>
   ): void {
-    this.unionSources = this.unionSources.map((u) =>
-      u.id === unionId ? { ...u, ...partial } : u
-    );
+    this.unionSources = this.unionSources.map((u) => {
+      if (u.id !== unionId) return u;
+      const updated = { ...u, ...partial };
+      void this.persistence.saveUnion?.(updated);
+      return updated;
+    });
     this.notify();
   }
 }
-

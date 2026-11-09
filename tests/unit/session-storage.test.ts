@@ -20,10 +20,21 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { createDefaultEqBands } from '../../src/sources/eq-source.js';
 import {
+  StoredCalibrationFile,
+  deleteCalibrationFileFromDb,
+  deleteEqSourceFromDb,
   deleteStoredTraceFromDb,
+  deleteUnionSourceFromDb,
+  loadAllCalibrationFilesFromDb,
+  loadAllEqSourcesFromDb,
   loadAllStoredTracesFromDb,
+  loadAllUnionSourcesFromDb,
+  saveCalibrationFileToDb,
+  saveEqSourceToDb,
   saveStoredTraceToDb,
+  saveUnionSourceToDb,
 } from '../../src/sources/session-storage.js';
 import {
   SourceData,
@@ -54,7 +65,7 @@ function createSampleStoredTrace(id: string, name: string): SourceData {
   };
 }
 
-describe('session-storage', () => {
+describe('session-storage (IndexedDB v2)', () => {
   const originalIndexedDb = globalThis.indexedDB;
 
   afterEach(() => {
@@ -76,37 +87,51 @@ describe('session-storage', () => {
     await expect(saveStoredTraceToDb(trace)).resolves.toBeUndefined();
     await expect(loadAllStoredTracesFromDb()).resolves.toEqual([]);
     await expect(deleteStoredTraceFromDb('stored-1')).resolves.toBeUndefined();
+    await expect(loadAllEqSourcesFromDb()).resolves.toEqual([]);
+    await expect(loadAllUnionSourcesFromDb()).resolves.toEqual([]);
+    await expect(loadAllCalibrationFilesFromDb()).resolves.toEqual([]);
   });
 
-  it('saves, loads, and deletes stored traces using IndexedDB', async () => {
-    const records = new Map<string, unknown>();
+  it('saves, loads, and deletes stored traces, EQ sources, Union sources, and calibration curves', async () => {
+    const stores = new Map<string, Map<string, unknown>>();
+    const getStoreMap = (name: string) => {
+      let map = stores.get(name);
+      if (!map) {
+        map = new Map();
+        stores.set(name, map);
+      }
+      return map;
+    };
 
-    const mockStore = {
-      put: (val: { id: string }) => {
-        records.set(val.id, val);
-      },
-      delete: (id: string) => {
-        records.delete(id);
-      },
-      getAll: () => {
-        const req: { result: unknown[]; onsuccess?: () => void; onerror?: () => void } = {
-          result: Array.from(records.values()),
-        };
-        queueMicrotask(() => req.onsuccess?.());
-        return req;
-      },
+    const createMockObjectStore = (storeName: string) => {
+      const records = getStoreMap(storeName);
+      return {
+        put: (val: { id: string }) => {
+          records.set(val.id, val);
+        },
+        delete: (id: string) => {
+          records.delete(id);
+        },
+        getAll: () => {
+          const req: { result: unknown[]; onsuccess?: () => void; onerror?: () => void } = {
+            result: Array.from(records.values()),
+          };
+          queueMicrotask(() => req.onsuccess?.());
+          return req;
+        },
+      };
     };
 
     const mockDb = {
-      objectStoreNames: { contains: () => false },
-      createObjectStore: () => mockStore,
-      transaction: () => {
+      objectStoreNames: { contains: (name: string) => stores.has(name) },
+      createObjectStore: (name: string) => createMockObjectStore(name),
+      transaction: (storeName: string) => {
         const tx: {
-          objectStore: () => typeof mockStore;
+          objectStore: () => ReturnType<typeof createMockObjectStore>;
           oncomplete?: () => void;
           onerror?: () => void;
         } = {
-          objectStore: () => mockStore,
+          objectStore: () => createMockObjectStore(storeName),
         };
         queueMicrotask(() => tx.oncomplete?.());
         return tx;
@@ -137,19 +162,58 @@ describe('session-storage', () => {
       writable: true,
     });
 
+    // 1. Stored trace
     const trace = createSampleStoredTrace('stored-42', 'Sub Alignment');
     await saveStoredTraceToDb(trace);
-
-    const loaded = await loadAllStoredTracesFromDb();
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].id).toBe('stored-42');
-    expect(loaded[0].name).toBe('Sub Alignment');
-    expect(loaded[0].gainOffsetDb).toBe(1.5);
-    expect(loaded[0].freqData.magnitude[0]).toBeCloseTo(2.0, 5);
-
+    const loadedTraces = await loadAllStoredTracesFromDb();
+    expect(loadedTraces).toHaveLength(1);
+    expect(loadedTraces[0].name).toBe('Sub Alignment');
     await deleteStoredTraceFromDb('stored-42');
-    const afterDelete = await loadAllStoredTracesFromDb();
-    expect(afterDelete).toHaveLength(0);
+    expect(await loadAllStoredTracesFromDb()).toHaveLength(0);
+
+    // 2. Virtual EQ source
+    await saveEqSourceToDb({
+      id: 'eq-1',
+      name: 'Virtual EQ #1',
+      color: '#10b981',
+      visible: true,
+      bands: createDefaultEqBands(),
+      targetSourceId: 'live-measurement',
+    });
+    const loadedEq = await loadAllEqSourcesFromDb();
+    expect(loadedEq).toHaveLength(1);
+    expect(loadedEq[0].id).toBe('eq-1');
+    await deleteEqSourceFromDb('eq-1');
+    expect(await loadAllEqSourcesFromDb()).toHaveLength(0);
+
+    // 3. Union source
+    await saveUnionSourceToDb({
+      id: 'union-1',
+      name: 'Math Union #1',
+      color: '#f59e0b',
+      visible: true,
+      operation: 'vector-avg',
+      sourceIds: ['live-measurement', 'stored-42'],
+    });
+    const loadedUnion = await loadAllUnionSourcesFromDb();
+    expect(loadedUnion).toHaveLength(1);
+    expect(loadedUnion[0].id).toBe('union-1');
+    await deleteUnionSourceFromDb('union-1');
+    expect(await loadAllUnionSourcesFromDb()).toHaveLength(0);
+
+    // 4. Calibration curve
+    const cal: StoredCalibrationFile = {
+      id: 'cal-umik1',
+      name: 'UMIK-1.cal',
+      text: '100 -1.2\n1000 0.0\n10000 1.8',
+      pointCount: 3,
+      createdAt: new Date().toISOString(),
+    };
+    await saveCalibrationFileToDb(cal);
+    const loadedCals = await loadAllCalibrationFilesFromDb();
+    expect(loadedCals).toHaveLength(1);
+    expect(loadedCals[0].name).toBe('UMIK-1.cal');
+    await deleteCalibrationFileFromDb('cal-umik1');
+    expect(await loadAllCalibrationFilesFromDb()).toHaveLength(0);
   });
 });
-

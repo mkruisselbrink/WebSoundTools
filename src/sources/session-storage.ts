@@ -20,19 +20,45 @@
  */
 
 /**
- * Local Browser Session & Stored Trace Persistence (`IndexedDB` + JSON Export/Import).
+ * Local Browser Session & Acoustic Library Persistence (`IndexedDB` v2).
+ *
+ * Object Stores in `web-sound-meter-db`:
+ *  - `stored-traces`: Serialized `SourceData` snapshots (Float32 frequency & impulse buffers)
+ *  - `eq-sources`: `EqualizerSourceConfig` virtual parametric EQ sources
+ *  - `union-sources`: `UnionSourceConfig` math/union sources
+ *  - `calibration-curves`: `StoredCalibrationFile` uploaded microphone calibration files
  */
 
+import { EqualizerSourceConfig } from './eq-source.js';
 import {
   SerializedSourceData,
   SourceData,
   deserializeSourceData,
   serializeSourceData,
 } from './source-data.js';
+import { UnionSourceConfig } from './union-source.js';
+
+export interface StoredCalibrationFile {
+  readonly id: string;
+  readonly name: string;
+  readonly text: string;
+  readonly pointCount: number;
+  readonly createdAt: string;
+}
 
 const DB_NAME = 'web-sound-meter-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_TRACES = 'stored-traces';
+const STORE_EQ_SOURCES = 'eq-sources';
+const STORE_UNION_SOURCES = 'union-sources';
+const STORE_CALIBRATIONS = 'calibration-curves';
+
+const ALL_STORES = [
+  STORE_TRACES,
+  STORE_EQ_SOURCES,
+  STORE_UNION_SOURCES,
+  STORE_CALIBRATIONS,
+] as const;
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -43,8 +69,10 @@ function openDatabase(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_TRACES)) {
-        db.createObjectStore(STORE_TRACES, { keyPath: 'id' });
+      for (const storeName of ALL_STORES) {
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.createObjectStore(storeName, { keyPath: 'id' });
+        }
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -52,12 +80,12 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveStoredTraceToDb(source: SourceData): Promise<void> {
+async function putRecord<T>(storeName: string, record: T): Promise<void> {
   try {
     const db = await openDatabase();
-    const tx = db.transaction(STORE_TRACES, 'readwrite');
-    const store = tx.objectStore(STORE_TRACES);
-    store.put(serializeSourceData(source));
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.put(record);
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -67,34 +95,83 @@ export async function saveStoredTraceToDb(source: SourceData): Promise<void> {
   }
 }
 
-export async function deleteStoredTraceFromDb(id: string): Promise<void> {
+async function deleteRecord(storeName: string, id: string): Promise<void> {
   try {
     const db = await openDatabase();
-    const tx = db.transaction(STORE_TRACES, 'readwrite');
-    const store = tx.objectStore(STORE_TRACES);
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
     store.delete(id);
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    // Ignore
+    // Ignore in environments without IndexedDB
   }
 }
 
-export async function loadAllStoredTracesFromDb(): Promise<SourceData[]> {
+async function getAllRecords<T>(storeName: string): Promise<T[]> {
   try {
     const db = await openDatabase();
-    const tx = db.transaction(STORE_TRACES, 'readonly');
-    const store = tx.objectStore(STORE_TRACES);
+    const tx = db.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
     const req = store.getAll();
-    const records = await new Promise<SerializedSourceData[]>((resolve, reject) => {
-      req.onsuccess = () => resolve(req.result as SerializedSourceData[]);
+    return await new Promise<T[]>((resolve, reject) => {
+      req.onsuccess = () => resolve((req.result as T[]) ?? []);
       req.onerror = () => reject(req.error);
     });
-    return records.map(deserializeSourceData);
   } catch {
     return [];
   }
 }
 
+export async function saveStoredTraceToDb(source: SourceData): Promise<void> {
+  await putRecord(STORE_TRACES, serializeSourceData(source));
+}
+
+export async function deleteStoredTraceFromDb(id: string): Promise<void> {
+  await deleteRecord(STORE_TRACES, id);
+}
+
+export async function loadAllStoredTracesFromDb(): Promise<SourceData[]> {
+  const records = await getAllRecords<SerializedSourceData>(STORE_TRACES);
+  return records.map(deserializeSourceData);
+}
+
+export async function saveEqSourceToDb(eq: EqualizerSourceConfig): Promise<void> {
+  await putRecord(STORE_EQ_SOURCES, eq);
+}
+
+export async function deleteEqSourceFromDb(id: string): Promise<void> {
+  await deleteRecord(STORE_EQ_SOURCES, id);
+}
+
+export async function loadAllEqSourcesFromDb(): Promise<EqualizerSourceConfig[]> {
+  return getAllRecords<EqualizerSourceConfig>(STORE_EQ_SOURCES);
+}
+
+export async function saveUnionSourceToDb(union: UnionSourceConfig): Promise<void> {
+  await putRecord(STORE_UNION_SOURCES, union);
+}
+
+export async function deleteUnionSourceFromDb(id: string): Promise<void> {
+  await deleteRecord(STORE_UNION_SOURCES, id);
+}
+
+export async function loadAllUnionSourcesFromDb(): Promise<UnionSourceConfig[]> {
+  return getAllRecords<UnionSourceConfig>(STORE_UNION_SOURCES);
+}
+
+export async function saveCalibrationFileToDb(
+  calibration: StoredCalibrationFile
+): Promise<void> {
+  await putRecord(STORE_CALIBRATIONS, calibration);
+}
+
+export async function deleteCalibrationFileFromDb(id: string): Promise<void> {
+  await deleteRecord(STORE_CALIBRATIONS, id);
+}
+
+export async function loadAllCalibrationFilesFromDb(): Promise<StoredCalibrationFile[]> {
+  return getAllRecords<StoredCalibrationFile>(STORE_CALIBRATIONS);
+}
