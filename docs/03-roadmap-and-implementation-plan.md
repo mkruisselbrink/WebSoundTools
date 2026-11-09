@@ -9,8 +9,8 @@
 | **Audio I/O & Worklets** | **Web Audio API + `AudioWorklet`** | Raw multi-channel `getUserMedia` routing (`HardwareAudioRouter`), worklet signal generator & dual-channel tap (`CaptureTapProcessor`), and lock-free `SPSC` `RingBuffer`. |
 | **DSP Engine** | **Dedicated Web Worker (Pure TS)** | Runs off the main UI thread and off the 2.67 ms audio thread (`src/dsp/dsp.worker.ts`). Pure TypeScript over `Float32Array` buffers. |
 | **Chart Rendering** | **WebGL2 + 2D Canvas Overlay** | `GlTraceRenderer` for GPU-accelerated traces with coherence alpha and phase-wrap suppression; `CanvasChartPainter` for grids, cursors, and draggable EQ nodes. |
-| **Persistence** | **URL History + `localStorage` + `IndexedDB`** | 3-tier persistence across URL query parameters (`url-state.ts`), synchronous workspace config (`workspace-session.ts`), and IndexedDB v2 (`session-storage.ts`). |
-| **Automated Testing** | **Vitest** + **Playwright** | 23 Vitest unit & integration test suites (68 tests) + Playwright E2E browser tests driven by the built-in Acoustic Simulator. |
+| **Persistence & Offline PWA** | **URL + `localStorage` + `IndexedDB` + Service Worker** | 3-tier state persistence (`url-state.ts`, `workspace-session.ts`, `session-storage.ts`) plus installable PWA (`manifest.webmanifest`) and offline Service Worker (`sw-core.ts`). |
+| **Automated Testing** | **Vitest** + **Playwright** | 24 Vitest unit & integration test suites (74 tests) + Playwright E2E browser tests driven by the built-in Acoustic Simulator. |
 
 ---
 
@@ -26,6 +26,9 @@ WebSoundMeter/
 ├── package.json
 ├── tsconfig.json
 ├── LICENSE                              # GNU General Public License v3.0 (GPLv3)
+├── public/
+│   ├── manifest.webmanifest             # PWA installability manifest
+│   └── icons/                           # Vector (SVG) and raster (192/512/maskable PNG) app icons
 ├── docs/
 │   ├── 01-overview-and-comparison.md
 │   ├── 02-architecture-and-dsp-design.md
@@ -33,13 +36,16 @@ WebSoundMeter/
 │   ├── 04-testing-and-simulation-design.md
 │   └── 05-persistence-and-state-management.md
 ├── src/
-│   ├── main.ts                          # Application bootstrap (<wsm-app-shell>)
+│   ├── main.ts                          # Application bootstrap & Service Worker registration
+│   ├── pwa/
+│   │   ├── sw-core.ts                   # Pure offline precache/runtime cache & COOP/COEP header core
+│   │   └── register-sw.ts               # Browser Service Worker registration helper
 │   ├── audio/
-│   │   ├── audio-engine.ts              # High-level coordinator between DSP Worker & HardwareAudioRouter
-│   │   ├── hardware-audio-router.ts     # AudioContext, device enumeration, raw getUserMedia, channel splitter/merger
-│   │   ├── ring-buffer.ts               # Lock-free SPSC RingBuffer backed by SharedArrayBuffer
+│   │   ├── audio-engine.ts              # Multi-slot coordinator between DSP Worker & HardwareAudioRouter
+│   │   ├── hardware-audio-router.ts     # AudioContext, 64ch getUserMedia, dynamic 8-tap splitter/merger routing
+│   │   ├── ring-buffer.ts               # Lock-free SPSC MultiChannelRingBuffer (SharedArrayBuffer)
 │   │   └── worklets/
-│   │       └── capture-worklet.ts       # AudioWorkletProcessor: signal generator + [M, R] capture tap
+│   │       └── capture-worklet.ts       # AudioWorkletProcessor: signal generator + 8-channel + loopback tap
 │   ├── dsp/                             # 100% Pure TypeScript (Zero DOM/WebAudio dependencies)
 │   │   ├── dsp.worker.ts                # Background Web Worker running AnalyzerPipeline & SyntheticAcousticRig
 │   │   ├── analyzer-pipeline.ts         # Full dual-channel measurement pipeline orchestrator
@@ -98,9 +104,9 @@ All keyboard shortcuts inspect `e.composedPath()[0]` so typing inside Shadow DOM
 
 | Key | Action |
 | :--- | :--- |
-| `Space` | Toggle **Pause / Resume** (pauses both capture and hardware signal generator output; or initializes hardware stream after reload) |
-| `C` | **Capture** current Live Measurement into a new `StoredSource` trace |
-| `D` | **Apply** the Auto Delay Finder's estimated propagation delay to the Live Measurement |
+| `Space` / `C` | **Capture** current active trace into a new `StoredSource` snapshot |
+| `D` | **Apply** the Auto Delay Finder's estimated propagation delay to the active Live Measurement |
+| `M` | Add a new simultaneous **Live Measurement** source (`+ Meas`) |
 | `R` | **Reset** averaging buffers and peak hold accumulators |
 | `E` | Create a new **Virtual Parametric EQ** source targeting the active trace |
 | `U` | Create a new **Math Union** source |

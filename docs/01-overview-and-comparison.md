@@ -36,10 +36,10 @@ SourceData
 ```
 
 Because every chart reads `SourceData`, the sidebar (`src/sources/source-store.ts`) treats all of the following as interchangeable visual traces:
-1. **Live Measurement**: Dual-channel ($M / R$) analyzer running in a dedicated DSP Web Worker (`src/dsp/dsp.worker.ts`).
+1. **Live Measurements (`+ Meas`)**: One or more simultaneous dual-channel ($M / R$) analyzers running in a dedicated DSP Web Worker (`src/dsp/dsp.worker.ts`). Each Live Measurement has its own hardware $M / R$ channel routing (across 2 to 64+ channel interfaces) or its own Demo Simulator preset, independent delay/gain/calibration settings, and can feed live spatial averages (`Math Union`) or `Virtual Parametric EQ`.
 2. **Stored Traces (`StoredSource`)**: Frozen snapshots of any source's `SourceData`, complete with user notes, gain offset ($\text{dB}$), delay offset ($\text{ms}$), JSON import/export, and IndexedDB persistence.
 3. **Virtual Parametric EQ (`EqualizerSource`)**: Applies a cascade of up to 8 parametric biquad filters (`peaking`, `lowshelf`, `highshelf`, `lowpass`, `highpass`, `notch`, `allpass`) to any live or stored source's transfer function, predicting the resulting Magnitude and Phase response in real time.
-4. **Math Union (`UnionSource`)**: Combines multiple sources in real time using Vector Average, Power Average, RMS Average, Subtract ($A - B$), Minimum, or Maximum.
+4. **Math Union (`UnionSource`)**: Combines multiple live or stored sources in real time using Vector Average, Power Average, RMS Average, Subtract ($A - B$), Minimum, or Maximum.
 
 ---
 
@@ -58,8 +58,9 @@ Because every chart reads `SourceData`, the sidebar (`src/sources/source-store.t
 | **Signal Generator** | Pink, White, Brown, Sweep, Burst | Pink, P-Noise, Sweep | Pink Noise (Voss-McCartney), White Noise, Sine, Log Sweep |
 | **SPL / Leq Metering** | A/C/Z, Fast/Slow/Impulse/Leq | Full SPL Logger | IEC 61672 A/C/Z Weighting + Fast, Slow, Impulse, $L_{\text{eq}}$ & Peak |
 | **Mic Calibration (`.cal` / `.txt` / `.frd`)** | Mag + Phase interpolation | Mag + Phase + SPL | Log-frequency Mag/Phase interpolation + Saved Calibration Library |
-| **State & Session Persistence** | Local file / autosave | Session files | **3-Tier Persistence**: URL Query/History + `localStorage` + `IndexedDB` + JSON Export/Import |
-| **Built-in Simulated Acoustic Rig** | No | No | **5 Interactive PA/Room Presets** (Hardware-free Demo & Test Rig) |
+| **Simultaneous Multi-Channel Measurements** | Multiple `Measurement` sources | Multi-input RTA & TF | **Multiple simultaneous Live Measurement sources (`+ Meas`)** across 64ch interfaces |
+| **State, Session & Offline PWA Support** | Local file / autosave | Session files | **3-Tier State Persistence** + **Installable Offline PWA (`sw.js` + `manifest.webmanifest`)** |
+| **Built-in Simulated Acoustic Rig** | No | No | **5 Interactive PA/Room Presets** (Per-slot selectable in Demo Mode) |
 
 ---
 

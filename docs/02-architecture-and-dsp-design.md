@@ -53,7 +53,7 @@ Web Audio's `AudioWorkletProcessor.process()` runs on a real-time audio thread i
 ## 2. Audio I/O & Routing Layer (`src/audio/`)
 
 ### 2.1 Hardware Audio Router (`src/audio/hardware-audio-router.ts`)
-When Hardware Audio mode is active, `HardwareAudioRouter` requests raw, unprocessed multi-channel audio from `navigator.mediaDevices.getUserMedia`:
+When Hardware Audio mode is active, `HardwareAudioRouter` requests raw, unprocessed multi-channel audio (up to 64 channels) from `navigator.mediaDevices.getUserMedia`:
 
 ```ts
 const stream = await navigator.mediaDevices.getUserMedia({
@@ -62,18 +62,21 @@ const stream = await navigator.mediaDevices.getUserMedia({
     echoCancellation: { exact: false },
     noiseSuppression: { exact: false },
     autoGainControl: { exact: false },
-    channelCount: { ideal: 32 },
+    channelCount: { ideal: 64 },
     sampleRate: { ideal: 48000 },
   },
 });
 ```
 
-- **Arbitrary Channel Routing**: A `ChannelSplitterNode` splits all available input channels so any physical channel can be routed to **Measurement ($M$)** (`inputs[0]`) and **Reference ($R$)** (`inputs[1]`).
-- **Internal Loopback Reference (`referenceChannel = 0`)**: Selecting `Internal Generator Loopback` connects the `CaptureTapProcessor`'s internal signal generator directly into the Reference buffer inside the worklet, providing sample-synchronous digital reference without an external loopback cable.
+- **Dynamic Multi-Channel Splitter Routing (2 to 64+ Interface Channels)**:
+  - Creates a `ChannelSplitterNode` for all channels exposed by the hardware interface (`availableChannels`, e.g., 32 or 64 channels on a digital console or Dante interface).
+  - `setActivePhysicalChannels()` collects the deduplicated physical channels referenced across all active Live Measurement sources (up to `MAX_CAPTURE_TAP_SLOTS = 8` simultaneous physical channels) and dynamically connects those splitter outputs into the 8 capture tap inputs on `CaptureTapProcessor`.
+  - Returns a `channelTapMap: Record<number, number>` mapping each physical channel index to its ring buffer tap slot (`0..7`).
+- **Internal Loopback Reference (`referenceChannel = -1`)**: Selecting `Internal Generator Loopback` reads directly from slot `8` (`INTERNAL_LOOPBACK_SLOT_INDEX`) of the `MultiChannelRingBuffer`, providing sample-synchronous digital reference without an external loopback cable.
 - **Pause Behavior**: Pausing measurement (`Space` or **Pause** button) halts both sample capture and hardware Signal Generator output so the room falls silent immediately while inspecting traces.
 
-### 2.2 Lock-Free SPSC Ring Buffer (`src/audio/ring-buffer.ts`)
-When `SharedArrayBuffer` is available (via `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers configured in `vite.config.ts`), `CaptureTapProcessor` writes interleaved `[M, R]` stereo frames into a lock-free Single-Producer Single-Consumer (`SPSC`) ring buffer synchronized with `Atomics.load` and `Atomics.store`. When `SharedArrayBuffer` is unavailable, `CaptureTapProcessor` automatically falls back to posting chunked `Float32Array` pairs over its `MessagePort`.
+### 2.2 Lock-Free Multi-Channel SPSC Ring Buffer (`src/audio/ring-buffer.ts`)
+When `SharedArrayBuffer` is available (via `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers configured in `vite.config.ts` and preserved offline by the Service Worker), `CaptureTapProcessor` writes 9 sample-synchronous planar channels (`0..7` hardware taps + slot `8` internal generator loopback) into `MultiChannelRingBuffer` synchronized with a single atomic `[writeIndex, readIndex]` header. When `SharedArrayBuffer` is unavailable, `CaptureTapProcessor` automatically falls back to posting batched multi-channel `Float32Array[]` chunks over its `MessagePort`.
 
 ### 2.3 Built-in Virtual Acoustic Rig (`src/dsp/synthetic-rig.ts`)
 In **Built-in Demo Simulator** mode, `dsp.worker.ts` generates sample-accurate `[M, R]` streams using `SyntheticAcousticRig`. It models:

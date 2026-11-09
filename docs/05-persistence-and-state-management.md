@@ -67,14 +67,21 @@ Detailed DSP analyzer settings, generator parameters, and hardware audio routing
 ```ts
 export interface WorkspaceSessionSnapshot {
   readonly version: 1;
-  readonly measConfig: Omit<MeasurementPipelineConfig, 'calibrationPoints'>;
-  readonly activeCalibrationId: string | null;
-  readonly genConfig: Omit<SignalGeneratorConfig, 'enabled'>;
-  readonly audioRouting: {
+  readonly layoutPreset: LayoutPreset;
+  readonly chartPlotTypes: PlotType[];
+  readonly audioInputMode: InputSourceMode;
+  readonly simulatorPreset: SimulatorPresetId;
+  readonly splWeighting: WeightingCurve;
+  readonly splTime: MeterIntegrationTime;
+  readonly selectedSourceId: string;
+  readonly liveSlots: LiveMeasurementSlotConfig[];
+  readonly genConfig: Pick<
+    SignalGeneratorConfig,
+    'enabled' | 'type' | 'levelDbFs' | 'sineFrequencyHz'
+  >;
+  readonly hardwareRouting: {
     readonly selectedDeviceId: string;
-    readonly lastDeviceLabel: string;
-    readonly measurementChannel: number;
-    readonly referenceChannel: number;
+    readonly selectedDeviceLabel: string;
     readonly generatorOutputChannel: number;
   };
 }
@@ -106,4 +113,19 @@ User-created domain objects and multi-kilobyte binary arrays are persisted async
 ### 3.1 Reactive Source Graph Re-Evaluation on Startup
 When `SessionStorage.loadAll()` completes on startup:
 1. `SourceStore` populates all `StoredSource`, `EqualizerSourceConfig`, and `UnionSourceConfig` items and IMMEDIATELY runs `recomputeVirtualSources()` so any Virtual EQ or Math Union referencing stored traces renders on the chart before the first live DSP frame even arrives.
-2. If `activeCalibrationId` from `WorkspaceSession` matches a curve in `calibration-curves`, the curve's `points` are automatically loaded into `measConfig.calibrationPoints` and pushed to the DSP Worker, and the saved calibration curve selector in the Live Measurement inspector highlights the active file.
+2. For each slot in `liveSlots`, if `slot.activeCalibrationId` matches a curve in `calibration-curves`, the curve is automatically loaded into that slot's `MeasurementPipeline` in the DSP Worker.
+
+---
+
+## 4. Offline Application Cache & PWA Installability (`src/pwa/`)
+
+In addition to persisting user data, `WebSoundMeter` caches its entire application shell and worker/worklet bundles via a **Service Worker (`src/pwa/sw-core.ts` & `vite.config.ts`)** and exposes a **Web App Manifest (`public/manifest.webmanifest`)**:
+
+1. **Build-Time Asset Precaching (`wsmOfflineSwPlugin` in `vite.config.ts`)**:
+   - During `vite build`, the plugin collects all emitted Rollup chunks (`index.html`, main UI bundle, `dsp.worker.js`, `capture-worklet.js`, `manifest.webmanifest`, and app icons), computes a deterministic content hash (`wsm-precache-<hash>`), and emits `dist/sw.js`.
+   - On activation, outdated `wsm-precache-*` caches are automatically pruned.
+2. **Offline Navigation & Parameterized URL Support**:
+   - Navigation requests (`request.mode === 'navigate'`) use **Network-First with offline fallback to cached `/index.html`**. Reloading any bookmarkable URL with query parameters (e.g., `/?layout=tf-dual&preset=sub-top-misaligned`) works 100% offline.
+3. **Cross-Origin Isolation (`COOP`/`COEP`) Header Preservation**:
+   - `withCrossOriginIsolationHeaders()` ensures every response served from the Service Worker includes `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so `SharedArrayBuffer` (used by `MultiChannelRingBuffer`) continues to work when launched offline.
+

@@ -17,10 +17,11 @@ Audio and graphics applications are difficult to test when DSP math, state manag
 
 Run all unit and integration tests via `npm test` (`npx vitest run`) and full browser E2E tests via `npm run test:e2e` (`npx playwright test`).
 
-### 2.1 Unit Test Suites (`tests/unit/` — 20 Suites)
+### 2.1 Unit Test Suites (`tests/unit/` — 21 Suites)
 
 | Test Suite | Module Under Test | What It Verifies |
 | :--- | :--- | :--- |
+| `sw-offline.test.ts` | `src/pwa/sw-core.ts`, `register-sw.ts` | Offline precaching, old cache cleanup, parameterized navigation URL fallback (`/?layout=...`) to cached `/index.html`, Cache-First static asset serving, and `COOP`/`COEP` header preservation. |
 | `fft.test.ts` | `src/dsp/fft.ts` | Impulse flatness, bin-centered sinusoid amplitude/phase recovery, `IFFT(FFT(x))` invertibility ($< 10^{-5}$ error), and Parseval's energy theorem. |
 | `window-functions.test.ts` | `src/dsp/window-functions.ts` | Window symmetry, endpoint tapering, and coherent gain normalization for `Hann`, `Hamming`, `Blackman`, `FlatTop`, and `Rectangular`. |
 | `biquad.test.ts` | `src/dsp/biquad.ts` | RBJ Audio EQ Cookbook coefficients, analytical transfer function evaluation $H(e^{j\omega})$, and Linkwitz-Riley (`LR24`) crossover summation. |
