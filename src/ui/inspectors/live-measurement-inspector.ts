@@ -301,198 +301,214 @@ export function renderLiveMeasurementInspector(
         </div>
 
         ${showAdvanced
-          ? html`
-              ${slot && inputMode === 'hardware'
-                ? html`
-                    <div class="prop-field full-width">
-                      <label>Ref Channel (R) Override</label>
-                      <select
-                        aria-label="Slot Reference Channel"
-                        data-testid="select-live-slot-ref-channel"
-                        .value=${String(slot.referenceChannel)}
-                        @change=${(e: Event) =>
-                          handlers.onUpdateSlotMeta?.({
-                            referenceChannel: Number(
-                              (e.target as HTMLSelectElement).value
-                            ),
-                          })}
-                      >
-                        <option
-                          value=${String(REFERENCE_CHANNEL_GLOBAL)}
-                          ?selected=${slot.referenceChannel === REFERENCE_CHANNEL_GLOBAL}
-                        >
-                          Follow Global Ref (${globalRefLabel})
-                        </option>
-                        <option value="-1" ?selected=${slot.referenceChannel === -1}>
-                          Internal Gen Loopback
-                        </option>
-                        ${channelOptions.map(
-                          (ch) =>
-                            html`<option
-                              value=${String(ch)}
-                              ?selected=${ch === slot.referenceChannel}
-                            >
-                              Ch ${ch + 1}
-                            </option>`
-                        )}
-                      </select>
-                    </div>
-                  `
-                : nothing}
-
-              <div
-                class="prop-field full-width"
-                style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
-              >
-                <label style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
-                  Shared Transform & Averaging (All Live Measurements)
-                </label>
-              </div>
-
-              <div class="prop-field">
-                <label>FFT Size</label>
-                <select
-                  aria-label="FFT Size"
-                  data-testid="select-fft-size"
-                  .value=${String(cfg.fftSize)}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      fftSize: Number((e.target as HTMLSelectElement).value),
-                    })}
-                >
-                  <option value="1024">1024 (21 ms)</option>
-                  <option value="2048">2048 (43 ms)</option>
-                  <option value="4096">4096 (85 ms)</option>
-                  <option value="8192">8192 (171 ms)</option>
-                  <option value="16384">16384 (341 ms)</option>
-                  <option value="32768">32768 (683 ms)</option>
-                </select>
-              </div>
-
-              <div class="prop-field">
-                <label>Window Function</label>
-                <select
-                  aria-label="Window Function"
-                  .value=${cfg.windowType}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      windowType: (e.target as HTMLSelectElement).value as WindowFunctionType,
-                    })}
-                >
-                  ${Object.entries(WINDOW_FUNCTION_LABELS).map(
-                    ([k, label]) => html`<option value=${k}>${label}</option>`
-                  )}
-                </select>
-              </div>
-
-              <div class="prop-field">
-                <label>Averaging Mode</label>
-                <select
-                  aria-label="Averaging Mode"
-                  .value=${cfg.averagingType}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      averagingType: (e.target as HTMLSelectElement).value as AveragingType,
-                    })}
-                >
-                  <option value="fifo">FIFO Window</option>
-                  <option value="lpf">LPF / Exponential</option>
-                  <option value="off">Off (Instant)</option>
-                </select>
-              </div>
-
-              <div class="prop-field">
-                <label>FIFO Averages</label>
-                <select
-                  aria-label="FIFO Averages"
-                  .value=${String(cfg.fifoDepth)}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      fifoDepth: Number((e.target as HTMLSelectElement).value),
-                    })}
-                >
-                  <option value="4">4 Frames</option>
-                  <option value="8">8 Frames</option>
-                  <option value="16">16 Frames</option>
-                  <option value="32">32 Frames</option>
-                  <option value="64">64 Frames</option>
-                </select>
-              </div>
-
-              <div class="prop-field">
-                <label>Octave Smoothing</label>
-                <select
-                  aria-label="Octave Smoothing"
-                  data-testid="select-smoothing"
-                  .value=${cfg.octaveSmoothing}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      octaveSmoothing: (e.target as HTMLSelectElement).value as OctaveSmoothingType,
-                    })}
-                >
-                  <option value="off">None (Narrowband)</option>
-                  <option value="1/48">1/48 Octave</option>
-                  <option value="1/24">1/24 Octave</option>
-                  <option value="1/12">1/12 Octave</option>
-                  <option value="1/6">1/6 Octave</option>
-                  <option value="1/3">1/3 Octave</option>
-                  <option value="1/1">1 Octave</option>
-                </select>
-              </div>
-
-              <div class="prop-field">
-                <label>TF Estimator</label>
-                <select
-                  aria-label="TF Estimator"
-                  .value=${cfg.estimator}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      estimator: (e.target as HTMLSelectElement).value as TransferEstimatorType,
-                    })}
-                >
-                  <option value="h1">H1 Cross-Spectrum</option>
-                  <option value="ratio">|M| / |R| Ratio</option>
-                </select>
-              </div>
-
-              <div
-                class="prop-field full-width"
-                style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
-              >
-                <label style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
-                  Channel Pre-Filter & Calibration Upload
-                </label>
-              </div>
-
-              <div class="prop-field full-width">
-                <label>Input Filter</label>
-                <select
-                  aria-label="Input Filter"
-                  .value=${cfg.inputFilter}
-                  @change=${(e: Event) =>
-                    handlers.onUpdateConfig({
-                      inputFilter: (e.target as HTMLSelectElement).value as InputPreFilterType,
-                    })}
-                >
-                  <option value="Z">Z (Flat / None)</option>
-                  <option value="A">A-Weighting</option>
-                  <option value="C">C-Weighting</option>
-                  <option value="notch-1k">1 kHz Notch</option>
-                </select>
-              </div>
-
-              <div class="prop-field full-width">
-                <label>Upload New Calibration (.cal / .txt / .frd)</label>
-                <input
-                  type="file"
-                  aria-label="Mic Calibration File"
-                  accept=".cal,.txt,.frd"
-                  @change=${handlers.onCalibrationUpload}
-                />
-              </div>
-            `
+          ? renderAdvancedMeasurementSettings(
+              cfg,
+              handlers,
+              slot,
+              inputMode,
+              channelOptions,
+              globalRefLabel
+            )
           : nothing}
       </div>
+    </div>
+  `;
+}
+
+function renderAdvancedMeasurementSettings(
+  cfg: MeasurementPipelineConfig,
+  handlers: LiveMeasurementInspectorHandlers,
+  slot: LiveMeasurementSlotConfig | undefined,
+  inputMode: InputSourceMode,
+  channelOptions: number[],
+  globalRefLabel: string
+): TemplateResult {
+  return html`
+    ${slot && inputMode === 'hardware'
+      ? html`
+          <div class="prop-field full-width">
+            <label>Ref Channel (R) Override</label>
+            <select
+              aria-label="Slot Reference Channel"
+              data-testid="select-live-slot-ref-channel"
+              .value=${String(slot.referenceChannel)}
+              @change=${(e: Event) =>
+                handlers.onUpdateSlotMeta?.({
+                  referenceChannel: Number((e.target as HTMLSelectElement).value),
+                })}
+            >
+              <option
+                value=${String(REFERENCE_CHANNEL_GLOBAL)}
+                ?selected=${slot.referenceChannel === REFERENCE_CHANNEL_GLOBAL}
+              >
+                Follow Global Ref (${globalRefLabel})
+              </option>
+              <option value="-1" ?selected=${slot.referenceChannel === -1}>
+                Internal Gen Loopback
+              </option>
+              ${channelOptions.map(
+                (ch) =>
+                  html`<option
+                    value=${String(ch)}
+                    ?selected=${ch === slot.referenceChannel}
+                  >
+                    Ch ${ch + 1}
+                  </option>`
+              )}
+            </select>
+          </div>
+        `
+      : nothing}
+
+    <div
+      class="prop-field full-width"
+      style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
+    >
+      <label style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
+        Shared Transform & Averaging (All Live Measurements)
+      </label>
+    </div>
+
+    <div class="prop-field">
+      <label>FFT Size</label>
+      <select
+        aria-label="FFT Size"
+        data-testid="select-fft-size"
+        .value=${String(cfg.fftSize)}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            fftSize: Number((e.target as HTMLSelectElement).value),
+          })}
+      >
+        <option value="1024">1024 (21 ms)</option>
+        <option value="2048">2048 (43 ms)</option>
+        <option value="4096">4096 (85 ms)</option>
+        <option value="8192">8192 (171 ms)</option>
+        <option value="16384">16384 (341 ms)</option>
+        <option value="32768">32768 (683 ms)</option>
+      </select>
+    </div>
+
+    <div class="prop-field">
+      <label>Window Function</label>
+      <select
+        aria-label="Window Function"
+        .value=${cfg.windowType}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            windowType: (e.target as HTMLSelectElement).value as WindowFunctionType,
+          })}
+      >
+        ${Object.entries(WINDOW_FUNCTION_LABELS).map(
+          ([k, label]) => html`<option value=${k}>${label}</option>`
+        )}
+      </select>
+    </div>
+
+    <div class="prop-field">
+      <label>Averaging Mode</label>
+      <select
+        aria-label="Averaging Mode"
+        .value=${cfg.averagingType}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            averagingType: (e.target as HTMLSelectElement).value as AveragingType,
+          })}
+      >
+        <option value="fifo">FIFO Window</option>
+        <option value="lpf">LPF / Exponential</option>
+        <option value="off">Off (Instant)</option>
+      </select>
+    </div>
+
+    <div class="prop-field">
+      <label>FIFO Averages</label>
+      <select
+        aria-label="FIFO Averages"
+        .value=${String(cfg.fifoDepth)}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            fifoDepth: Number((e.target as HTMLSelectElement).value),
+          })}
+      >
+        <option value="4">4 Frames</option>
+        <option value="8">8 Frames</option>
+        <option value="16">16 Frames</option>
+        <option value="32">32 Frames</option>
+        <option value="64">64 Frames</option>
+      </select>
+    </div>
+
+    <div class="prop-field">
+      <label>Octave Smoothing</label>
+      <select
+        aria-label="Octave Smoothing"
+        data-testid="select-smoothing"
+        .value=${cfg.octaveSmoothing}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            octaveSmoothing: (e.target as HTMLSelectElement).value as OctaveSmoothingType,
+          })}
+      >
+        <option value="off">None (Narrowband)</option>
+        <option value="1/48">1/48 Octave</option>
+        <option value="1/24">1/24 Octave</option>
+        <option value="1/12">1/12 Octave</option>
+        <option value="1/6">1/6 Octave</option>
+        <option value="1/3">1/3 Octave</option>
+        <option value="1/1">1 Octave</option>
+      </select>
+    </div>
+
+    <div class="prop-field">
+      <label>TF Estimator</label>
+      <select
+        aria-label="TF Estimator"
+        .value=${cfg.estimator}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            estimator: (e.target as HTMLSelectElement).value as TransferEstimatorType,
+          })}
+      >
+        <option value="h1">H1 Cross-Spectrum</option>
+        <option value="ratio">|M| / |R| Ratio</option>
+      </select>
+    </div>
+
+    <div
+      class="prop-field full-width"
+      style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
+    >
+      <label style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
+        Channel Pre-Filter & Calibration Upload
+      </label>
+    </div>
+
+    <div class="prop-field full-width">
+      <label>Input Filter</label>
+      <select
+        aria-label="Input Filter"
+        .value=${cfg.inputFilter}
+        @change=${(e: Event) =>
+          handlers.onUpdateConfig({
+            inputFilter: (e.target as HTMLSelectElement).value as InputPreFilterType,
+          })}
+      >
+        <option value="Z">Z (Flat / None)</option>
+        <option value="A">A-Weighting</option>
+        <option value="C">C-Weighting</option>
+        <option value="notch-1k">1 kHz Notch</option>
+      </select>
+    </div>
+
+    <div class="prop-field full-width">
+      <label>Upload New Calibration (.cal / .txt / .frd)</label>
+      <input
+        type="file"
+        aria-label="Mic Calibration File"
+        accept=".cal,.txt,.frd"
+        @change=${handlers.onCalibrationUpload}
+      />
     </div>
   `;
 }

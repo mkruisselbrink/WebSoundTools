@@ -102,7 +102,8 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
                     }}
                   />
                   <span
-                    style="width:10px;height:10px;border-radius:50%;background:${src.color};display:inline-block;flex-shrink:0;"
+                    class="source-color-dot"
+                    style="background:${src.color}"
                   ></span>
                   <span class="source-name">${src.name}</span>
                 </div>

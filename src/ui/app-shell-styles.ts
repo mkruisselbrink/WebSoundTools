@@ -282,6 +282,14 @@ export const appShellStyles = css`
     flex: 1;
   }
 
+  .source-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
   .source-name {
     white-space: nowrap;
     overflow: hidden;

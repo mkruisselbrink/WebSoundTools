@@ -80,10 +80,9 @@ WebSoundMeter/
 │       ├── keyboard-shortcuts.ts        # Global keyboard shortcut dispatcher (Space, C, D, R, E, U, 1-3, Esc)
 │       ├── sidebar-view.ts              # Right-hand source list (Live, Stored, Virtual EQ, Math Union)
 │       ├── topbar/
-│       │   ├── topbar-view.ts           # Top bar container composing the 4 functional toolbar groups
-│       │   ├── input-routing-group.ts   # Unified Input dropdown (Simulator + Hardware devices) & global Ref channel
+│       │   ├── topbar-view.ts           # Top bar container composing functional toolbar groups
+│       │   ├── input-routing-group.ts   # Unified Input dropdown (Simulator + Hardware), global Ref, Pause/Resume
 │       │   ├── generator-group.ts       # Signal generator controls (type, frequency, level dBFS, enable)
-│       │   ├── delay-capture-group.ts   # Auto Delay Finder readout, Apply Delay, Pause, Capture, Layout 1/2/3
 │       │   └── spl-meter-group.ts       # Live broadband SPL / Leq / Peak meter & crest factor badge
 │       └── inspectors/
 │           ├── live-measurement-inspector.ts # Per-slot source/delay/gain/polarity/cal + collapsible Advanced settings

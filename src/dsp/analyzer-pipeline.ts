@@ -155,7 +155,6 @@ export class MeasurementPipeline {
   private readonly circM: Float32Array;
   private readonly circR: Float32Array;
   private writePtr: number = 0;
-  private totalWritten: number = 0;
 
   private fft: Radix2FFT;
   private tf: TransferFunctionAnalyzer;
@@ -369,8 +368,6 @@ export class MeasurementPipeline {
       this.circR[this.writePtr] = filtR;
       this.writePtr = (this.writePtr + 1) & mask;
     }
-
-    this.totalWritten += length;
   }
 
   /**

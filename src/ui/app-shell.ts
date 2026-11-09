@@ -574,6 +574,13 @@ export class WebSoundMeterApp extends LitElement {
     return renderLiveMeasurementInspector(liveSlot.config, liveHandlers);
   }
 
+  private updateGenerator(partial: Partial<SignalGeneratorConfig>): void {
+    if (!this.engine) return;
+    this.engine.updateGeneratorConfig(partial);
+    this.genConfig = { ...this.engine.getGeneratorConfig() };
+    this.persistState('none');
+  }
+
   render() {
     const allSources = this.sourceStore.getAllSources();
     const activeEq = this.sourceStore.getActiveEq();
@@ -610,24 +617,9 @@ export class WebSoundMeterApp extends LitElement {
           this.engine?.setGeneratorOutputChannel(outCh);
           this.persistState('none');
         },
-        onToggleGenerator: () => {
-          if (!this.engine) return;
-          this.engine.updateGeneratorConfig({ enabled: !this.genConfig.enabled });
-          this.genConfig = { ...this.engine.getGeneratorConfig() };
-          this.persistState('none');
-        },
-        onGeneratorTypeChange: (type: GeneratorSignalType) => {
-          if (!this.engine) return;
-          this.engine.updateGeneratorConfig({ type });
-          this.genConfig = { ...this.engine.getGeneratorConfig() };
-          this.persistState('none');
-        },
-        onGeneratorLevelChange: (levelDbFs: number) => {
-          if (!this.engine) return;
-          this.engine.updateGeneratorConfig({ levelDbFs });
-          this.genConfig = { ...this.engine.getGeneratorConfig() };
-          this.persistState('none');
-        },
+        onToggleGenerator: () => this.updateGenerator({ enabled: !this.genConfig.enabled }),
+        onGeneratorTypeChange: (type: GeneratorSignalType) => this.updateGenerator({ type }),
+        onGeneratorLevelChange: (levelDbFs: number) => this.updateGenerator({ levelDbFs }),
         onTogglePause: () => {
           void this.handleTogglePause();
         },

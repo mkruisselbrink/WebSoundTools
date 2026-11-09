@@ -55,10 +55,7 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
           @change=${props.onPlotTypeChange}
         >
           ${Object.values(PLOT_METADATA).map(
-            (m) =>
-              html`<option value=${m.type} ?selected=${m.type === props.plotType}>
-                ${m.label}
-              </option>`
+            (m) => html`<option value=${m.type}>${m.label}</option>`
           )}
         </select>
 
@@ -92,7 +89,9 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
             `
           : nothing}
 
-        ${props.plotType === 'magnitude' || props.plotType === 'phase'
+        ${props.plotType === 'magnitude' ||
+        props.plotType === 'phase' ||
+        props.plotType === 'group-delay'
           ? html`
               <label
                 class="label-muted"

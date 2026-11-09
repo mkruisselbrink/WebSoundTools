@@ -484,4 +484,5 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
   }
 };
 
+// Exported for unit test teardown (clearInterval) and simulator preset lookup
 export { intervalId, SIMULATOR_PRESETS };

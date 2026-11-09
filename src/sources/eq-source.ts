@@ -62,6 +62,17 @@ export function createDefaultEqBands(): BiquadSpec[] {
   ];
 }
 
+export function createRoomModeFlattenEqBands(): BiquadSpec[] {
+  return [
+    { type: 'highpass', frequency: 35, q: 0.707, gainDb: 0, enabled: false },
+    { type: 'lowshelf', frequency: 100, q: 0.707, gainDb: 0, enabled: true },
+    { type: 'peaking', frequency: 160, q: 2.2, gainDb: -6.5, enabled: true },
+    { type: 'peaking', frequency: 800, q: 3.0, gainDb: 5.0, enabled: true },
+    { type: 'peaking', frequency: 3200, q: 2.5, gainDb: -3.5, enabled: true },
+    { type: 'highshelf', frequency: 9000, q: 0.707, gainDb: 6.0, enabled: true },
+  ];
+}
+
 interface CachedBandCascadeCurve {
   readonly sampleRate: number;
   readonly binCount: number;

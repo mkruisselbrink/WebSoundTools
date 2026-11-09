@@ -32,6 +32,7 @@ import {
   EqualizerSourceConfig,
   computeEqualizerSourceData,
   createDefaultEqBands,
+  createRoomModeFlattenEqBands,
 } from './eq-source.js';
 import {
   deleteEqSourceFromDb,
@@ -84,7 +85,21 @@ function generateShortId(prefix: string): string {
 }
 
 export function isLiveSourceId(id: string): boolean {
-  return id === 'live-measurement' || id.startsWith('live-');
+  return id.startsWith('live-');
+}
+
+function updateInList<T extends { id: string }>(
+  list: T[],
+  id: string,
+  updater: (item: T) => T,
+  onPersist?: (updated: T) => void | Promise<void>
+): T[] {
+  return list.map((item) => {
+    if (item.id !== id) return item;
+    const updated = updater(item);
+    void onPersist?.(updated);
+    return updated;
+  });
 }
 
 export class SourceStore {
@@ -362,42 +377,40 @@ export class SourceStore {
     id: string,
     partial: Partial<Pick<SourceData, 'name' | 'gainOffsetDb' | 'delayOffsetMs'>>
   ): void {
-    this.storedSources = this.storedSources.map((s) => {
-      if (s.id !== id) return s;
-      const updated = { ...s, ...partial };
-      void this.persistence.save(updated);
-      return updated;
-    });
+    this.storedSources = updateInList(
+      this.storedSources,
+      id,
+      (s) => ({ ...s, ...partial }),
+      this.persistence.save
+    );
     this.notify();
   }
 
   toggleVisibility(id: string, visible: boolean): void {
     if (isLiveSourceId(id)) {
       this.liveVisibility.set(id, visible);
-      this.liveSources = this.liveSources.map((s) =>
-        s.id === id ? { ...s, visible } : s
-      );
+      this.liveSources = updateInList(this.liveSources, id, (s) => ({ ...s, visible }));
     } else if (id.startsWith('stored-')) {
-      this.storedSources = this.storedSources.map((s) => {
-        if (s.id !== id) return s;
-        const updated = { ...s, visible };
-        void this.persistence.save(updated);
-        return updated;
-      });
+      this.storedSources = updateInList(
+        this.storedSources,
+        id,
+        (s) => ({ ...s, visible }),
+        this.persistence.save
+      );
     } else if (id.startsWith('eq-')) {
-      this.eqSources = this.eqSources.map((s) => {
-        if (s.id !== id) return s;
-        const updated = { ...s, visible };
-        void this.persistence.saveEq?.(updated);
-        return updated;
-      });
+      this.eqSources = updateInList(
+        this.eqSources,
+        id,
+        (s) => ({ ...s, visible }),
+        this.persistence.saveEq
+      );
     } else if (id.startsWith('union-')) {
-      this.unionSources = this.unionSources.map((s) => {
-        if (s.id !== id) return s;
-        const updated = { ...s, visible };
-        void this.persistence.saveUnion?.(updated);
-        return updated;
-      });
+      this.unionSources = updateInList(
+        this.unionSources,
+        id,
+        (s) => ({ ...s, visible }),
+        this.persistence.saveUnion
+      );
     }
     this.notify();
   }
@@ -430,43 +443,35 @@ export class SourceStore {
   }
 
   autoFlattenRoomModesWithEq(eqId: string): void {
-    this.eqSources = this.eqSources.map((eq) => {
-      if (eq.id !== eqId) return eq;
-      const updated: EqualizerSourceConfig = {
-        ...eq,
-        bands: [
-          { type: 'highpass', frequency: 35, q: 0.707, gainDb: 0, enabled: false },
-          { type: 'lowshelf', frequency: 100, q: 0.707, gainDb: 0, enabled: true },
-          { type: 'peaking', frequency: 160, q: 2.2, gainDb: -6.5, enabled: true },
-          { type: 'peaking', frequency: 800, q: 3.0, gainDb: 5.0, enabled: true },
-          { type: 'peaking', frequency: 3200, q: 2.5, gainDb: -3.5, enabled: true },
-          { type: 'highshelf', frequency: 9000, q: 0.707, gainDb: 6.0, enabled: true },
-        ],
-      };
-      void this.persistence.saveEq?.(updated);
-      return updated;
-    });
+    this.eqSources = updateInList(
+      this.eqSources,
+      eqId,
+      (eq) => ({ ...eq, bands: createRoomModeFlattenEqBands() }),
+      this.persistence.saveEq
+    );
     this.notify();
   }
 
   setEqTargetSource(eqId: string, targetSourceId: string | null): void {
-    this.eqSources = this.eqSources.map((item) => {
-      if (item.id !== eqId) return item;
-      const updated = { ...item, targetSourceId };
-      void this.persistence.saveEq?.(updated);
-      return updated;
-    });
+    this.eqSources = updateInList(
+      this.eqSources,
+      eqId,
+      (item) => ({ ...item, targetSourceId }),
+      this.persistence.saveEq
+    );
     this.notify();
   }
 
   updateEqBand(eqId: string, bandIdx: number, partial: Partial<BiquadSpec>): void {
-    this.eqSources = this.eqSources.map((eq) => {
-      if (eq.id !== eqId) return eq;
-      const bands = eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b));
-      const updated = { ...eq, bands };
-      void this.persistence.saveEq?.(updated);
-      return updated;
-    });
+    this.eqSources = updateInList(
+      this.eqSources,
+      eqId,
+      (eq) => ({
+        ...eq,
+        bands: eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b)),
+      }),
+      this.persistence.saveEq
+    );
     this.notify();
   }
 
@@ -523,12 +528,12 @@ export class SourceStore {
     unionId: string,
     partial: Partial<Pick<UnionSourceConfig, 'operation' | 'sourceIds'>>
   ): void {
-    this.unionSources = this.unionSources.map((u) => {
-      if (u.id !== unionId) return u;
-      const updated = { ...u, ...partial };
-      void this.persistence.saveUnion?.(updated);
-      return updated;
-    });
+    this.unionSources = updateInList(
+      this.unionSources,
+      unionId,
+      (u) => ({ ...u, ...partial }),
+      this.persistence.saveUnion
+    );
     this.notify();
   }
 }
