@@ -21,90 +21,97 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  DualChannelRingBuffer,
+  MultiChannelRingBuffer,
+  TOTAL_RING_BUFFER_SLOTS,
   createRingBufferStorage,
 } from '../../src/audio/ring-buffer.js';
 
-describe('DualChannelRingBuffer', () => {
-  it('validates power-of-2 capacity', () => {
+describe('MultiChannelRingBuffer', () => {
+  it('validates power-of-2 capacity and positive channelCount', () => {
     expect(() => createRingBufferStorage(0)).toThrow();
     expect(() => createRingBufferStorage(100)).toThrow();
-    expect(() => createRingBufferStorage(128)).not.toThrow();
+    expect(() => createRingBufferStorage(128, false, 0)).toThrow();
+    const storage = createRingBufferStorage(128);
+    expect(storage.channelCount).toBe(TOTAL_RING_BUFFER_SLOTS);
   });
 
-  it('writes and reads stereo [M, R] frames across wrap-around boundaries', () => {
-    const storage = createRingBufferStorage(64, true);
-    const rb = new DualChannelRingBuffer(storage);
+  it('writes and reads multi-channel frames across wrap-around boundaries', () => {
+    const storage = createRingBufferStorage(64, true, 4);
+    const rb = new MultiChannelRingBuffer(storage);
 
     expect(rb.availableRead()).toBe(0);
     expect(rb.availableWrite()).toBe(64);
+    expect(rb.channelCount).toBe(4);
 
-    // Write 48 samples
-    const inM1 = new Float32Array(48);
-    const inR1 = new Float32Array(48);
-    for (let i = 0; i < 48; i++) {
-      inM1[i] = i + 1;
-      inR1[i] = -(i + 1);
-    }
+    // Write 48 samples across 4 channels
+    const in1 = Array.from({ length: 4 }, (_, ch) => {
+      const arr = new Float32Array(48);
+      for (let i = 0; i < 48; i++) {
+        arr[i] = (ch + 1) * 1000 + i;
+      }
+      return arr;
+    });
 
-    expect(rb.write(inM1, inR1)).toBe(48);
+    expect(rb.write(in1)).toBe(48);
     expect(rb.availableRead()).toBe(48);
     expect(rb.availableWrite()).toBe(16);
 
     // Read 32 samples (leaving 16 in buffer, readPtr = 32)
-    const outM1 = new Float32Array(32);
-    const outR1 = new Float32Array(32);
-    expect(rb.read(outM1, outR1)).toBe(32);
-    for (let i = 0; i < 32; i++) {
-      expect(outM1[i]).toBe(i + 1);
-      expect(outR1[i]).toBe(-(i + 1));
+    const out1 = Array.from({ length: 4 }, () => new Float32Array(32));
+    expect(rb.read(out1)).toBe(32);
+    for (let ch = 0; ch < 4; ch++) {
+      for (let i = 0; i < 32; i++) {
+        expect(out1[ch][i]).toBe((ch + 1) * 1000 + i);
+      }
     }
 
     expect(rb.availableRead()).toBe(16);
     expect(rb.availableWrite()).toBe(48);
 
     // Write 40 samples (wraps around index 64 -> 0..24)
-    const inM2 = new Float32Array(40);
-    const inR2 = new Float32Array(40);
-    for (let i = 0; i < 40; i++) {
-      inM2[i] = 100 + i;
-      inR2[i] = -100 - i;
-    }
-    expect(rb.write(inM2, inR2)).toBe(40);
+    const in2 = Array.from({ length: 4 }, (_, ch) => {
+      const arr = new Float32Array(40);
+      for (let i = 0; i < 40; i++) {
+        arr[i] = -(ch + 1) * 1000 - i;
+      }
+      return arr;
+    });
+    expect(rb.write(in2)).toBe(40);
     expect(rb.availableRead()).toBe(56);
 
     // Read all 56 samples and verify exact ordering across wrap boundary
-    const outM2 = new Float32Array(56);
-    const outR2 = new Float32Array(56);
-    expect(rb.read(outM2, outR2)).toBe(56);
+    const out2 = Array.from({ length: 4 }, () => new Float32Array(56));
+    expect(rb.read(out2)).toBe(56);
 
-    for (let i = 0; i < 16; i++) {
-      expect(outM2[i]).toBe(33 + i);
-      expect(outR2[i]).toBe(-(33 + i));
-    }
-    for (let i = 0; i < 40; i++) {
-      expect(outM2[16 + i]).toBe(100 + i);
-      expect(outR2[16 + i]).toBe(-100 - i);
+    for (let ch = 0; ch < 4; ch++) {
+      for (let i = 0; i < 16; i++) {
+        expect(out2[ch][i]).toBe((ch + 1) * 1000 + 32 + i);
+      }
+      for (let i = 0; i < 40; i++) {
+        expect(out2[ch][16 + i]).toBe(-(ch + 1) * 1000 - i);
+      }
     }
     expect(rb.availableRead()).toBe(0);
   });
 
-  it('handles overflow and underflow gracefully without corrupting state', () => {
-    const storage = createRingBufferStorage(16, false);
-    const rb = new DualChannelRingBuffer(storage);
+  it('handles overflow, underflow, and missing input channels gracefully', () => {
+    const storage = createRingBufferStorage(16, false, 3);
+    const rb = new MultiChannelRingBuffer(storage);
 
-    const bigM = new Float32Array(32).fill(7);
-    const bigR = new Float32Array(32).fill(9);
+    // Pass only 2 of the 3 channels; 3rd channel should be zero-filled
+    const big0 = new Float32Array(32).fill(7);
+    const big1 = new Float32Array(32).fill(9);
 
-    // Should clamp write to capacity (16)
-    expect(rb.write(bigM, bigR)).toBe(16);
+    expect(rb.write([big0, big1])).toBe(16);
     expect(rb.availableWrite()).toBe(0);
-    expect(rb.write(bigM, bigR)).toBe(0);
+    expect(rb.write([big0, big1])).toBe(0);
 
-    const outM = new Float32Array(32);
-    const outR = new Float32Array(32);
-    expect(rb.read(outM, outR)).toBe(16);
-    expect(rb.read(outM, outR)).toBe(0);
+    const out = [new Float32Array(32), new Float32Array(32), new Float32Array(32)];
+    expect(rb.read(out)).toBe(16);
+    expect(out[0][0]).toBe(7);
+    expect(out[1][0]).toBe(9);
+    expect(out[2][0]).toBe(0);
+    expect(rb.read(out)).toBe(0);
 
     rb.clear();
     expect(rb.availableRead()).toBe(0);
@@ -112,27 +119,25 @@ describe('DualChannelRingBuffer', () => {
   });
 
   it('handles Uint32 index wrap-around past 2^31 and 2^32 boundaries without corruption', () => {
-    const storage = createRingBufferStorage(16, true);
-    const rb = new DualChannelRingBuffer(storage);
+    const storage = createRingBufferStorage(16, true, 2);
+    const rb = new MultiChannelRingBuffer(storage);
     const header = new Uint32Array(storage.headerBuffer);
 
-    // Position both write and read indices 6 samples before 2^32 wrap-around (0xFFFFFFFA)
     const startIdx = 0xfffffffa >>> 0;
     Atomics.store(header, 0, startIdx);
     Atomics.store(header, 1, startIdx);
 
-    const inM = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    const inR = new Float32Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    const in0 = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const in1 = new Float32Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
 
-    expect(rb.write(inM, inR)).toBe(10);
+    expect(rb.write([in0, in1])).toBe(10);
     expect(rb.availableRead()).toBe(10);
 
-    const outM = new Float32Array(10);
-    const outR = new Float32Array(10);
-    expect(rb.read(outM, outR)).toBe(10);
+    const out0 = new Float32Array(10);
+    const out1 = new Float32Array(10);
+    expect(rb.read([out0, out1])).toBe(10);
     expect(rb.availableRead()).toBe(0);
-    expect(Array.from(outM)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(Array.from(outR)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    expect(Array.from(out0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(Array.from(out1)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
   });
 });
-

@@ -22,14 +22,20 @@
 /**
  * Dedicated Background DSP Web Worker (`dsp.worker.ts`).
  *
- * Runs the `MeasurementPipeline` at ~25-30 Hz, reading either:
- *  - Real-time hardware samples from `DualChannelRingBuffer` (when in 'hardware' input mode), OR
- *  - Deterministic simulated PA/room samples from `SignalGenerator` + `SyntheticAcousticRig`
- *    (when in 'simulator' input mode, enabling zero-setup demos and E2E testing).
+ * Runs one or more simultaneous `MeasurementPipeline` slots at ~25 Hz, reading either:
+ *  - Real-time multi-channel hardware samples from `MultiChannelRingBuffer` (in 'hardware' mode), OR
+ *  - Deterministic simulated PA/room samples per slot from `SignalGenerator` + `SyntheticAcousticRig`
+ *    (in 'simulator' mode).
  */
 
-import { DualChannelRingBuffer, RingBufferStorage } from '../audio/ring-buffer.js';
 import {
+  INTERNAL_LOOPBACK_SLOT_INDEX,
+  MultiChannelRingBuffer,
+  RingBufferStorage,
+  TOTAL_RING_BUFFER_SLOTS,
+} from '../audio/ring-buffer.js';
+import {
+  DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipeline,
   MeasurementPipelineConfig,
 } from './analyzer-pipeline.js';
@@ -47,35 +53,137 @@ import {
 
 export type InputSourceMode = 'simulator' | 'hardware';
 
+export interface LiveMeasurementSlotConfig {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+  readonly visible: boolean;
+  readonly simulatorPreset: SimulatorPresetId;
+  readonly measurementChannel: number;
+  readonly referenceChannel: number; // -1 = Internal Generator Loopback
+  readonly config: MeasurementPipelineConfig;
+  readonly activeCalibrationId: string | null;
+}
+
 export type WorkerInboundMessage =
   | { type: 'init'; sampleRate: number; ringBufferStorage?: RingBufferStorage }
   | { type: 'set-input-mode'; mode: InputSourceMode }
-  | { type: 'set-simulator-preset'; preset: SimulatorPresetId | SimulatorRigConfig }
-  | { type: 'update-measurement-config'; config: Partial<MeasurementPipelineConfig> }
+  | {
+      type: 'sync-live-slots';
+      slots: readonly LiveMeasurementSlotConfig[];
+      channelTapMap: Record<number, number>;
+    }
+  | {
+      type: 'set-simulator-preset';
+      slotId: string;
+      preset: SimulatorPresetId | SimulatorRigConfig;
+    }
+  | {
+      type: 'update-measurement-config';
+      slotId: string;
+      config: Partial<MeasurementPipelineConfig>;
+    }
   | { type: 'update-generator-config'; config: Partial<SignalGeneratorConfig> }
-  | { type: 'load-calibration'; text: string; name: string }
-  | { type: 'clear-calibration' }
-  | { type: 'find-delay' }
-  | { type: 'apply-estimated-delay' }
-  | { type: 'reset-averaging' }
-  | { type: 'audio-chunk'; m: Float32Array; r: Float32Array }
+  | { type: 'load-calibration'; slotId: string; text: string; name: string }
+  | { type: 'clear-calibration'; slotId: string }
+  | { type: 'find-delay'; slotId: string }
+  | { type: 'apply-estimated-delay'; slotId: string }
+  | { type: 'reset-averaging'; slotId?: string }
+  | { type: 'audio-chunk'; channels: Float32Array[] }
   | { type: 'pause'; paused: boolean };
+
+interface LiveSlotRuntime {
+  slot: LiveMeasurementSlotConfig;
+  pipeline: MeasurementPipeline;
+  simulatorRig: SyntheticAcousticRig;
+}
 
 let sampleRate = 48000;
 let inputMode: InputSourceMode = 'simulator';
 let isPaused = false;
+let channelTapMap: Record<number, number> = { 0: 0, 1: 1 };
 
-const pipeline = new MeasurementPipeline({ sampleRate });
 const generator = new SignalGenerator(sampleRate);
-const simulatorRig = new SyntheticAcousticRig(sampleRate, 'pa-room-modes');
-let ringBuffer: DualChannelRingBuffer | null = null;
+let ringBuffer: MultiChannelRingBuffer | null = null;
 
-// Scratch buffers for simulation & ring buffer draining
+const slots = new Map<string, LiveSlotRuntime>();
+
+function createDefaultPrimarySlot(): LiveMeasurementSlotConfig {
+  return {
+    id: 'live-measurement',
+    name: 'Live Measurement',
+    color: '#38bdf8',
+    visible: true,
+    simulatorPreset: 'pa-room-modes',
+    measurementChannel: 0,
+    referenceChannel: 1,
+    config: { ...DEFAULT_MEASUREMENT_CONFIG, sampleRate },
+    activeCalibrationId: null,
+  };
+}
+
+function getOrCreateSlotRuntime(slotId: string): LiveSlotRuntime {
+  let rt = slots.get(slotId);
+  if (!rt) {
+    if (slots.size === 0) {
+      const def = createDefaultPrimarySlot();
+      rt = {
+        slot: def,
+        pipeline: new MeasurementPipeline({ ...def.config, sampleRate }),
+        simulatorRig: new SyntheticAcousticRig(sampleRate, def.simulatorPreset),
+      };
+      slots.set(def.id, rt);
+    } else {
+      rt = slots.values().next().value!;
+    }
+  }
+  return rt;
+}
+
+// Initialize primary slot immediately
+getOrCreateSlotRuntime('live-measurement');
+
+// Scratch buffers for simulation & multi-channel ring buffer draining
 const simChunkSize = 2048;
 const simRefBuf = new Float32Array(simChunkSize);
 const simMeasBuf = new Float32Array(simChunkSize);
-const hwReadBufM = new Float32Array(4096);
-const hwReadBufR = new Float32Array(4096);
+const hwReadChunkSize = 4096;
+const hwReadChannels: Float32Array[] = Array.from(
+  { length: TOTAL_RING_BUFFER_SLOTS },
+  () => new Float32Array(hwReadChunkSize)
+);
+const zeroHwChannel = new Float32Array(hwReadChunkSize);
+
+function routeHardwareSamplesToSlots(
+  channels: readonly Float32Array[],
+  sampleCount: number
+): void {
+  const zeroSlice =
+    zeroHwChannel.length >= sampleCount
+      ? zeroHwChannel.subarray(0, sampleCount)
+      : new Float32Array(sampleCount);
+
+  for (const rt of slots.values()) {
+    const tapM = channelTapMap[rt.slot.measurementChannel];
+    const bufM =
+      tapM !== undefined && channels[tapM]
+        ? channels[tapM].subarray(0, sampleCount)
+        : zeroSlice;
+
+    let bufR: Float32Array;
+    if (rt.slot.referenceChannel < 0) {
+      bufR =
+        channels[INTERNAL_LOOPBACK_SLOT_INDEX]?.subarray(0, sampleCount) ?? zeroSlice;
+    } else {
+      const tapR = channelTapMap[rt.slot.referenceChannel];
+      bufR =
+        tapR !== undefined && channels[tapR]
+          ? channels[tapR].subarray(0, sampleCount)
+          : zeroSlice;
+    }
+    rt.pipeline.writeSamples(bufM, bufR, sampleCount);
+  }
+}
 
 let lastTickTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -91,26 +199,41 @@ function tick(): void {
 
   try {
     if (inputMode === 'simulator') {
-      // Synthesize ~42.6 ms (2048 samples at 48 kHz) per tick
+      // Synthesize ~42.6 ms (2048 samples at 48 kHz) shared reference block per tick
       generator.fillBuffer(simRefBuf, simChunkSize);
-      simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
-      pipeline.writeSamples(simMeasBuf, simRefBuf, simChunkSize);
+      for (const rt of slots.values()) {
+        rt.simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
+        rt.pipeline.writeSamples(simMeasBuf, simRefBuf, simChunkSize);
+      }
     } else if (ringBuffer) {
       let avail = ringBuffer.availableRead();
       while (avail > 0) {
-        const toRead = Math.min(avail, hwReadBufM.length);
-        const readCount = ringBuffer.read(hwReadBufM, hwReadBufR, toRead);
+        const toRead = Math.min(avail, hwReadChunkSize);
+        const readCount = ringBuffer.read(hwReadChannels, toRead);
         if (readCount <= 0) break;
-        pipeline.writeSamples(hwReadBufM, hwReadBufR, readCount);
+        routeHardwareSamplesToSlots(hwReadChannels, readCount);
         avail -= readCount;
       }
     }
 
-    const snapshot = pipeline.computeTransform(dtSeconds);
-    self.postMessage({
-      type: 'measurement-frame',
-      sourceData: snapshot,
-    });
+    const frames = [];
+    for (const rt of slots.values()) {
+      const snapshot = rt.pipeline.computeTransform(dtSeconds);
+      frames.push({
+        ...snapshot,
+        id: rt.slot.id,
+        name: rt.slot.name,
+        color: rt.slot.color,
+        visible: rt.slot.visible,
+      });
+    }
+
+    if (frames.length > 0) {
+      self.postMessage({
+        type: 'measurement-frames',
+        frames,
+      });
+    }
   } catch (err) {
     self.postMessage({
       type: 'worker-error',
@@ -129,11 +252,13 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
     switch (msg.type) {
       case 'init':
         sampleRate = msg.sampleRate || 48000;
-        pipeline.updateConfig({ sampleRate });
         generator.setSampleRate(sampleRate);
-        simulatorRig.setSampleRate(sampleRate);
+        for (const rt of slots.values()) {
+          rt.pipeline.updateConfig({ sampleRate });
+          rt.simulatorRig.setSampleRate(sampleRate);
+        }
         if (msg.ringBufferStorage) {
-          ringBuffer = new DualChannelRingBuffer(msg.ringBufferStorage);
+          ringBuffer = new MultiChannelRingBuffer(msg.ringBufferStorage);
         }
         break;
 
@@ -142,79 +267,153 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           ringBuffer.clear();
         }
         inputMode = msg.mode;
-        pipeline.resetAveraging();
+        for (const rt of slots.values()) {
+          rt.pipeline.resetAveraging();
+        }
         break;
 
-      case 'set-simulator-preset':
-        simulatorRig.setConfig(msg.preset);
-        pipeline.resetAveraging();
+      case 'sync-live-slots': {
+        channelTapMap = { ...msg.channelTapMap };
+        const incomingIds = new Set(msg.slots.map((s) => s.id));
+        for (const existingId of Array.from(slots.keys())) {
+          if (!incomingIds.has(existingId)) {
+            slots.delete(existingId);
+          }
+        }
+        for (const slotCfg of msg.slots) {
+          const existing = slots.get(slotCfg.id);
+          if (existing) {
+            const presetChanged =
+              existing.slot.simulatorPreset !== slotCfg.simulatorPreset;
+            const channelChanged =
+              existing.slot.measurementChannel !== slotCfg.measurementChannel ||
+              existing.slot.referenceChannel !== slotCfg.referenceChannel;
+            existing.slot = slotCfg;
+            existing.pipeline.updateConfig({ ...slotCfg.config, sampleRate });
+            if (presetChanged) {
+              existing.simulatorRig.setConfig(slotCfg.simulatorPreset);
+              existing.pipeline.resetAveraging();
+            } else if (channelChanged && inputMode === 'hardware') {
+              existing.pipeline.resetAveraging();
+            }
+          } else {
+            const pipeline = new MeasurementPipeline({
+              ...slotCfg.config,
+              sampleRate,
+            });
+            const simulatorRig = new SyntheticAcousticRig(
+              sampleRate,
+              slotCfg.simulatorPreset
+            );
+            slots.set(slotCfg.id, { slot: slotCfg, pipeline, simulatorRig });
+          }
+        }
+        break;
+      }
+
+      case 'set-simulator-preset': {
+        const rt = getOrCreateSlotRuntime(msg.slotId);
+        rt.simulatorRig.setConfig(msg.preset);
+        if (typeof msg.preset === 'string') {
+          rt.slot = { ...rt.slot, simulatorPreset: msg.preset };
+        }
+        rt.pipeline.resetAveraging();
         self.postMessage({
           type: 'simulator-config-updated',
-          config: simulatorRig.getConfig(),
+          slotId: rt.slot.id,
+          config: rt.simulatorRig.getConfig(),
         });
         break;
+      }
 
-      case 'update-measurement-config':
-        if (msg.config.sampleRate !== undefined && msg.config.sampleRate !== sampleRate) {
+      case 'update-measurement-config': {
+        if (
+          msg.config.sampleRate !== undefined &&
+          msg.config.sampleRate !== sampleRate
+        ) {
           sampleRate = msg.config.sampleRate;
           generator.setSampleRate(sampleRate);
-          simulatorRig.setSampleRate(sampleRate);
+          for (const item of slots.values()) {
+            item.simulatorRig.setSampleRate(sampleRate);
+            item.pipeline.updateConfig({ sampleRate });
+          }
         }
-        pipeline.updateConfig(msg.config);
+        const rt = getOrCreateSlotRuntime(msg.slotId);
+        rt.pipeline.updateConfig(msg.config);
+        rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
         self.postMessage({
           type: 'measurement-config-updated',
-          config: pipeline.getConfig(),
+          slotId: rt.slot.id,
+          config: rt.pipeline.getConfig(),
         });
         break;
+      }
 
       case 'update-generator-config':
         generator.updateConfig(msg.config);
         break;
 
       case 'load-calibration': {
+        const rt = getOrCreateSlotRuntime(msg.slotId);
         const curve = parseCalibrationFile(msg.text, msg.name);
-        pipeline.setCalibrationCurve(curve);
-        pipeline.updateConfig({ calibrationEnabled: curve.points.length > 0 });
+        rt.pipeline.setCalibrationCurve(curve);
+        rt.pipeline.updateConfig({ calibrationEnabled: curve.points.length > 0 });
+        rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
         self.postMessage({
           type: 'calibration-loaded',
+          slotId: rt.slot.id,
           name: curve.name,
           pointCount: curve.points.length,
         });
         break;
       }
 
-      case 'clear-calibration':
-        pipeline.setCalibrationCurve(null);
-        pipeline.updateConfig({ calibrationEnabled: false });
+      case 'clear-calibration': {
+        const rt = getOrCreateSlotRuntime(msg.slotId);
+        rt.pipeline.setCalibrationCurve(null);
+        rt.pipeline.updateConfig({ calibrationEnabled: false });
+        rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
         break;
+      }
 
       case 'find-delay': {
-        const est = pipeline.findDelayNow();
+        const rt = getOrCreateSlotRuntime(msg.slotId);
+        const est = rt.pipeline.findDelayNow();
         self.postMessage({
           type: 'delay-found',
+          slotId: rt.slot.id,
           estimate: est,
         });
         break;
       }
 
       case 'apply-estimated-delay': {
-        const est = pipeline.findDelayNow();
+        const rt = getOrCreateSlotRuntime(msg.slotId);
+        const est = rt.pipeline.findDelayNow();
         const roundedMs = Math.round(est.delayMs * 100) / 100;
-        pipeline.updateConfig({ delayMs: roundedMs });
+        rt.pipeline.updateConfig({ delayMs: roundedMs });
+        rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
         self.postMessage({
           type: 'measurement-config-updated',
-          config: pipeline.getConfig(),
+          slotId: rt.slot.id,
+          config: rt.pipeline.getConfig(),
         });
         break;
       }
 
       case 'reset-averaging':
-        pipeline.resetAveraging();
+        if (msg.slotId) {
+          getOrCreateSlotRuntime(msg.slotId).pipeline.resetAveraging();
+        } else {
+          for (const rt of slots.values()) {
+            rt.pipeline.resetAveraging();
+          }
+        }
         break;
 
       case 'audio-chunk':
-        if (inputMode === 'hardware' && !isPaused) {
-          pipeline.writeSamples(msg.m, msg.r, msg.m.length);
+        if (inputMode === 'hardware' && !isPaused && msg.channels.length > 0) {
+          routeHardwareSamplesToSlots(msg.channels, msg.channels[0].length);
         }
         break;
 
@@ -234,4 +433,3 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
 };
 
 export { intervalId, SIMULATOR_PRESETS };
-

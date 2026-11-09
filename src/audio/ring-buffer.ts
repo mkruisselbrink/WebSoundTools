@@ -20,9 +20,10 @@
  */
 
 /**
- * Lock-free Single-Producer Single-Consumer (SPSC) Ring Buffer
+ * Lock-free Single-Producer Single-Consumer (SPSC) Multi-Channel Ring Buffer
  * backed by SharedArrayBuffer (or standard ArrayBuffer in single-threaded tests)
- * for streaming interleaved or planar [Measurement, Reference] float32 audio frames
+ * for streaming sample-synchronous multi-channel float32 audio frames
+ * (up to 8 active hardware tap channels + 1 internal generator loopback channel)
  * from the real-time AudioWorklet thread to the DSP Worker thread with zero allocations.
  */
 
@@ -30,46 +31,60 @@ const WRITE_INDEX_OFFSET = 0;
 const READ_INDEX_OFFSET = 1;
 const HEADER_INTS = 2; // writeIndex, readIndex (Uint32Array with Atomics)
 
+export const MAX_CAPTURE_TAP_SLOTS = 8;
+export const INTERNAL_LOOPBACK_SLOT_INDEX = MAX_CAPTURE_TAP_SLOTS; // Slot 8
+export const TOTAL_RING_BUFFER_SLOTS = MAX_CAPTURE_TAP_SLOTS + 1; // 9 slots total
+
 export interface RingBufferStorage {
   readonly headerBuffer: SharedArrayBuffer | ArrayBuffer;
-  readonly dataBufferM: SharedArrayBuffer | ArrayBuffer;
-  readonly dataBufferR: SharedArrayBuffer | ArrayBuffer;
+  readonly channelBuffers: readonly (SharedArrayBuffer | ArrayBuffer)[];
   readonly capacity: number;
+  readonly channelCount: number;
 }
 
 export function createRingBufferStorage(
   capacity: number,
-  useSharedMemory: boolean = typeof SharedArrayBuffer !== 'undefined'
+  useSharedMemory: boolean = typeof SharedArrayBuffer !== 'undefined',
+  channelCount: number = TOTAL_RING_BUFFER_SLOTS
 ): RingBufferStorage {
   if ((capacity & (capacity - 1)) !== 0 || capacity <= 0) {
     throw new Error(`RingBuffer capacity must be a positive power of 2, got ${capacity}`);
   }
+  if (channelCount <= 0) {
+    throw new Error(`RingBuffer channelCount must be positive, got ${channelCount}`);
+  }
   const BufferCtor = useSharedMemory ? SharedArrayBuffer : ArrayBuffer;
+  const channelBuffers: (SharedArrayBuffer | ArrayBuffer)[] = [];
+  for (let ch = 0; ch < channelCount; ch++) {
+    channelBuffers.push(new BufferCtor(capacity * Float32Array.BYTES_PER_ELEMENT));
+  }
   return {
     headerBuffer: new BufferCtor(HEADER_INTS * Uint32Array.BYTES_PER_ELEMENT),
-    dataBufferM: new BufferCtor(capacity * Float32Array.BYTES_PER_ELEMENT),
-    dataBufferR: new BufferCtor(capacity * Float32Array.BYTES_PER_ELEMENT),
+    channelBuffers,
     capacity,
+    channelCount,
   };
 }
 
-export class DualChannelRingBuffer {
+export class MultiChannelRingBuffer {
   readonly capacity: number;
+  readonly channelCount: number;
   private readonly mask: number;
   private readonly indices: Uint32Array;
-  private readonly dataM: Float32Array;
-  private readonly dataR: Float32Array;
+  private readonly channels: Float32Array[];
   private readonly isShared: boolean;
 
   constructor(storage: RingBufferStorage) {
     if ((storage.capacity & (storage.capacity - 1)) !== 0 || storage.capacity <= 0) {
-      throw new Error(`RingBuffer capacity must be a positive power of 2, got ${storage.capacity}`);
+      throw new Error(
+        `RingBuffer capacity must be a positive power of 2, got ${storage.capacity}`
+      );
     }
     this.capacity = storage.capacity;
+    this.channelCount = storage.channelBuffers.length;
     this.mask = storage.capacity - 1;
     this.indices = new Uint32Array(storage.headerBuffer);
-    this.dataM = new Float32Array(storage.dataBufferM);
-    this.dataR = new Float32Array(storage.dataBufferR);
+    this.channels = storage.channelBuffers.map((buf) => new Float32Array(buf));
     this.isShared =
       typeof SharedArrayBuffer !== 'undefined' &&
       storage.headerBuffer instanceof SharedArrayBuffer;
@@ -88,25 +103,33 @@ export class DualChannelRingBuffer {
     }
   }
 
-  /** Number of samples currently available to read. */
+  /** Number of sample frames currently available to read across all channels. */
   availableRead(): number {
     const writeIdx = this.loadIndex(WRITE_INDEX_OFFSET);
     const readIdx = this.loadIndex(READ_INDEX_OFFSET);
     return (writeIdx - readIdx) >>> 0;
   }
 
-  /** Number of free sample slots available to write. */
+  /** Number of free sample frame slots available to write. */
   availableWrite(): number {
     return this.capacity - this.availableRead();
   }
 
   /**
-   * Producer (AudioWorklet): Writes up to `length` samples from `inputM` and `inputR`.
-   * Returns the number of samples actually written.
+   * Producer (AudioWorklet): Writes up to `length` sample frames across `inputs`.
+   * Returns the number of sample frames actually written.
    */
-  write(inputM: Float32Array, inputR: Float32Array, length: number = inputM.length): number {
+  write(inputs: readonly Float32Array[], length?: number): number {
+    if (inputs.length === 0) return 0;
+    const requestedLen = length ?? inputs[0].length;
     const avail = this.availableWrite();
-    const toWrite = Math.min(length, avail, inputM.length, inputR.length);
+    let maxInputLen = requestedLen;
+    for (let ch = 0; ch < Math.min(inputs.length, this.channelCount); ch++) {
+      if (inputs[ch].length < maxInputLen) {
+        maxInputLen = inputs[ch].length;
+      }
+    }
+    const toWrite = Math.min(requestedLen, avail, maxInputLen);
     if (toWrite <= 0) {
       return 0;
     }
@@ -114,14 +137,22 @@ export class DualChannelRingBuffer {
     const writeIdx = this.loadIndex(WRITE_INDEX_OFFSET);
     const pos = (writeIdx & this.mask) >>> 0;
     const firstChunk = Math.min(toWrite, this.capacity - pos);
-
-    this.dataM.set(inputM.subarray(0, firstChunk), pos);
-    this.dataR.set(inputR.subarray(0, firstChunk), pos);
-
     const secondChunk = toWrite - firstChunk;
-    if (secondChunk > 0) {
-      this.dataM.set(inputM.subarray(firstChunk, toWrite), 0);
-      this.dataR.set(inputR.subarray(firstChunk, toWrite), 0);
+
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      const dst = this.channels[ch];
+      const src = inputs[ch];
+      if (src) {
+        dst.set(src.subarray(0, firstChunk), pos);
+        if (secondChunk > 0) {
+          dst.set(src.subarray(firstChunk, toWrite), 0);
+        }
+      } else {
+        dst.fill(0, pos, pos + firstChunk);
+        if (secondChunk > 0) {
+          dst.fill(0, 0, secondChunk);
+        }
+      }
     }
 
     this.storeIndex(WRITE_INDEX_OFFSET, (writeIdx + toWrite) >>> 0);
@@ -129,12 +160,20 @@ export class DualChannelRingBuffer {
   }
 
   /**
-   * Consumer (DSP Worker): Reads up to `length` samples into `outputM` and `outputR`.
-   * Returns the number of samples actually read.
+   * Consumer (DSP Worker): Reads up to `length` sample frames into `outputs`.
+   * Returns the number of sample frames actually read.
    */
-  read(outputM: Float32Array, outputR: Float32Array, length: number = outputM.length): number {
+  read(outputs: readonly Float32Array[], length?: number): number {
+    if (outputs.length === 0) return 0;
+    const requestedLen = length ?? outputs[0].length;
     const avail = this.availableRead();
-    const toRead = Math.min(length, avail, outputM.length, outputR.length);
+    let maxOutputLen = requestedLen;
+    for (let ch = 0; ch < Math.min(outputs.length, this.channelCount); ch++) {
+      if (outputs[ch].length < maxOutputLen) {
+        maxOutputLen = outputs[ch].length;
+      }
+    }
+    const toRead = Math.min(requestedLen, avail, maxOutputLen);
     if (toRead <= 0) {
       return 0;
     }
@@ -142,14 +181,16 @@ export class DualChannelRingBuffer {
     const readIdx = this.loadIndex(READ_INDEX_OFFSET);
     const pos = (readIdx & this.mask) >>> 0;
     const firstChunk = Math.min(toRead, this.capacity - pos);
-
-    outputM.set(this.dataM.subarray(pos, pos + firstChunk), 0);
-    outputR.set(this.dataR.subarray(pos, pos + firstChunk), 0);
-
     const secondChunk = toRead - firstChunk;
-    if (secondChunk > 0) {
-      outputM.set(this.dataM.subarray(0, secondChunk), firstChunk);
-      outputR.set(this.dataR.subarray(0, secondChunk), firstChunk);
+
+    const chLimit = Math.min(outputs.length, this.channelCount);
+    for (let ch = 0; ch < chLimit; ch++) {
+      const src = this.channels[ch];
+      const dst = outputs[ch];
+      dst.set(src.subarray(pos, pos + firstChunk), 0);
+      if (secondChunk > 0) {
+        dst.set(src.subarray(0, secondChunk), firstChunk);
+      }
     }
 
     this.storeIndex(READ_INDEX_OFFSET, (readIdx + toRead) >>> 0);
@@ -162,4 +203,3 @@ export class DualChannelRingBuffer {
     this.storeIndex(READ_INDEX_OFFSET, 0);
   }
 }
-

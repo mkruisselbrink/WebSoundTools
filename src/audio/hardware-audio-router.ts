@@ -23,14 +23,15 @@
  * Hardware Web Audio graph and device router (`src/audio/hardware-audio-router.ts`).
  *
  * Manages:
- *  - `navigator.mediaDevices.enumerateDevices()` and raw `getUserMedia` capture
+ *  - `navigator.mediaDevices.enumerateDevices()` and raw `getUserMedia` capture (up to 64 channels)
  *  - `AudioContext`, `ChannelSplitterNode`, `ChannelMergerNode`, and `CaptureWorkletNode`
- *  - Multi-channel input routing (Measurement + Reference or Internal Generator loopback)
+ *  - Dynamic multi-channel input routing: connects up to 8 actively used physical device channels
+ *    from a 2..64+ channel interface into the worklet's 8 capture tap inputs
  *  - Multi-channel hardware output routing for the real-time Signal Generator
  */
 
 import { SignalGeneratorConfig } from '../dsp/signal-generator.js';
-import { RingBufferStorage } from './ring-buffer.js';
+import { MAX_CAPTURE_TAP_SLOTS, RingBufferStorage } from './ring-buffer.js';
 import CaptureWorkletUrl from './worklets/capture-worklet.ts?worker&url';
 
 export interface AudioDeviceOption {
@@ -40,13 +41,12 @@ export interface AudioDeviceOption {
 
 export interface HardwareStreamStartOptions {
   readonly deviceId: string;
-  readonly measurementChannel: number;
-  readonly referenceChannel: number;
+  readonly activePhysicalChannels: readonly number[];
   readonly generatorOutputChannel: number;
   readonly generatorConfig: SignalGeneratorConfig;
   readonly isPaused: boolean;
   readonly ringBufferStorage: RingBufferStorage | null;
-  readonly onFallbackChunk: (m: Float32Array, r: Float32Array) => void;
+  readonly onFallbackChunk: (channels: Float32Array[]) => void;
 }
 
 export class HardwareAudioRouter {
@@ -57,8 +57,7 @@ export class HardwareAudioRouter {
   private captureWorkletNode: AudioWorkletNode | null = null;
   private outputMergerNode: ChannelMergerNode | null = null;
 
-  private measurementChannel = 0;
-  private referenceChannel = 1;
+  private activePhysicalChannels: number[] = [0, 1];
   private generatorOutputChannel = -1;
   private availableChannels = 2;
   private availableOutputChannels = 2;
@@ -88,27 +87,40 @@ export class HardwareAudioRouter {
     return this.availableOutputChannels;
   }
 
-  getChannelRouting(): {
-    measurementChannel: number;
-    referenceChannel: number;
-    generatorOutputChannel: number;
-  } {
-    return {
-      measurementChannel: this.measurementChannel,
-      referenceChannel: this.referenceChannel,
-      generatorOutputChannel: this.generatorOutputChannel,
-    };
+  getGeneratorOutputChannel(): number {
+    return this.generatorOutputChannel;
   }
 
-  setChannelRouting(
-    measurementChannel: number,
-    referenceChannel: number,
-    generatorOutputChannel: number = this.generatorOutputChannel
-  ): void {
-    this.measurementChannel = measurementChannel;
-    this.referenceChannel = referenceChannel;
-    this.generatorOutputChannel = generatorOutputChannel;
+  getActivePhysicalChannels(): readonly number[] {
+    return this.activePhysicalChannels;
+  }
+
+  /**
+   * Computes the mapping from physical hardware channel index (0-based, e.g. 0..63)
+   * to capture worklet tap slot index (0..7).
+   */
+  getChannelTapMap(): Record<number, number> {
+    const map: Record<number, number> = {};
+    for (let tapIdx = 0; tapIdx < this.activePhysicalChannels.length; tapIdx++) {
+      const ch = this.activePhysicalChannels[tapIdx];
+      map[ch] = tapIdx;
+    }
+    return map;
+  }
+
+  setActivePhysicalChannels(physicalChannels: readonly number[]): Record<number, number> {
+    const deduped: number[] = [];
+    for (const ch of physicalChannels) {
+      if (ch >= 0 && !deduped.includes(ch) && deduped.length < MAX_CAPTURE_TAP_SLOTS) {
+        deduped.push(ch);
+      }
+    }
+    if (deduped.length === 0) {
+      deduped.push(0);
+    }
+    this.activePhysicalChannels = deduped;
     this.reconnectChannels();
+    return this.getChannelTapMap();
   }
 
   setGeneratorOutputChannel(outputChannel: number): void {
@@ -133,9 +145,8 @@ export class HardwareAudioRouter {
 
   async startStream(options: HardwareStreamStartOptions): Promise<number> {
     this.stopStream();
-    this.measurementChannel = options.measurementChannel;
-    this.referenceChannel = options.referenceChannel;
     this.generatorOutputChannel = options.generatorOutputChannel;
+    this.setActivePhysicalChannels(options.activePhysicalChannels);
 
     if (!this.audioContext) {
       this.audioContext = new AudioContext({ sampleRate: 48000 });
@@ -145,7 +156,7 @@ export class HardwareAudioRouter {
       await this.audioContext.resume();
     }
 
-    const maxOut = Math.min(32, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
+    const maxOut = Math.min(64, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
     this.availableOutputChannels = maxOut;
     try {
       this.audioContext.destination.channelCount = maxOut;
@@ -161,7 +172,7 @@ export class HardwareAudioRouter {
         echoCancellation: { exact: false },
         noiseSuppression: { exact: false },
         autoGainControl: { exact: false },
-        channelCount: { ideal: 32 },
+        channelCount: { ideal: 64 },
         sampleRate: { ideal: this.audioContext.sampleRate },
       },
     });
@@ -180,7 +191,7 @@ export class HardwareAudioRouter {
       this.audioContext,
       'capture-tap-processor',
       {
-        numberOfInputs: 2,
+        numberOfInputs: MAX_CAPTURE_TAP_SLOTS,
         numberOfOutputs: 1,
         outputChannelCount: [1],
       }
@@ -207,8 +218,8 @@ export class HardwareAudioRouter {
       });
     } else {
       this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
-        if (e.data?.type === 'audio-chunk') {
-          options.onFallbackChunk(e.data.m, e.data.r);
+        if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
+          options.onFallbackChunk(e.data.channels as Float32Array[]);
         }
       };
     }
@@ -224,17 +235,10 @@ export class HardwareAudioRouter {
     this.splitterNode.disconnect();
     this.captureWorkletNode.disconnect();
 
-    const mCh = Math.max(0, Math.min(this.measurementChannel, this.availableChannels - 1));
-    this.splitterNode.connect(this.captureWorkletNode, mCh, 0);
-
-    const useInternalGenAsRef = this.referenceChannel < 0;
-    this.captureWorkletNode.port.postMessage({
-      type: 'set-ref-loopback',
-      useInternalGenAsRef,
-    });
-    if (!useInternalGenAsRef) {
-      const rCh = Math.max(0, Math.min(this.referenceChannel, this.availableChannels - 1));
-      this.splitterNode.connect(this.captureWorkletNode, rCh, 1);
+    for (let tapIdx = 0; tapIdx < this.activePhysicalChannels.length; tapIdx++) {
+      const requestedCh = this.activePhysicalChannels[tapIdx];
+      const physicalCh = Math.max(0, Math.min(requestedCh, this.availableChannels - 1));
+      this.splitterNode.connect(this.captureWorkletNode, physicalCh, tapIdx);
     }
 
     if (this.outputMergerNode && this.generatorOutputChannel !== -2) {
@@ -286,4 +290,3 @@ export class HardwareAudioRouter {
     }
   }
 }
-

@@ -20,44 +20,52 @@
  */
 
 /**
- * Real-time AudioWorkletProcessor that taps [Measurement, Reference] audio inputs
- * and writes them into a lock-free DualChannelRingBuffer (or posts chunks if fallback).
+ * Real-time AudioWorkletProcessor that taps up to 8 active hardware input channels
+ * plus the internal SignalGenerator loopback output and writes them sample-synchronously
+ * into a lock-free MultiChannelRingBuffer (or posts batched multi-channel chunks if fallback).
  */
 
 import {
   SignalGenerator,
   SignalGeneratorConfig,
 } from '../../dsp/signal-generator.js';
-import { DualChannelRingBuffer, RingBufferStorage } from '../ring-buffer.js';
+import {
+  INTERNAL_LOOPBACK_SLOT_INDEX,
+  MAX_CAPTURE_TAP_SLOTS,
+  MultiChannelRingBuffer,
+  RingBufferStorage,
+  TOTAL_RING_BUFFER_SLOTS,
+} from '../ring-buffer.js';
 
 declare const sampleRate: number;
 
 class CaptureTapProcessor extends AudioWorkletProcessor {
-  private ringBuffer: DualChannelRingBuffer | null = null;
+  private ringBuffer: MultiChannelRingBuffer | null = null;
   private readonly generator: SignalGenerator;
-  private useInternalGenAsRef = false;
   private isPaused = false;
   private readonly zeroFallback = new Float32Array(128);
   private readonly genScratch = new Float32Array(128);
+  private readonly tapInputs: Float32Array[] = new Array(TOTAL_RING_BUFFER_SLOTS);
   private readonly batchSize = 1024;
-  private readonly batchM = new Float32Array(this.batchSize);
-  private readonly batchR = new Float32Array(this.batchSize);
+  private readonly batchChannels: Float32Array[];
   private batchOffset = 0;
 
   constructor() {
     super();
     const sr = typeof sampleRate === 'number' && sampleRate > 0 ? sampleRate : 48000;
     this.generator = new SignalGenerator(sr);
+    this.batchChannels = Array.from(
+      { length: TOTAL_RING_BUFFER_SLOTS },
+      () => new Float32Array(this.batchSize)
+    );
 
     this.port.onmessage = (event: MessageEvent) => {
       const msg = event.data;
       if (!msg) return;
       if (msg.type === 'init-ring-buffer' && msg.storage) {
-        this.ringBuffer = new DualChannelRingBuffer(msg.storage as RingBufferStorage);
+        this.ringBuffer = new MultiChannelRingBuffer(msg.storage as RingBufferStorage);
       } else if (msg.type === 'update-generator-config' && msg.config) {
         this.generator.updateConfig(msg.config as Partial<SignalGeneratorConfig>);
-      } else if (msg.type === 'set-ref-loopback') {
-        this.useInternalGenAsRef = Boolean(msg.useInternalGenAsRef);
       } else if (msg.type === 'pause') {
         this.isPaused = Boolean(msg.paused);
         this.batchOffset = 0;
@@ -74,8 +82,8 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    const inputM = inputs[0]?.[0] ?? this.zeroFallback;
-    const frameLen = inputM.length || 128;
+    const firstIn = inputs[0]?.[0];
+    const frameLen = firstIn && firstIn.length > 0 ? firstIn.length : 128;
 
     const genOut = outputs[0]?.[0];
     const genBuf =
@@ -91,30 +99,36 @@ class CaptureTapProcessor extends AudioWorkletProcessor {
       genOut.set(genBuf);
     }
 
-    const inputR = this.useInternalGenAsRef
-      ? genBuf
-      : (inputs[1]?.[0] ?? inputs[0]?.[1] ?? this.zeroFallback);
+    const zeroSlice =
+      this.zeroFallback.length === frameLen
+        ? this.zeroFallback
+        : this.zeroFallback.subarray(0, frameLen);
+
+    for (let tap = 0; tap < MAX_CAPTURE_TAP_SLOTS; tap++) {
+      const chData = inputs[tap]?.[0];
+      this.tapInputs[tap] =
+        chData && chData.length === frameLen ? chData : zeroSlice;
+    }
+    this.tapInputs[INTERNAL_LOOPBACK_SLOT_INDEX] = genBuf;
 
     if (this.ringBuffer) {
-      this.ringBuffer.write(inputM, inputR, inputM.length);
-    } else if (inputM.length > 0) {
-      const len = inputM.length;
-      if (this.batchOffset + len > this.batchSize) {
+      this.ringBuffer.write(this.tapInputs, frameLen);
+    } else if (frameLen > 0) {
+      if (this.batchOffset + frameLen > this.batchSize) {
         this.port.postMessage({
           type: 'audio-chunk',
-          m: this.batchM.slice(0, this.batchOffset),
-          r: this.batchR.slice(0, this.batchOffset),
+          channels: this.batchChannels.map((b) => b.slice(0, this.batchOffset)),
         });
         this.batchOffset = 0;
       }
-      this.batchM.set(inputM, this.batchOffset);
-      this.batchR.set(inputR, this.batchOffset);
-      this.batchOffset += len;
+      for (let ch = 0; ch < TOTAL_RING_BUFFER_SLOTS; ch++) {
+        this.batchChannels[ch].set(this.tapInputs[ch], this.batchOffset);
+      }
+      this.batchOffset += frameLen;
       if (this.batchOffset >= this.batchSize) {
         this.port.postMessage({
           type: 'audio-chunk',
-          m: this.batchM.slice(0, this.batchOffset),
-          r: this.batchR.slice(0, this.batchOffset),
+          channels: this.batchChannels.map((b) => b.slice(0, this.batchOffset)),
         });
         this.batchOffset = 0;
       }

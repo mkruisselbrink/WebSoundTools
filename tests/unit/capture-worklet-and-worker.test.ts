@@ -21,9 +21,12 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  DualChannelRingBuffer,
+  INTERNAL_LOOPBACK_SLOT_INDEX,
+  MultiChannelRingBuffer,
+  TOTAL_RING_BUFFER_SLOTS,
   createRingBufferStorage,
 } from '../../src/audio/ring-buffer.js';
+import { DEFAULT_MEASUREMENT_CONFIG } from '../../src/dsp/analyzer-pipeline.js';
 
 interface MockWorkletProcessorInstance {
   port: {
@@ -33,7 +36,7 @@ interface MockWorkletProcessorInstance {
   process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean;
 }
 
-describe('capture-worklet and dsp.worker', () => {
+describe('capture-worklet and multi-slot dsp.worker', () => {
   let RegisteredProcessorCtor: (new () => MockWorkletProcessorInstance) | null = null;
   let workerIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -72,44 +75,46 @@ describe('capture-worklet and dsp.worker', () => {
     }
   });
 
-  it('CaptureTapProcessor synthesizes generator output, supports internal loopback, writes to ring buffer, and mutes when paused', () => {
+  it('CaptureTapProcessor taps multiple input channels plus internal loopback into MultiChannelRingBuffer and mutes when paused', () => {
     expect(RegisteredProcessorCtor).not.toBeNull();
     const proc = new RegisteredProcessorCtor!();
 
-    const storage = createRingBufferStorage(4096, false);
-    const reader = new DualChannelRingBuffer(storage);
+    const storage = createRingBufferStorage(4096, false, TOTAL_RING_BUFFER_SLOTS);
+    const reader = new MultiChannelRingBuffer(storage);
 
     proc.port.onmessage?.({
       data: { type: 'init-ring-buffer', storage },
     } as MessageEvent);
 
-    // Enable generator and internal reference loopback
+    // Enable generator
     proc.port.onmessage?.({
       data: {
         type: 'update-generator-config',
-        config: { enabled: true, type: 'sine', frequencyHz: 1000, levelDbFs: -6 },
+        config: { enabled: true, type: 'sine', sineFrequencyHz: 1000, levelDbFs: -6 },
       },
     } as MessageEvent);
-    proc.port.onmessage?.({
-      data: { type: 'set-ref-loopback', useInternalGenAsRef: true },
-    } as MessageEvent);
 
-    const mIn = new Float32Array(128).fill(0.25);
-    const rIn = new Float32Array(128).fill(-0.25);
+    const ch0In = new Float32Array(128).fill(0.25);
+    const ch1In = new Float32Array(128).fill(-0.25);
+    const ch2In = new Float32Array(128).fill(0.75);
     const genOut = new Float32Array(128);
 
-    expect(proc.process([[mIn], [rIn]], [[genOut]])).toBe(true);
+    expect(proc.process([[ch0In], [ch1In], [ch2In]], [[genOut]])).toBe(true);
 
     // Generator output should have non-zero sine samples
     expect(genOut.some((v) => Math.abs(v) > 0.01)).toBe(true);
 
-    // Ring buffer should have received 128 samples with R matching genOut (internal loopback)
+    // Ring buffer should have received 128 frames across all 9 slots
     expect(reader.availableRead()).toBe(128);
-    const outM = new Float32Array(128);
-    const outR = new Float32Array(128);
-    reader.read(outM, outR, 128);
-    expect(outM[0]).toBeCloseTo(0.25, 5);
-    expect(outR[10]).toBeCloseTo(genOut[10], 5);
+    const outChannels = Array.from(
+      { length: TOTAL_RING_BUFFER_SLOTS },
+      () => new Float32Array(128)
+    );
+    reader.read(outChannels, 128);
+    expect(outChannels[0][0]).toBeCloseTo(0.25, 5);
+    expect(outChannels[1][0]).toBeCloseTo(-0.25, 5);
+    expect(outChannels[2][0]).toBeCloseTo(0.75, 5);
+    expect(outChannels[INTERNAL_LOOPBACK_SLOT_INDEX][10]).toBeCloseTo(genOut[10], 5);
 
     // Pause processor: output should be zeroed and ring buffer should receive no new samples
     proc.port.onmessage?.({
@@ -117,32 +122,33 @@ describe('capture-worklet and dsp.worker', () => {
     } as MessageEvent);
 
     genOut.fill(0.9);
-    proc.process([[mIn], [rIn]], [[genOut]]);
+    proc.process([[ch0In], [ch1In], [ch2In]], [[genOut]]);
     expect(genOut.every((v) => v === 0)).toBe(true);
     expect(reader.availableRead()).toBe(0);
   });
 
-  it('CaptureTapProcessor batches 1024-sample fallback chunks when SharedArrayBuffer is unavailable', () => {
+  it('CaptureTapProcessor batches 1024-sample multi-channel fallback chunks when SharedArrayBuffer is unavailable', () => {
     const proc = new RegisteredProcessorCtor!();
-    const mIn = new Float32Array(128).fill(0.1);
-    const rIn = new Float32Array(128).fill(0.2);
+    const ch0 = new Float32Array(128).fill(0.1);
+    const ch1 = new Float32Array(128).fill(0.2);
     const genOut = new Float32Array(128);
 
     // 7 blocks of 128 = 896 samples (< 1024, no postMessage yet)
     for (let i = 0; i < 7; i++) {
-      proc.process([[mIn], [rIn]], [[genOut]]);
+      proc.process([[ch0], [ch1]], [[genOut]]);
     }
     expect(proc.port.postMessage).not.toHaveBeenCalled();
 
-    // 8th block reaches 1024 samples -> emits 1 batched message
-    proc.process([[mIn], [rIn]], [[genOut]]);
+    // 8th block reaches 1024 samples -> emits 1 batched message with 9 channels
+    proc.process([[ch0], [ch1]], [[genOut]]);
     expect(proc.port.postMessage).toHaveBeenCalledTimes(1);
     const payload = proc.port.postMessage.mock.calls[0][0];
     expect(payload.type).toBe('audio-chunk');
-    expect(payload.m).toHaveLength(1024);
+    expect(payload.channels).toHaveLength(TOTAL_RING_BUFFER_SLOTS);
+    expect(payload.channels[0]).toHaveLength(1024);
   });
 
-  it('dsp.worker handles configuration, calibration, delay estimation, and pause messages', async () => {
+  it('dsp.worker manages multiple live measurement slots, per-slot calibration, delay estimation, and pause', async () => {
     const postedMessages: Array<{ type: string; [k: string]: unknown }> = [];
     Object.defineProperty(globalThis, 'self', {
       value: {
@@ -161,12 +167,44 @@ describe('capture-worklet and dsp.worker', () => {
       onmessage: (e: MessageEvent) => void;
     };
 
-    const storage = createRingBufferStorage(4096, false);
-    const rb = new DualChannelRingBuffer(storage);
-    rb.write(new Float32Array(64).fill(1), new Float32Array(64).fill(1), 64);
+    const storage = createRingBufferStorage(4096, false, TOTAL_RING_BUFFER_SLOTS);
+    const rb = new MultiChannelRingBuffer(storage);
+    rb.write([new Float32Array(64).fill(1), new Float32Array(64).fill(1)], 64);
 
     selfObj.onmessage({
       data: { type: 'init', sampleRate: 48000, ringBufferStorage: storage },
+    } as MessageEvent);
+
+    // Synchronize 2 live slots mapped to physical channels 0, 1, and 18 (mapped to tap 2)
+    selfObj.onmessage({
+      data: {
+        type: 'sync-live-slots',
+        slots: [
+          {
+            id: 'live-measurement',
+            name: 'FOH Center',
+            color: '#38bdf8',
+            visible: true,
+            simulatorPreset: 'pa-room-modes',
+            measurementChannel: 0,
+            referenceChannel: 1,
+            config: { ...DEFAULT_MEASUREMENT_CONFIG },
+            activeCalibrationId: null,
+          },
+          {
+            id: 'live-2',
+            name: 'Front Fill (Ch 19)',
+            color: '#10b981',
+            visible: true,
+            simulatorPreset: 'flat-delayed',
+            measurementChannel: 18,
+            referenceChannel: -1,
+            config: { ...DEFAULT_MEASUREMENT_CONFIG },
+            activeCalibrationId: null,
+          },
+        ],
+        channelTapMap: { 0: 0, 1: 1, 18: 2 },
+      },
     } as MessageEvent);
 
     // Switching to hardware mode clears stale ring buffer samples
@@ -175,35 +213,52 @@ describe('capture-worklet and dsp.worker', () => {
     } as MessageEvent);
     expect(rb.availableRead()).toBe(0);
 
-    // Updating measurement config posts measurement-config-updated
+    // Updating measurement config on slot 'live-2' posts measurement-config-updated with slotId
     selfObj.onmessage({
       data: {
         type: 'update-measurement-config',
+        slotId: 'live-2',
         config: { sampleRate: 44100, fftSize: 2048 },
       },
     } as MessageEvent);
-    expect(postedMessages.some((m) => m.type === 'measurement-config-updated')).toBe(true);
+    expect(
+      postedMessages.some(
+        (m) => m.type === 'measurement-config-updated' && m.slotId === 'live-2'
+      )
+    ).toBe(true);
 
-    // Loading calibration posts calibration-loaded
+    // Loading calibration on 'live-2' posts calibration-loaded with slotId
     selfObj.onmessage({
       data: {
         type: 'load-calibration',
+        slotId: 'live-2',
         name: 'test.cal',
         text: '100 -1.5\n1000 0.0\n10000 2.0',
       },
     } as MessageEvent);
-    expect(postedMessages.some((m) => m.type === 'calibration-loaded')).toBe(true);
+    expect(
+      postedMessages.some(
+        (m) => m.type === 'calibration-loaded' && m.slotId === 'live-2'
+      )
+    ).toBe(true);
 
-    // Apply estimated delay & clear calibration
-    selfObj.onmessage({ data: { type: 'find-delay' } } as MessageEvent);
-    expect(postedMessages.some((m) => m.type === 'delay-found')).toBe(true);
-    selfObj.onmessage({ data: { type: 'apply-estimated-delay' } } as MessageEvent);
-    selfObj.onmessage({ data: { type: 'clear-calibration' } } as MessageEvent);
+    // Apply estimated delay & clear calibration on 'live-2'
+    selfObj.onmessage({
+      data: { type: 'find-delay', slotId: 'live-2' },
+    } as MessageEvent);
+    expect(
+      postedMessages.some((m) => m.type === 'delay-found' && m.slotId === 'live-2')
+    ).toBe(true);
+    selfObj.onmessage({
+      data: { type: 'apply-estimated-delay', slotId: 'live-2' },
+    } as MessageEvent);
+    selfObj.onmessage({
+      data: { type: 'clear-calibration', slotId: 'live-2' },
+    } as MessageEvent);
 
     // Pause clears ring buffer
-    rb.write(new Float32Array(32).fill(0.5), new Float32Array(32).fill(0.5), 32);
+    rb.write([new Float32Array(32).fill(0.5)], 32);
     selfObj.onmessage({ data: { type: 'pause', paused: true } } as MessageEvent);
     expect(rb.availableRead()).toBe(0);
   });
 });
-

@@ -20,17 +20,21 @@
  */
 
 /**
- * AudioEngine & DSP Worker Controller (`src/audio/audio-engine.ts`).
+ * AudioEngine & Multi-Slot DSP Worker Controller (`src/audio/audio-engine.ts`).
  *
- * Manages background `dsp.worker.ts` lifecycle, message dispatch, and state synchronization,
- * delegating Web Audio hardware stream/channel routing to `HardwareAudioRouter`.
+ * Manages background `dsp.worker.ts` lifecycle, multi-slot Live Measurement configurations,
+ * message dispatch, and dynamic physical hardware channel routing via `HardwareAudioRouter`.
  */
 
 import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipelineConfig,
 } from '../dsp/analyzer-pipeline.js';
-import { InputSourceMode, WorkerInboundMessage } from '../dsp/dsp.worker.js';
+import {
+  InputSourceMode,
+  LiveMeasurementSlotConfig,
+  WorkerInboundMessage,
+} from '../dsp/dsp.worker.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
   SignalGeneratorConfig,
@@ -40,14 +44,44 @@ import {
   SimulatorPresetId,
   SimulatorRigConfig,
 } from '../dsp/synthetic-rig.js';
-import { SourceData } from '../sources/source-data.js';
+import { DEFAULT_SOURCE_PALETTE, SourceData } from '../sources/source-data.js';
 import { AudioDeviceOption, HardwareAudioRouter } from './hardware-audio-router.js';
 import { createRingBufferStorage, RingBufferStorage } from './ring-buffer.js';
 
-export type { AudioDeviceOption };
+export type { AudioDeviceOption, LiveMeasurementSlotConfig };
 
-export type FrameUpdateCallback = (liveSource: SourceData) => void;
-export type ConfigUpdateCallback = (config: MeasurementPipelineConfig) => void;
+export type LiveFramesCallback = (liveFrames: SourceData[]) => void;
+export type SlotConfigUpdateCallback = (
+  slotId: string,
+  config: MeasurementPipelineConfig
+) => void;
+
+const SIMULATOR_PRESET_CYCLE: readonly SimulatorPresetId[] = [
+  'pa-room-modes',
+  'sub-top-misaligned',
+  'stage-monitor-comb',
+  'flat-delayed',
+  'noisy-venue',
+];
+
+export function createDefaultLiveSlot(
+  id: string = 'live-measurement',
+  index: number = 0
+): LiveMeasurementSlotConfig {
+  const paletteIdx = index % DEFAULT_SOURCE_PALETTE.length;
+  const preset = SIMULATOR_PRESET_CYCLE[index % SIMULATOR_PRESET_CYCLE.length];
+  return {
+    id,
+    name: index === 0 ? 'Live Measurement' : `Live Measurement #${index + 1}`,
+    color: DEFAULT_SOURCE_PALETTE[paletteIdx],
+    visible: true,
+    simulatorPreset: preset,
+    measurementChannel: index === 0 ? 0 : index * 2,
+    referenceChannel: 1,
+    config: { ...DEFAULT_MEASUREMENT_CONFIG },
+    activeCalibrationId: null,
+  };
+}
 
 export class AudioEngine {
   private readonly worker: Worker;
@@ -55,17 +89,15 @@ export class AudioEngine {
   private ringBufferStorage: RingBufferStorage | null = null;
 
   private inputMode: InputSourceMode = 'simulator';
-  private simulatorPreset: SimulatorPresetId = 'pa-room-modes';
-  private simulatorConfig: SimulatorRigConfig = SIMULATOR_PRESETS['pa-room-modes'];
-  private measurementConfig: MeasurementPipelineConfig = { ...DEFAULT_MEASUREMENT_CONFIG };
+  private liveSlots: LiveMeasurementSlotConfig[] = [createDefaultLiveSlot()];
   private generatorConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
 
   private selectedDeviceId: string = '';
   private isPaused: boolean = false;
-  private calibrationName: string | null = null;
+  private readonly calibrationNames = new Map<string, string>();
 
-  private readonly frameListeners = new Set<FrameUpdateCallback>();
-  private readonly configListeners = new Set<ConfigUpdateCallback>();
+  private readonly liveFramesListeners = new Set<LiveFramesCallback>();
+  private readonly configListeners = new Set<SlotConfigUpdateCallback>();
 
   constructor() {
     this.worker = new Worker(new URL('../dsp/dsp.worker.ts', import.meta.url), {
@@ -82,20 +114,25 @@ export class AudioEngine {
       const msg = event.data;
       if (!msg) return;
 
-      if (msg.type === 'measurement-frame' && msg.sourceData) {
-        const sd = msg.sourceData as SourceData;
-        for (const listener of this.frameListeners) {
-          listener(sd);
+      if (msg.type === 'measurement-frames' && Array.isArray(msg.frames)) {
+        const frames = msg.frames as SourceData[];
+        for (const listener of this.liveFramesListeners) {
+          listener(frames);
         }
       } else if (msg.type === 'measurement-config-updated' && msg.config) {
-        this.measurementConfig = msg.config as MeasurementPipelineConfig;
+        const slotId = (msg.slotId as string) || this.liveSlots[0].id;
+        const updatedConfig = msg.config as MeasurementPipelineConfig;
+        this.liveSlots = this.liveSlots.map((s) =>
+          s.id === slotId ? { ...s, config: updatedConfig } : s
+        );
         for (const listener of this.configListeners) {
-          listener(this.measurementConfig);
+          listener(slotId, updatedConfig);
         }
-      } else if (msg.type === 'simulator-config-updated' && msg.config) {
-        this.simulatorConfig = msg.config as SimulatorRigConfig;
-      } else if (msg.type === 'calibration-loaded') {
-        this.calibrationName = `${msg.name} (${msg.pointCount} pts)`;
+      } else if (msg.type === 'calibration-loaded' && msg.slotId) {
+        this.calibrationNames.set(
+          msg.slotId as string,
+          `${msg.name} (${msg.pointCount} pts)`
+        );
       }
     };
 
@@ -108,18 +145,43 @@ export class AudioEngine {
       sampleRate: 48000,
       ringBufferStorage: canShareRingBuffer ? this.ringBufferStorage! : undefined,
     });
+    this.syncSlotsToRouterAndWorker();
   }
 
   private sendToWorker(msg: WorkerInboundMessage): void {
     this.worker.postMessage(msg);
   }
 
-  onFrame(listener: FrameUpdateCallback): () => void {
-    this.frameListeners.add(listener);
-    return () => this.frameListeners.delete(listener);
+  private collectActivePhysicalChannels(): number[] {
+    const chs: number[] = [];
+    for (const slot of this.liveSlots) {
+      if (slot.measurementChannel >= 0) {
+        chs.push(slot.measurementChannel);
+      }
+      if (slot.referenceChannel >= 0) {
+        chs.push(slot.referenceChannel);
+      }
+    }
+    return chs;
   }
 
-  onMeasurementConfigChange(listener: ConfigUpdateCallback): () => void {
+  private syncSlotsToRouterAndWorker(): void {
+    const tapMap = this.hardwareRouter.setActivePhysicalChannels(
+      this.collectActivePhysicalChannels()
+    );
+    this.sendToWorker({
+      type: 'sync-live-slots',
+      slots: this.liveSlots,
+      channelTapMap: tapMap,
+    });
+  }
+
+  onLiveFrames(listener: LiveFramesCallback): () => void {
+    this.liveFramesListeners.add(listener);
+    return () => this.liveFramesListeners.delete(listener);
+  }
+
+  onMeasurementConfigChange(listener: SlotConfigUpdateCallback): () => void {
     this.configListeners.add(listener);
     return () => this.configListeners.delete(listener);
   }
@@ -128,24 +190,83 @@ export class AudioEngine {
     return this.inputMode;
   }
 
-  getSimulatorPreset(): SimulatorPresetId {
-    return this.simulatorPreset;
+  getLiveSlots(): readonly LiveMeasurementSlotConfig[] {
+    return this.liveSlots;
   }
 
-  getSimulatorConfig(): SimulatorRigConfig {
-    return this.simulatorConfig;
+  getLiveSlot(slotId: string = 'live-measurement'): LiveMeasurementSlotConfig {
+    return (
+      this.liveSlots.find((s) => s.id === slotId) ??
+      this.liveSlots[0] ??
+      createDefaultLiveSlot()
+    );
   }
 
-  getMeasurementConfig(): MeasurementPipelineConfig {
-    return this.measurementConfig;
+  setLiveSlots(slots: readonly LiveMeasurementSlotConfig[]): void {
+    this.liveSlots = slots.length > 0 ? [...slots] : [createDefaultLiveSlot()];
+    this.syncSlotsToRouterAndWorker();
+  }
+
+  addLiveSlot(partial?: Partial<LiveMeasurementSlotConfig>): LiveMeasurementSlotConfig {
+    const idx = this.liveSlots.length;
+    const uid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().slice(0, 6)
+        : `${Date.now().toString(36)}-${ idx}`;
+    const base = createDefaultLiveSlot(`live-${uid}`, idx);
+    const created: LiveMeasurementSlotConfig = {
+      ...base,
+      ...partial,
+      config: {
+        ...base.config,
+        ...(partial?.config ?? {}),
+      },
+    };
+    this.liveSlots = [...this.liveSlots, created];
+    this.syncSlotsToRouterAndWorker();
+    return created;
+  }
+
+  removeLiveSlot(slotId: string): void {
+    if (this.liveSlots.length <= 1) return;
+    this.liveSlots = this.liveSlots.filter((s) => s.id !== slotId);
+    this.calibrationNames.delete(slotId);
+    this.syncSlotsToRouterAndWorker();
+  }
+
+  updateLiveSlot(
+    slotId: string,
+    partial: Partial<LiveMeasurementSlotConfig>
+  ): void {
+    this.liveSlots = this.liveSlots.map((slot) => {
+      if (slot.id !== slotId) return slot;
+      return {
+        ...slot,
+        ...partial,
+        config: partial.config ? { ...slot.config, ...partial.config } : slot.config,
+      };
+    });
+    this.syncSlotsToRouterAndWorker();
+  }
+
+  getSimulatorPreset(slotId?: string): SimulatorPresetId {
+    return this.getLiveSlot(slotId).simulatorPreset;
+  }
+
+  getSimulatorConfig(slotId?: string): SimulatorRigConfig {
+    return SIMULATOR_PRESETS[this.getSimulatorPreset(slotId)];
+  }
+
+  getMeasurementConfig(slotId?: string): MeasurementPipelineConfig {
+    return this.getLiveSlot(slotId).config;
   }
 
   getGeneratorConfig(): SignalGeneratorConfig {
     return this.generatorConfig;
   }
 
-  getCalibrationName(): string | null {
-    return this.calibrationName;
+  getCalibrationName(slotId: string = 'live-measurement'): string | null {
+    return this.calibrationNames.get(slotId) ?? null;
   }
 
   getPaused(): boolean {
@@ -158,20 +279,35 @@ export class AudioEngine {
     this.hardwareRouter.setPaused(paused);
   }
 
-  setSimulatorPreset(presetId: SimulatorPresetId): void {
-    this.simulatorPreset = presetId;
-    this.simulatorConfig = SIMULATOR_PRESETS[presetId];
-    this.sendToWorker({ type: 'set-simulator-preset', preset: presetId });
+  setSimulatorPreset(
+    presetId: SimulatorPresetId,
+    slotId: string = this.liveSlots[0].id
+  ): void {
+    this.liveSlots = this.liveSlots.map((s) =>
+      s.id === slotId ? { ...s, simulatorPreset: presetId } : s
+    );
+    this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: presetId });
   }
 
-  setCustomSimulatorConfig(config: SimulatorRigConfig): void {
-    this.simulatorConfig = config;
-    this.sendToWorker({ type: 'set-simulator-preset', preset: config });
+  setCustomSimulatorConfig(
+    config: SimulatorRigConfig,
+    slotId: string = this.liveSlots[0].id
+  ): void {
+    this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: config });
   }
 
-  updateMeasurementConfig(partial: Partial<MeasurementPipelineConfig>): void {
-    this.measurementConfig = { ...this.measurementConfig, ...partial };
-    this.sendToWorker({ type: 'update-measurement-config', config: partial });
+  updateMeasurementConfig(
+    partial: Partial<MeasurementPipelineConfig>,
+    slotId: string = this.liveSlots[0].id
+  ): void {
+    this.liveSlots = this.liveSlots.map((s) =>
+      s.id === slotId ? { ...s, config: { ...s.config, ...partial } } : s
+    );
+    this.sendToWorker({
+      type: 'update-measurement-config',
+      slotId,
+      config: partial,
+    });
   }
 
   updateGeneratorConfig(partial: Partial<SignalGeneratorConfig>): void {
@@ -180,21 +316,25 @@ export class AudioEngine {
     this.hardwareRouter.updateGeneratorConfig(this.generatorConfig);
   }
 
-  loadCalibrationFile(text: string, name: string): void {
-    this.sendToWorker({ type: 'load-calibration', text, name });
+  loadCalibrationFile(
+    text: string,
+    name: string,
+    slotId: string = this.liveSlots[0].id
+  ): void {
+    this.sendToWorker({ type: 'load-calibration', slotId, text, name });
   }
 
-  clearCalibration(): void {
-    this.calibrationName = null;
-    this.sendToWorker({ type: 'clear-calibration' });
+  clearCalibration(slotId: string = this.liveSlots[0].id): void {
+    this.calibrationNames.delete(slotId);
+    this.sendToWorker({ type: 'clear-calibration', slotId });
   }
 
-  findAndApplyDelay(): void {
-    this.sendToWorker({ type: 'apply-estimated-delay' });
+  findAndApplyDelay(slotId: string = this.liveSlots[0].id): void {
+    this.sendToWorker({ type: 'apply-estimated-delay', slotId });
   }
 
-  resetAveraging(): void {
-    this.sendToWorker({ type: 'reset-averaging' });
+  resetAveraging(slotId?: string): void {
+    this.sendToWorker({ type: 'reset-averaging', slotId });
   }
 
   listInputDevices(): Promise<AudioDeviceOption[]> {
@@ -209,24 +349,29 @@ export class AudioEngine {
     return this.hardwareRouter.getAvailableOutputChannels();
   }
 
-  getChannelRouting(): {
+  getChannelRouting(slotId?: string): {
     measurementChannel: number;
     referenceChannel: number;
     generatorOutputChannel: number;
   } {
-    return this.hardwareRouter.getChannelRouting();
+    const slot = this.getLiveSlot(slotId);
+    return {
+      measurementChannel: slot.measurementChannel,
+      referenceChannel: slot.referenceChannel,
+      generatorOutputChannel: this.hardwareRouter.getGeneratorOutputChannel(),
+    };
   }
 
   setChannelRouting(
     measurementChannel: number,
     referenceChannel: number,
-    generatorOutputChannel?: number
+    generatorOutputChannel?: number,
+    slotId: string = this.liveSlots[0].id
   ): void {
-    this.hardwareRouter.setChannelRouting(
-      measurementChannel,
-      referenceChannel,
-      generatorOutputChannel
-    );
+    if (generatorOutputChannel !== undefined) {
+      this.hardwareRouter.setGeneratorOutputChannel(generatorOutputChannel);
+    }
+    this.updateLiveSlot(slotId, { measurementChannel, referenceChannel });
   }
 
   setGeneratorOutputChannel(outputChannel: number): void {
@@ -237,12 +382,17 @@ export class AudioEngine {
     mode: InputSourceMode,
     deviceId?: string,
     measChannel?: number,
-    refChannel?: number
+    refChannel?: number,
+    slotId: string = this.liveSlots[0].id
   ): Promise<void> {
     this.inputMode = mode;
-    const currentRouting = this.hardwareRouter.getChannelRouting();
-    const nextMeas = measChannel ?? currentRouting.measurementChannel;
-    const nextRef = refChannel ?? currentRouting.referenceChannel;
+    if (measChannel !== undefined || refChannel !== undefined) {
+      const slot = this.getLiveSlot(slotId);
+      this.updateLiveSlot(slot.id, {
+        measurementChannel: measChannel ?? slot.measurementChannel,
+        referenceChannel: refChannel ?? slot.referenceChannel,
+      });
+    }
 
     if (mode === 'simulator') {
       this.hardwareRouter.stopStream();
@@ -257,19 +407,19 @@ export class AudioEngine {
     try {
       const hwSampleRate = await this.hardwareRouter.startStream({
         deviceId: this.selectedDeviceId,
-        measurementChannel: nextMeas,
-        referenceChannel: nextRef,
-        generatorOutputChannel: currentRouting.generatorOutputChannel,
+        activePhysicalChannels: this.collectActivePhysicalChannels(),
+        generatorOutputChannel: this.hardwareRouter.getGeneratorOutputChannel(),
         generatorConfig: this.generatorConfig,
         isPaused: this.isPaused,
         ringBufferStorage: this.ringBufferStorage,
-        onFallbackChunk: (m, r) => {
-          this.sendToWorker({ type: 'audio-chunk', m, r });
+        onFallbackChunk: (channels) => {
+          this.sendToWorker({ type: 'audio-chunk', channels });
         },
       });
 
-      if (hwSampleRate !== this.measurementConfig.sampleRate) {
-        this.updateMeasurementConfig({ sampleRate: hwSampleRate });
+      this.syncSlotsToRouterAndWorker();
+      if (hwSampleRate !== this.liveSlots[0].config.sampleRate) {
+        this.updateMeasurementConfig({ sampleRate: hwSampleRate }, this.liveSlots[0].id);
       }
       this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
     } catch (err) {
@@ -282,7 +432,7 @@ export class AudioEngine {
   dispose(): void {
     this.hardwareRouter.dispose();
     this.worker.terminate();
-    this.frameListeners.clear();
+    this.liveFramesListeners.clear();
     this.configListeners.clear();
   }
 }
