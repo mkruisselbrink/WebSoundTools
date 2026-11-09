@@ -19,7 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import { BiquadFilterType, BiquadSpec } from '../../dsp/biquad.js';
 import { EqualizerSourceConfig } from '../../sources/eq-source.js';
 import { SourceData } from '../../sources/source-data.js';
@@ -32,6 +32,7 @@ export interface EqInspectorHandlers {
     bandIdx: number,
     partial: Partial<BiquadSpec>
   ) => void;
+  readonly onDelete?: (eqId: string) => void;
 }
 
 export function renderEqInspector(
@@ -46,14 +47,26 @@ export function renderEqInspector(
     <div class="section-card" data-testid="inspector-eq-source">
       <div class="section-header">
         <span>${eq.name}</span>
-        <button
-          class="btn-accent"
-          data-testid="btn-auto-flatten-eq"
-          title="Load corrective inverse EQ matching the PA Room Modes simulator preset"
-          @click=${() => handlers.onAutoFlatten(eq.id)}
-        >
-          Auto-Match Room
-        </button>
+        <div style="display:flex;gap:4px;">
+          <button
+            class="btn-accent"
+            data-testid="btn-auto-flatten-eq"
+            title="Load corrective inverse EQ matching the PA Room Modes simulator preset"
+            @click=${() => handlers.onAutoFlatten(eq.id)}
+          >
+            Auto-Match Room
+          </button>
+          ${handlers.onDelete
+            ? html`
+                <button
+                  style="color:#f43f5e;"
+                  @click=${() => handlers.onDelete?.(eq.id)}
+                >
+                  Delete
+                </button>
+              `
+            : nothing}
+        </div>
       </div>
 
       <div class="prop-field full-width">
@@ -145,4 +158,3 @@ export function renderEqInspector(
     </div>
   `;
 }
-

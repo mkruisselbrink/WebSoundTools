@@ -19,7 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import {
   InputPreFilterType,
   MeasurementPipelineConfig,
@@ -30,8 +30,13 @@ import {
   WINDOW_FUNCTION_LABELS,
   WindowFunctionType,
 } from '../../dsp/window-functions.js';
+import { StoredCalibrationFile } from '../../sources/session-storage.js';
 
 export interface LiveMeasurementInspectorHandlers {
+  readonly savedCalibrations?: readonly StoredCalibrationFile[];
+  readonly activeCalibrationId?: string | null;
+  readonly onSelectCalibration?: (calibrationId: string | null) => void;
+  readonly onDeleteCalibration?: (calibrationId: string) => void;
   readonly onResetAveraging: () => void;
   readonly onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => void;
   readonly onCalibrationUpload: (e: Event) => void;
@@ -41,6 +46,9 @@ export function renderLiveMeasurementInspector(
   cfg: MeasurementPipelineConfig,
   handlers: LiveMeasurementInspectorHandlers
 ): TemplateResult {
+  const savedCals = handlers.savedCalibrations ?? [];
+  const activeCalId = handlers.activeCalibrationId ?? '';
+
   return html`
     <div class="section-card" data-testid="inspector-live-measurement">
       <div class="section-header">
@@ -212,7 +220,42 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field full-width">
-          <label>Mic Calibration (.cal / .txt)</label>
+          <label>Mic Calibration Curve</label>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <select
+              style="flex:1;"
+              aria-label="Saved Mic Calibration Curve"
+              data-testid="select-calibration-curve"
+              .value=${activeCalId}
+              @change=${(e: Event) => {
+                const val = (e.target as HTMLSelectElement).value || null;
+                handlers.onSelectCalibration?.(val);
+              }}
+            >
+              <option value="">None (Flat / Uncalibrated)</option>
+              ${savedCals.map(
+                (cal) =>
+                  html`<option value=${cal.id} ?selected=${cal.id === activeCalId}>
+                    ${cal.name} (${cal.pointCount} pts)
+                  </option>`
+              )}
+            </select>
+            ${activeCalId
+              ? html`
+                  <button
+                    style="color:#f43f5e;"
+                    title="Delete selected calibration curve"
+                    @click=${() => handlers.onDeleteCalibration?.(activeCalId)}
+                  >
+                    Remove
+                  </button>
+                `
+              : nothing}
+          </div>
+        </div>
+
+        <div class="prop-field full-width">
+          <label>Upload New Calibration (.cal / .txt / .frd)</label>
           <input
             type="file"
             aria-label="Mic Calibration File"
@@ -224,4 +267,3 @@ export function renderLiveMeasurementInspector(
     </div>
   `;
 }
-

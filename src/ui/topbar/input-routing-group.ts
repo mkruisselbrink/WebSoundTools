@@ -29,6 +29,7 @@ export interface InputRoutingGroupProps {
   readonly simulatorPreset: SimulatorPresetId;
   readonly audioDevices: readonly AudioDeviceOption[];
   readonly selectedDeviceId: string;
+  readonly selectedDeviceLabel?: string;
   readonly availableChannels: number;
   readonly measurementChannel: number;
   readonly referenceChannel: number;
@@ -40,6 +41,9 @@ export interface InputRoutingGroupProps {
 
 export function renderInputRoutingGroup(props: InputRoutingGroupProps): TemplateResult {
   const inputChannelIndices = Array.from({ length: props.availableChannels }, (_, i) => i);
+  const hasSelectedDeviceInList =
+    !props.selectedDeviceId ||
+    props.audioDevices.some((d) => d.deviceId === props.selectedDeviceId);
 
   return html`
     <div class="toolbar-group">
@@ -76,8 +80,19 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
                 props.onDeviceChange((e.target as HTMLSelectElement).value)}
             >
               <option value="">Default Input Device</option>
+              ${!hasSelectedDeviceInList
+                ? html`<option value=${props.selectedDeviceId} selected>
+                    ${props.selectedDeviceLabel || 'Saved Input Device'}
+                  </option>`
+                : ''}
               ${props.audioDevices.map(
-                (d) => html`<option value=${d.deviceId}>${d.label}</option>`
+                (d) =>
+                  html`<option
+                    value=${d.deviceId}
+                    ?selected=${d.deviceId === props.selectedDeviceId}
+                  >
+                    ${d.label}
+                  </option>`
               )}
             </select>
             <span class="toolbar-label" title="Measurement Microphone Input Channel">M:</span>
@@ -127,4 +142,3 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
     </div>
   `;
 }
-

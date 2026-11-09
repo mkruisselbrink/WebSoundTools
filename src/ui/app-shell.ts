@@ -26,6 +26,8 @@
  *  - Persistent Top Bar (`topbar/topbar-view.ts`)
  *  - Multi-Chart Stack (1 to 3 synchronized `<chart-panel>` instances)
  *  - Reactive `SourceStore` (`sources/source-store.ts`) + Sidebar & Inspector panels
+ *  - URL Query State (`url-state.ts`) + `localStorage` Workspace Session (`workspace-session.ts`)
+ *    + `IndexedDB` v2 Stored Traces, Virtual EQs, Math Unions, and Calibration Curves
  */
 
 import { LitElement, html } from 'lit';
@@ -37,6 +39,7 @@ import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipelineConfig,
 } from '../dsp/analyzer-pipeline.js';
+import { parseCalibrationFile } from '../dsp/calibration.js';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
@@ -48,8 +51,18 @@ import {
   MeterIntegrationTime,
   WeightingCurve,
 } from '../dsp/weighting-meters.js';
+import {
+  StoredCalibrationFile,
+  deleteCalibrationFileFromDb,
+  loadAllCalibrationFilesFromDb,
+  saveCalibrationFileToDb,
+} from '../sources/session-storage.js';
 import { SourceData } from '../sources/source-data.js';
 import { SourceStore } from '../sources/source-store.js';
+import {
+  loadWorkspaceSession,
+  saveWorkspaceSession,
+} from '../sources/workspace-session.js';
 import { appShellStyles } from './app-shell-styles.js';
 import { renderEqInspector } from './inspectors/eq-source-inspector.js';
 import { renderLiveMeasurementInspector } from './inspectors/live-measurement-inspector.js';
@@ -58,6 +71,12 @@ import { renderUnionInspector } from './inspectors/union-source-inspector.js';
 import { dispatchAppKeydown } from './keyboard-shortcuts.js';
 import { renderSidebar } from './sidebar-view.js';
 import { renderTopbar } from './topbar/topbar-view.js';
+import {
+  UrlViewState,
+  parseUrlViewState,
+  plotsForLayoutPreset,
+  syncBrowserUrlState,
+} from './url-state.js';
 
 export type LayoutPreset = 'tf-dual' | 'pa-triple' | 'rta-mix' | 'single';
 
@@ -68,6 +87,7 @@ export class WebSoundMeterApp extends LitElement {
   private engine: AudioEngine | null = null;
   private readonly sourceStore = new SourceStore();
   private unsubscribeStore: (() => void) | null = null;
+  private hardwareStreamDeferred = false;
 
   @state()
   private audioInputMode: InputSourceMode = 'simulator';
@@ -80,6 +100,9 @@ export class WebSoundMeterApp extends LitElement {
 
   @state()
   private selectedDeviceId: string = '';
+
+  @state()
+  private selectedDeviceLabel: string = '';
 
   @state()
   private availableChannels: number = 2;
@@ -98,6 +121,12 @@ export class WebSoundMeterApp extends LitElement {
 
   @state()
   private measConfig: MeasurementPipelineConfig = { ...DEFAULT_MEASUREMENT_CONFIG };
+
+  @state()
+  private savedCalibrations: StoredCalibrationFile[] = [];
+
+  @state()
+  private activeCalibrationId: string | null = null;
 
   @state()
   private genConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
@@ -119,63 +148,196 @@ export class WebSoundMeterApp extends LitElement {
 
   private keydownHandler = (e: KeyboardEvent) => {
     dispatchAppKeydown(e, {
-      onCaptureTrace: () => this.sourceStore.captureCurrentTrace(),
+      onCaptureTrace: () => {
+        this.sourceStore.captureCurrentTrace();
+        this.persistState('replace');
+      },
       onFindAndApplyDelay: () => this.engine?.findAndApplyDelay(),
     });
   };
 
+  private popstateHandler = () => {
+    const next = parseUrlViewState(window.location.search, this.getUrlViewState());
+    this.layoutPreset = next.layoutPreset;
+    this.chartPlotTypes = next.chartPlotTypes;
+    if (next.simulatorPreset !== this.simulatorPreset) {
+      this.simulatorPreset = next.simulatorPreset;
+      this.engine?.setSimulatorPreset(this.simulatorPreset);
+    }
+    this.splWeighting = next.splWeighting;
+    this.splTime = next.splTime;
+    this.sourceStore.setSelectedSourceId(next.selectedSourceId);
+    this.persistState('none');
+  };
+
   connectedCallback(): void {
     super.connectedCallback();
+
+    const session = loadWorkspaceSession();
+    const initialUrl = parseUrlViewState(
+      typeof window !== 'undefined' ? window.location.search : '',
+      {
+        layoutPreset: session.layoutPreset,
+        chartPlotTypes: session.chartPlotTypes,
+        audioInputMode: session.audioInputMode,
+        simulatorPreset: session.simulatorPreset,
+        splWeighting: session.splWeighting,
+        splTime: session.splTime,
+        selectedSourceId: session.selectedSourceId,
+      }
+    );
+
+    this.layoutPreset = initialUrl.layoutPreset;
+    this.chartPlotTypes = initialUrl.chartPlotTypes;
+    this.audioInputMode = initialUrl.audioInputMode;
+    this.simulatorPreset = initialUrl.simulatorPreset;
+    this.splWeighting = initialUrl.splWeighting;
+    this.splTime = initialUrl.splTime;
+
+    this.selectedDeviceId = session.hardwareRouting.selectedDeviceId;
+    this.selectedDeviceLabel = session.hardwareRouting.selectedDeviceLabel;
+    this.measurementChannel = session.hardwareRouting.measurementChannel;
+    this.referenceChannel = session.hardwareRouting.referenceChannel;
+    this.generatorOutputChannel = session.hardwareRouting.generatorOutputChannel;
+    this.activeCalibrationId = session.activeCalibrationId;
+
+    this.sourceStore.setLiveSourceVisible(session.liveSourceVisible);
+    this.sourceStore.setSelectedSourceId(initialUrl.selectedSourceId);
+
     this.unsubscribeStore = this.sourceStore.subscribe(() => {
       this.requestUpdate();
     });
 
     this.engine = new AudioEngine();
-    this.measConfig = this.engine.getMeasurementConfig();
-    this.genConfig = this.engine.getGeneratorConfig();
+    this.engine.updateMeasurementConfig(session.measConfig);
+    this.engine.updateGeneratorConfig(session.genConfig);
+    this.engine.setSimulatorPreset(this.simulatorPreset);
+    this.engine.setChannelRouting(
+      this.measurementChannel,
+      this.referenceChannel,
+      this.generatorOutputChannel
+    );
+
+    this.measConfig = { ...this.engine.getMeasurementConfig() };
+    this.genConfig = { ...this.engine.getGeneratorConfig() };
+
+    if (this.audioInputMode === 'hardware') {
+      // On reload in hardware mode, start paused until user clicks Resume (user gesture)
+      this.isPaused = true;
+      this.hardwareStreamDeferred = true;
+      this.engine.setPaused(true);
+      void this.engine.listInputDevices().then((devices) => {
+        if (devices.length > 0) {
+          this.audioDevices = devices;
+        }
+      });
+    }
 
     this.engine.onFrame((live) => {
       this.sourceStore.setLiveFrame(live);
     });
     this.engine.onMeasurementConfigChange((cfg) => {
       this.measConfig = { ...cfg };
+      this.persistState('none');
     });
 
-    void this.sourceStore.loadFromPersistence();
+    void this.hydratePersistentStores();
+    syncBrowserUrlState(this.getUrlViewState(), 'replace');
+
     window.addEventListener('keydown', this.keydownHandler);
+    window.addEventListener('popstate', this.popstateHandler);
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
+    window.removeEventListener('popstate', this.popstateHandler);
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     this.engine?.dispose();
     this.engine = null;
   }
 
+  private async hydratePersistentStores(): Promise<void> {
+    const [, calibrations] = await Promise.all([
+      this.sourceStore.loadFromPersistence(),
+      loadAllCalibrationFilesFromDb(),
+    ]);
+    this.savedCalibrations = calibrations;
+
+    if (this.activeCalibrationId) {
+      const match = calibrations.find((c) => c.id === this.activeCalibrationId);
+      if (match) {
+        this.engine?.loadCalibrationFile(match.text, match.name);
+      } else {
+        this.activeCalibrationId = null;
+      }
+    }
+    this.persistState('replace');
+  }
+
+  private getUrlViewState(): UrlViewState {
+    return {
+      layoutPreset: this.layoutPreset,
+      chartPlotTypes: this.chartPlotTypes,
+      audioInputMode: this.audioInputMode,
+      simulatorPreset: this.simulatorPreset,
+      splWeighting: this.splWeighting,
+      splTime: this.splTime,
+      selectedSourceId: this.sourceStore.getSelectedSourceId(),
+    };
+  }
+
+  private persistState(urlMode: 'push' | 'replace' | 'none' = 'replace'): void {
+    const viewState = this.getUrlViewState();
+    if (urlMode !== 'none') {
+      syncBrowserUrlState(viewState, urlMode);
+    }
+    saveWorkspaceSession({
+      version: 1,
+      ...viewState,
+      liveSourceVisible: this.sourceStore.getLiveSourceVisible(),
+      measConfig: {
+        fftSize: this.measConfig.fftSize,
+        windowType: this.measConfig.windowType,
+        averagingType: this.measConfig.averagingType,
+        fifoDepth: this.measConfig.fifoDepth,
+        lpfCutoffHz: this.measConfig.lpfCutoffHz,
+        octaveSmoothing: this.measConfig.octaveSmoothing,
+        estimator: this.measConfig.estimator,
+        delayMs: this.measConfig.delayMs,
+        gainDb: this.measConfig.gainDb,
+        inputFilter: this.measConfig.inputFilter,
+        invertPolarity: this.measConfig.invertPolarity,
+      },
+      activeCalibrationId: this.activeCalibrationId,
+      genConfig: {
+        enabled: this.genConfig.enabled,
+        type: this.genConfig.type,
+        levelDbFs: this.genConfig.levelDbFs,
+        sineFrequencyHz: this.genConfig.sineFrequencyHz,
+      },
+      hardwareRouting: {
+        selectedDeviceId: this.selectedDeviceId,
+        selectedDeviceLabel: this.selectedDeviceLabel,
+        measurementChannel: this.measurementChannel,
+        referenceChannel: this.referenceChannel,
+        generatorOutputChannel: this.generatorOutputChannel,
+      },
+    });
+  }
+
   private setLayoutPreset(preset: LayoutPreset): void {
     this.layoutPreset = preset;
-    switch (preset) {
-      case 'tf-dual':
-        this.chartPlotTypes = ['magnitude', 'phase'];
-        break;
-      case 'pa-triple':
-        this.chartPlotTypes = ['magnitude', 'phase', 'impulse'];
-        break;
-      case 'rta-mix':
-        this.chartPlotTypes = ['rta', 'magnitude'];
-        break;
-      case 'single':
-        this.chartPlotTypes = [this.chartPlotTypes[0] ?? 'magnitude'];
-        break;
-    }
+    this.chartPlotTypes = plotsForLayoutPreset(preset, this.chartPlotTypes[0]);
+    this.persistState('push');
   }
 
   private handleInputModeChange = async (e: Event): Promise<void> => {
     if (!this.engine) return;
     const mode = (e.target as HTMLSelectElement).value as InputSourceMode;
     this.audioInputMode = mode;
+    this.hardwareStreamDeferred = false;
     try {
       await this.engine.setInputMode(
         mode,
@@ -187,16 +349,22 @@ export class WebSoundMeterApp extends LitElement {
         this.audioDevices = await this.engine.listInputDevices();
         this.availableChannels = this.engine.getAvailableChannels();
         this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+        const activeDev = this.audioDevices.find((d) => d.deviceId === this.selectedDeviceId);
+        if (activeDev) {
+          this.selectedDeviceLabel = activeDev.label;
+        }
       }
     } catch {
       this.audioInputMode = this.engine.getInputMode();
     }
+    this.persistState('push');
   };
 
   private handleSimulatorPresetChange = (e: Event): void => {
     const preset = (e.target as HTMLSelectElement).value as SimulatorPresetId;
     this.simulatorPreset = preset;
     this.engine?.setSimulatorPreset(preset);
+    this.persistState('push');
   };
 
   private handleEqBandDrag = (
@@ -211,16 +379,64 @@ export class WebSoundMeterApp extends LitElement {
     const file = input.files?.[0];
     if (!file) return;
     file.text().then((text) => {
+      const parsed = parseCalibrationFile(text, file.name);
+      const id = `cal-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const record: StoredCalibrationFile = {
+        id,
+        name: file.name,
+        text,
+        pointCount: parsed.points.length,
+        createdAt: new Date().toISOString(),
+      };
+      this.savedCalibrations = [
+        ...this.savedCalibrations.filter((c) => c.id !== id),
+        record,
+      ];
+      this.activeCalibrationId = id;
+      void saveCalibrationFileToDb(record);
       this.engine?.loadCalibrationFile(text, file.name);
+      this.persistState('none');
     });
+  };
+
+  private handleSelectCalibration = (calibrationId: string | null): void => {
+    this.activeCalibrationId = calibrationId;
+    if (!calibrationId) {
+      this.engine?.clearCalibration();
+    } else {
+      const found = this.savedCalibrations.find((c) => c.id === calibrationId);
+      if (found) {
+        this.engine?.loadCalibrationFile(found.text, found.name);
+      }
+    }
+    this.persistState('none');
+  };
+
+  private handleDeleteCalibration = (calibrationId: string): void => {
+    this.savedCalibrations = this.savedCalibrations.filter((c) => c.id !== calibrationId);
+    void deleteCalibrationFileFromDb(calibrationId);
+    if (this.activeCalibrationId === calibrationId) {
+      this.activeCalibrationId = null;
+      this.engine?.clearCalibration();
+    }
+    this.persistState('none');
   };
 
   private renderSelectedSourceInspector(allSources: SourceData[]) {
     const selectedId = this.sourceStore.getSelectedSourceId();
     const liveHandlers = {
+      savedCalibrations: this.savedCalibrations,
+      activeCalibrationId: this.activeCalibrationId,
+      onSelectCalibration: this.handleSelectCalibration,
+      onDeleteCalibration: this.handleDeleteCalibration,
       onResetAveraging: () => this.engine?.resetAveraging(),
-      onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) =>
-        this.engine?.updateMeasurementConfig(partial),
+      onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => {
+        this.engine?.updateMeasurementConfig(partial);
+        if (this.engine) {
+          this.measConfig = { ...this.engine.getMeasurementConfig() };
+        }
+        this.persistState('none');
+      },
       onCalibrationUpload: this.handleCalibrationUpload,
     };
 
@@ -231,7 +447,10 @@ export class WebSoundMeterApp extends LitElement {
     const stored = this.sourceStore.getStoredSources().find((s) => s.id === selectedId);
     if (stored) {
       return renderStoredInspector(stored, {
-        onDelete: (id) => this.sourceStore.deleteStoredSource(id),
+        onDelete: (id) => {
+          this.sourceStore.deleteStoredSource(id);
+          this.persistState('replace');
+        },
         onUpdateStored: (id, partial) => this.sourceStore.updateStoredSource(id, partial),
       });
     }
@@ -244,6 +463,10 @@ export class WebSoundMeterApp extends LitElement {
           this.sourceStore.setEqTargetSource(eqId, targetSourceId),
         onUpdateEqBand: (eqId, bandIdx, partial) =>
           this.sourceStore.updateEqBand(eqId, bandIdx, partial),
+        onDelete: (eqId) => {
+          this.sourceStore.deleteEqSource(eqId);
+          this.persistState('replace');
+        },
       });
     }
 
@@ -252,6 +475,10 @@ export class WebSoundMeterApp extends LitElement {
       return renderUnionInspector(union, allSources, {
         onUpdateUnion: (unionId, partial) =>
           this.sourceStore.updateUnionSource(unionId, partial),
+        onDelete: (unionId) => {
+          this.sourceStore.deleteUnionSource(unionId);
+          this.persistState('replace');
+        },
       });
     }
 
@@ -270,6 +497,7 @@ export class WebSoundMeterApp extends LitElement {
         simulatorPreset: this.simulatorPreset,
         audioDevices: this.audioDevices,
         selectedDeviceId: this.selectedDeviceId,
+        selectedDeviceLabel: this.selectedDeviceLabel,
         availableChannels: this.availableChannels,
         availableOutputChannels: this.availableOutputChannels,
         measurementChannel: this.measurementChannel,
@@ -286,6 +514,9 @@ export class WebSoundMeterApp extends LitElement {
         onSimulatorPresetChange: this.handleSimulatorPresetChange,
         onDeviceChange: async (deviceId) => {
           this.selectedDeviceId = deviceId;
+          const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
+          this.selectedDeviceLabel = dev ? dev.label : '';
+          this.persistState('none');
           if (!this.engine) return;
           try {
             await this.engine.setInputMode(
@@ -294,6 +525,7 @@ export class WebSoundMeterApp extends LitElement {
               this.measurementChannel,
               this.referenceChannel
             );
+            this.hardwareStreamDeferred = false;
             this.availableChannels = this.engine.getAvailableChannels();
             this.availableOutputChannels = this.engine.getAvailableOutputChannels();
           } catch {
@@ -304,37 +536,65 @@ export class WebSoundMeterApp extends LitElement {
           this.measurementChannel = measCh;
           this.referenceChannel = refCh;
           this.engine?.setChannelRouting(measCh, refCh, this.generatorOutputChannel);
+          this.persistState('none');
         },
         onGeneratorOutputChannelChange: (outCh) => {
           this.generatorOutputChannel = outCh;
           this.engine?.setGeneratorOutputChannel(outCh);
+          this.persistState('none');
         },
         onToggleGenerator: () => {
           if (!this.engine) return;
           this.engine.updateGeneratorConfig({ enabled: !this.genConfig.enabled });
           this.genConfig = { ...this.engine.getGeneratorConfig() };
+          this.persistState('none');
         },
         onGeneratorTypeChange: (type: GeneratorSignalType) => {
           if (!this.engine) return;
           this.engine.updateGeneratorConfig({ type });
           this.genConfig = { ...this.engine.getGeneratorConfig() };
+          this.persistState('none');
         },
         onGeneratorLevelChange: (levelDbFs: number) => {
           if (!this.engine) return;
           this.engine.updateGeneratorConfig({ levelDbFs });
           this.genConfig = { ...this.engine.getGeneratorConfig() };
+          this.persistState('none');
         },
         onFindAndApplyDelay: () => this.engine?.findAndApplyDelay(),
-        onCaptureTrace: () => this.sourceStore.captureCurrentTrace(),
-        onTogglePause: () => {
-          this.isPaused = !this.isPaused;
+        onCaptureTrace: () => {
+          this.sourceStore.captureCurrentTrace();
+          this.persistState('replace');
+        },
+        onTogglePause: async () => {
+          const nextPaused = !this.isPaused;
+          if (!nextPaused && this.audioInputMode === 'hardware' && this.hardwareStreamDeferred && this.engine) {
+            try {
+              await this.engine.setInputMode(
+                'hardware',
+                this.selectedDeviceId,
+                this.measurementChannel,
+                this.referenceChannel
+              );
+              this.hardwareStreamDeferred = false;
+              this.audioDevices = await this.engine.listInputDevices();
+              this.availableChannels = this.engine.getAvailableChannels();
+              this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+            } catch {
+              this.audioInputMode = this.engine.getInputMode();
+              this.persistState('replace');
+            }
+          }
+          this.isPaused = nextPaused;
           this.engine?.setPaused(this.isPaused);
         },
         onSplWeightingChange: (curve) => {
           this.splWeighting = curve;
+          this.persistState('replace');
         },
         onSplTimeChange: (time) => {
           this.splTime = time;
+          this.persistState('replace');
         },
       })}
 
@@ -351,6 +611,7 @@ export class WebSoundMeterApp extends LitElement {
                   const updated = [...this.chartPlotTypes];
                   updated[idx] = e.detail.plotType;
                   this.chartPlotTypes = updated;
+                  this.persistState('replace');
                 }}
                 @eq-band-drag=${this.handleEqBandDrag}
               ></chart-panel>
@@ -364,10 +625,22 @@ export class WebSoundMeterApp extends LitElement {
           allSources,
           selectedSourceId: this.sourceStore.getSelectedSourceId(),
           inspectorContent: this.renderSelectedSourceInspector(allSources),
-          onAddEqSource: () => this.sourceStore.addVirtualEqSource(),
-          onAddUnionSource: () => this.sourceStore.addUnionSource(),
-          onSelectSource: (id) => this.sourceStore.setSelectedSourceId(id),
-          onToggleSourceVisibility: (id, vis) => this.sourceStore.toggleVisibility(id, vis),
+          onAddEqSource: () => {
+            this.sourceStore.addVirtualEqSource();
+            this.persistState('replace');
+          },
+          onAddUnionSource: () => {
+            this.sourceStore.addUnionSource();
+            this.persistState('replace');
+          },
+          onSelectSource: (id) => {
+            this.sourceStore.setSelectedSourceId(id);
+            this.persistState('replace');
+          },
+          onToggleSourceVisibility: (id, vis) => {
+            this.sourceStore.toggleVisibility(id, vis);
+            this.persistState('none');
+          },
         })}
       </div>
     `;

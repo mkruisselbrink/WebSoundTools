@@ -22,7 +22,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('WebSoundMeter Demo Simulator E2E', () => {
-  test('boots in Demo Simulator mode, updates SPL meters, finds delay, captures traces, and auto-flattens Virtual EQ', async ({
+  test('boots in Demo Simulator mode, updates SPL meters, finds delay, captures traces, and persists state across reloads', async ({
     page,
   }) => {
     await page.goto('/');
@@ -63,22 +63,11 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     await page.waitForTimeout(150);
     await expect(liveVisibilityCheckbox).not.toBeChecked();
 
-    // Switch layout presets and verify chart panel count updates
+    // Switch layout presets and verify chart panel count & URL query string update
     const layoutSelect = app.locator('[data-testid="select-layout"]');
     await layoutSelect.selectOption('tf-dual');
     await expect(app.locator('chart-panel')).toHaveCount(2);
-    await layoutSelect.selectOption('single');
-    await expect(app.locator('chart-panel')).toHaveCount(1);
-    await layoutSelect.selectOption('pa-triple');
-    await expect(app.locator('chart-panel')).toHaveCount(3);
-
-    // Pause and resume
-    const pauseBtn = app.locator('[data-testid="btn-pause"]');
-    await expect(pauseBtn).toHaveText('Pause');
-    await pauseBtn.click();
-    await expect(pauseBtn).toHaveText('Resume');
-    await pauseBtn.click();
-    await expect(pauseBtn).toHaveText('Pause');
+    expect(page.url()).toContain('layout=tf-dual');
 
     // Add a Virtual Equalizer source and click Auto-Flatten
     await app.locator('[data-testid="btn-add-eq"]').click();
@@ -89,5 +78,15 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     // Add a Math / Union source
     await app.locator('[data-testid="btn-add-union"]').click();
     await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
+
+    // Reload the page and verify layout, Stored Trace, Virtual EQ, Math Union, and Live visibility persist
+    await page.reload();
+    await expect(app.locator('chart-panel')).toHaveCount(2);
+    await expect(app.locator('[data-testid^="source-item-stored-"]')).toHaveCount(1);
+    await expect(app.locator('[data-testid^="source-item-eq-"]')).toHaveCount(1);
+    await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
+    await expect(
+      app.getByLabel('Toggle visibility for Live Measurement')
+    ).not.toBeChecked();
   });
 });

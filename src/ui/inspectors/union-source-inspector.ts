@@ -19,7 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import { SourceData } from '../../sources/source-data.js';
 import {
   UNION_OPERATION_LABELS,
@@ -32,6 +32,7 @@ export interface UnionInspectorHandlers {
     unionId: string,
     partial: Partial<Pick<UnionSourceConfig, 'operation' | 'sourceIds'>>
   ) => void;
+  readonly onDelete?: (unionId: string) => void;
 }
 
 export function renderUnionInspector(
@@ -44,6 +45,16 @@ export function renderUnionInspector(
     <div class="section-card" data-testid="inspector-union-source">
       <div class="section-header">
         <span>${union.name}</span>
+        ${handlers.onDelete
+          ? html`
+              <button
+                style="color:#f43f5e;"
+                @click=${() => handlers.onDelete?.(union.id)}
+              >
+                Delete
+              </button>
+            `
+          : nothing}
       </div>
 
       <div class="prop-grid">
@@ -108,4 +119,3 @@ export function renderUnionInspector(
     </div>
   `;
 }
-
