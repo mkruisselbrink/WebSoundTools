@@ -222,12 +222,13 @@ export class WebSoundMeterApp extends LitElement {
       this.isPaused = true;
       this.hardwareStreamDeferred = true;
       this.engine.setPaused(true);
-      void this.engine.listInputDevices().then((devices) => {
-        if (devices.length > 0) {
-          this.audioDevices = devices;
-        }
-      });
     }
+
+    void this.engine.listInputDevices().then((devices) => {
+      if (devices.length > 0) {
+        this.audioDevices = devices;
+      }
+    });
 
     this.engine.onLiveFrames((frames) => {
       this.sourceStore.setLiveFrames(frames);
@@ -348,10 +349,18 @@ export class WebSoundMeterApp extends LitElement {
     this.requestUpdate();
   };
 
-  private handleInputModeChange = async (e: Event): Promise<void> => {
+  private handleInputSourceSelect = async (
+    mode: InputSourceMode,
+    deviceId: string
+  ): Promise<void> => {
     if (!this.engine) return;
-    const mode = (e.target as HTMLSelectElement).value as InputSourceMode;
+    const modeChanged = this.audioInputMode !== mode;
     this.audioInputMode = mode;
+    if (mode === 'hardware') {
+      this.selectedDeviceId = deviceId;
+      const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
+      this.selectedDeviceLabel = dev ? dev.label : '';
+    }
     this.hardwareStreamDeferred = false;
     try {
       await this.engine.setInputMode(mode, this.selectedDeviceId);
@@ -369,7 +378,7 @@ export class WebSoundMeterApp extends LitElement {
     } catch {
       this.audioInputMode = this.engine.getInputMode();
     }
-    this.persistState('push');
+    this.persistState(modeChanged ? 'push' : 'none');
   };
 
   private handleEqBandDrag = (
@@ -557,22 +566,7 @@ export class WebSoundMeterApp extends LitElement {
         levels: activeLiveSource?.levels,
         delayEstimate: activeLiveSource?.delayEstimate,
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
-        onInputModeChange: this.handleInputModeChange,
-        onDeviceChange: async (deviceId) => {
-          this.selectedDeviceId = deviceId;
-          const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
-          this.selectedDeviceLabel = dev ? dev.label : '';
-          this.persistState('none');
-          if (!this.engine) return;
-          try {
-            await this.engine.setInputMode('hardware', this.selectedDeviceId);
-            this.hardwareStreamDeferred = false;
-            this.availableChannels = this.engine.getAvailableChannels();
-            this.availableOutputChannels = this.engine.getAvailableOutputChannels();
-          } catch {
-            this.audioInputMode = this.engine.getInputMode();
-          }
-        },
+        onInputSourceSelect: this.handleInputSourceSelect,
         onGlobalReferenceChannelChange: (refCh) => {
           this.globalReferenceChannel = refCh;
           this.engine?.setGlobalReferenceChannel(refCh);

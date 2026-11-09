@@ -30,8 +30,7 @@ export interface InputRoutingGroupProps {
   readonly selectedDeviceLabel?: string;
   readonly availableChannels: number;
   readonly globalReferenceChannel: number;
-  readonly onInputModeChange: (e: Event) => void;
-  readonly onDeviceChange: (deviceId: string) => void;
+  readonly onInputSourceSelect: (mode: InputSourceMode, deviceId: string) => void;
   readonly onGlobalReferenceChannelChange: (refCh: number) => void;
 }
 
@@ -41,44 +40,60 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
     !props.selectedDeviceId ||
     props.audioDevices.some((d) => d.deviceId === props.selectedDeviceId);
 
+  const currentSelectValue =
+    props.audioInputMode === 'simulator'
+      ? 'simulator'
+      : props.selectedDeviceId
+        ? `hardware:${props.selectedDeviceId}`
+        : 'hardware';
+
+  const handleSelectChange = (e: Event) => {
+    const val = (e.target as HTMLSelectElement).value;
+    if (val === 'simulator') {
+      props.onInputSourceSelect('simulator', props.selectedDeviceId);
+    } else if (val.startsWith('hardware:')) {
+      props.onInputSourceSelect('hardware', val.slice('hardware:'.length));
+    } else {
+      props.onInputSourceSelect('hardware', '');
+    }
+  };
+
   return html`
     <div class="toolbar-group">
       <span class="toolbar-label">Input</span>
       <select
-        aria-label="Input Mode"
+        aria-label="Audio Input Source"
         data-testid="select-input-mode"
-        .value=${props.audioInputMode}
-        @change=${props.onInputModeChange}
+        .value=${currentSelectValue}
+        @change=${handleSelectChange}
       >
-        <option value="simulator">Built-in Demo Simulator</option>
-        <option value="hardware">Hardware Audio Input (Mic/Interface)</option>
+        <option value="simulator" ?selected=${currentSelectValue === 'simulator'}>
+          Built-in Demo Simulator
+        </option>
+        <option value="hardware" ?selected=${currentSelectValue === 'hardware'}>
+          Hardware: Default Input Device
+        </option>
+        ${!hasSelectedDeviceInList
+          ? html`<option
+              value=${`hardware:${props.selectedDeviceId}`}
+              ?selected=${currentSelectValue === `hardware:${props.selectedDeviceId}`}
+            >
+              Hardware: ${props.selectedDeviceLabel || 'Saved Input Device'}
+            </option>`
+          : nothing}
+        ${props.audioDevices.map((d) => {
+          const optVal = `hardware:${d.deviceId}`;
+          return html`<option
+            value=${optVal}
+            ?selected=${currentSelectValue === optVal}
+          >
+            Hardware: ${d.label}
+          </option>`;
+        })}
       </select>
 
       ${props.audioInputMode === 'hardware'
         ? html`
-            <select
-              aria-label="Audio Device"
-              data-testid="select-audio-device"
-              .value=${props.selectedDeviceId}
-              @change=${(e: Event) =>
-                props.onDeviceChange((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">Default Input Device</option>
-              ${!hasSelectedDeviceInList
-                ? html`<option value=${props.selectedDeviceId} selected>
-                    ${props.selectedDeviceLabel || 'Saved Input Device'}
-                  </option>`
-                : ''}
-              ${props.audioDevices.map(
-                (d) =>
-                  html`<option
-                    value=${d.deviceId}
-                    ?selected=${d.deviceId === props.selectedDeviceId}
-                  >
-                    ${d.label}
-                  </option>`
-              )}
-            </select>
             <span
               class="toolbar-label"
               title="Global Reference Timing Channel (Physical Loopback Input or Internal Signal Generator)"

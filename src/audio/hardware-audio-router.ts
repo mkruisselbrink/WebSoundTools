@@ -70,7 +70,7 @@ export class HardwareAudioRouter {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       return devices
-        .filter((d) => d.kind === 'audioinput')
+        .filter((d) => d.kind === 'audioinput' && Boolean(d.deviceId))
         .map((d, idx) => ({
           deviceId: d.deviceId,
           label: d.label || `Audio Input ${idx + 1}`,
