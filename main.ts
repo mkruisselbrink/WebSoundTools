@@ -19,4 +19,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { registerOfflineServiceWorker } from './src/pwa/register-sw.js';
 import './src/ui/app-shell.js';
+
+void registerOfflineServiceWorker();
