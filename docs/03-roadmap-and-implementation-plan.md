@@ -81,12 +81,12 @@ WebSoundMeter/
 │       ├── sidebar-view.ts              # Right-hand source list (Live, Stored, Virtual EQ, Math Union)
 │       ├── topbar/
 │       │   ├── topbar-view.ts           # Top bar container composing the 4 functional toolbar groups
-│       │   ├── input-routing-group.ts   # Simulator preset selector vs. Hardware device & channel routing
+│       │   ├── input-routing-group.ts   # Input mode selector, hardware device picker & global Ref channel
 │       │   ├── generator-group.ts       # Signal generator controls (type, frequency, level dBFS, enable)
 │       │   ├── delay-capture-group.ts   # Auto Delay Finder readout, Apply Delay, Pause, Capture, Layout 1/2/3
 │       │   └── spl-meter-group.ts       # Live broadband SPL / Leq / Peak meter & crest factor badge
 │       └── inspectors/
-│           ├── live-measurement-inspector.ts # FFT, window, averaging, smoothing, delay, filter & calibration UI
+│           ├── live-measurement-inspector.ts # Per-slot source/delay/gain/polarity/cal + collapsible Advanced settings
 │           ├── stored-source-inspector.ts    # Rename, color, gain/delay offsets, notes & JSON export
 │           ├── eq-source-inspector.ts        # Target source selector & 8-band parametric EQ editor table
 │           └── union-source-inspector.ts     # Math mode selector & multi-source checkbox matrix

@@ -47,7 +47,6 @@ import {
   GeneratorSignalType,
   SignalGeneratorConfig,
 } from '../dsp/signal-generator.js';
-import { SimulatorPresetId } from '../dsp/synthetic-rig.js';
 import {
   MeterIntegrationTime,
   WeightingCurve,
@@ -109,7 +108,13 @@ export class WebSoundMeterApp extends LitElement {
   private availableOutputChannels: number = 2;
 
   @state()
+  private globalReferenceChannel: number = 1;
+
+  @state()
   private generatorOutputChannel: number = -1;
+
+  @state()
+  private showAdvancedMeasSettings: boolean = false;
 
   @state()
   private savedCalibrations: StoredCalibrationFile[] = [];
@@ -187,6 +192,7 @@ export class WebSoundMeterApp extends LitElement {
 
     this.selectedDeviceId = session.hardwareRouting.selectedDeviceId;
     this.selectedDeviceLabel = session.hardwareRouting.selectedDeviceLabel;
+    this.globalReferenceChannel = session.hardwareRouting.globalReferenceChannel;
     this.generatorOutputChannel = session.hardwareRouting.generatorOutputChannel;
 
     const hydratedSlots = session.liveSlots.map((slot, idx) =>
@@ -205,6 +211,7 @@ export class WebSoundMeterApp extends LitElement {
     });
 
     this.engine = new AudioEngine();
+    this.engine.setGlobalReferenceChannel(this.globalReferenceChannel);
     this.engine.setLiveSlots(hydratedSlots);
     this.engine.updateGeneratorConfig(session.genConfig);
     this.engine.setGeneratorOutputChannel(this.generatorOutputChannel);
@@ -312,6 +319,7 @@ export class WebSoundMeterApp extends LitElement {
       hardwareRouting: {
         selectedDeviceId: this.selectedDeviceId,
         selectedDeviceLabel: this.selectedDeviceLabel,
+        globalReferenceChannel: this.globalReferenceChannel,
         generatorOutputChannel: this.generatorOutputChannel,
       },
     });
@@ -362,14 +370,6 @@ export class WebSoundMeterApp extends LitElement {
       this.audioInputMode = this.engine.getInputMode();
     }
     this.persistState('push');
-  };
-
-  private handleSimulatorPresetChange = (e: Event): void => {
-    const preset = (e.target as HTMLSelectElement).value as SimulatorPresetId;
-    const activeId = this.sourceStore.getActiveLiveSourceId();
-    this.engine?.setSimulatorPreset(preset, activeId);
-    this.persistState('push');
-    this.requestUpdate();
   };
 
   private handleEqBandDrag = (
@@ -452,6 +452,11 @@ export class WebSoundMeterApp extends LitElement {
       slot: liveSlot,
       audioInputMode: this.audioInputMode,
       availableChannels: this.availableChannels,
+      globalReferenceChannel: this.globalReferenceChannel,
+      showAdvanced: this.showAdvancedMeasSettings,
+      onToggleAdvanced: () => {
+        this.showAdvancedMeasSettings = !this.showAdvancedMeasSettings;
+      },
       canDeleteSlot,
       onUpdateSlotMeta: (
         partial: Partial<
@@ -462,7 +467,7 @@ export class WebSoundMeterApp extends LitElement {
         >
       ) => {
         this.engine?.updateLiveSlot(liveSlot.id, partial);
-        this.persistState('none');
+        this.persistState(partial.simulatorPreset !== undefined ? 'push' : 'none');
         this.requestUpdate();
       },
       onDeleteSlot: () => this.handleDeleteLiveSlot(liveSlot.id),
@@ -538,14 +543,12 @@ export class WebSoundMeterApp extends LitElement {
       ${renderTopbar({
         layoutPreset: this.layoutPreset,
         audioInputMode: this.audioInputMode,
-        simulatorPreset: activeSlot.simulatorPreset,
         audioDevices: this.audioDevices,
         selectedDeviceId: this.selectedDeviceId,
         selectedDeviceLabel: this.selectedDeviceLabel,
         availableChannels: this.availableChannels,
         availableOutputChannels: this.availableOutputChannels,
-        measurementChannel: activeSlot.measurementChannel,
-        referenceChannel: activeSlot.referenceChannel,
+        globalReferenceChannel: this.globalReferenceChannel,
         generatorOutputChannel: this.generatorOutputChannel,
         genConfig: this.genConfig,
         isPaused: this.isPaused,
@@ -555,7 +558,6 @@ export class WebSoundMeterApp extends LitElement {
         delayEstimate: activeLiveSource?.delayEstimate,
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
         onInputModeChange: this.handleInputModeChange,
-        onSimulatorPresetChange: this.handleSimulatorPresetChange,
         onDeviceChange: async (deviceId) => {
           this.selectedDeviceId = deviceId;
           const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
@@ -571,13 +573,9 @@ export class WebSoundMeterApp extends LitElement {
             this.audioInputMode = this.engine.getInputMode();
           }
         },
-        onChannelRoutingChange: (measCh, refCh) => {
-          this.engine?.setChannelRouting(
-            measCh,
-            refCh,
-            this.generatorOutputChannel,
-            activeLiveId
-          );
+        onGlobalReferenceChannelChange: (refCh) => {
+          this.globalReferenceChannel = refCh;
+          this.engine?.setGlobalReferenceChannel(refCh);
           this.persistState('none');
           this.requestUpdate();
         },

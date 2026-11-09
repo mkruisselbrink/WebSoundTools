@@ -78,6 +78,7 @@ describe('workspace-session', () => {
       hardwareRouting: {
         selectedDeviceId: 'dante-32',
         selectedDeviceLabel: 'Dante Virtual Soundcard (32ch)',
+        globalReferenceChannel: 7,
         generatorOutputChannel: 2,
       },
     };
@@ -97,6 +98,7 @@ describe('workspace-session', () => {
     expect(loaded.hardwareRouting.selectedDeviceLabel).toBe(
       'Dante Virtual Soundcard (32ch)'
     );
+    expect(loaded.hardwareRouting.globalReferenceChannel).toBe(7);
     expect(loaded.hardwareRouting.generatorOutputChannel).toBe(2);
   });
 

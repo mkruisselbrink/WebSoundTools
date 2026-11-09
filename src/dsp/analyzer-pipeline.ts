@@ -104,6 +104,50 @@ export const DEFAULT_MEASUREMENT_CONFIG: MeasurementPipelineConfig = {
   calibrationEnabled: false,
 };
 
+/** Sentinel value on `LiveMeasurementSlotConfig.referenceChannel` meaning "follow the Topbar Global Reference Channel". */
+export const REFERENCE_CHANNEL_GLOBAL = -2;
+
+export function resolveEffectiveReferenceChannel(
+  slotRefChannel: number,
+  globalRefChannel: number
+): number {
+  return slotRefChannel === REFERENCE_CHANNEL_GLOBAL
+    ? globalRefChannel
+    : slotRefChannel;
+}
+
+export const SHARED_MEASUREMENT_CONFIG_KEYS = [
+  'sampleRate',
+  'fftSize',
+  'windowType',
+  'averagingType',
+  'fifoDepth',
+  'lpfCutoffHz',
+  'coherenceDepth',
+  'estimator',
+  'octaveSmoothing',
+] as const;
+
+export function splitMeasurementConfigPartial(
+  partial: Partial<MeasurementPipelineConfig>
+): {
+  sharedPartial: Partial<MeasurementPipelineConfig>;
+  perSlotPartial: Partial<MeasurementPipelineConfig>;
+} {
+  const sharedPartial: Partial<MeasurementPipelineConfig> = {};
+  const perSlotPartial: Partial<MeasurementPipelineConfig> = {};
+  const sharedSet = new Set<string>(SHARED_MEASUREMENT_CONFIG_KEYS);
+  for (const [k, v] of Object.entries(partial)) {
+    if (v === undefined) continue;
+    if (sharedSet.has(k)) {
+      (sharedPartial as Record<string, unknown>)[k] = v;
+    } else {
+      (perSlotPartial as Record<string, unknown>)[k] = v;
+    }
+  }
+  return { sharedPartial, perSlotPartial };
+}
+
 export class MeasurementPipeline {
   private config: MeasurementPipelineConfig;
   private readonly bufferCapacity = 131072; // 2^17 samples (~2.73 sec at 48 kHz)

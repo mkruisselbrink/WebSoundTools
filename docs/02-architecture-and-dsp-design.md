@@ -72,7 +72,13 @@ const stream = await navigator.mediaDevices.getUserMedia({
   - Creates a `ChannelSplitterNode` for all channels exposed by the hardware interface (`availableChannels`, e.g., 32 or 64 channels on a digital console or Dante interface).
   - `setActivePhysicalChannels()` collects the deduplicated physical channels referenced across all active Live Measurement sources (up to `MAX_CAPTURE_TAP_SLOTS = 8` simultaneous physical channels) and dynamically connects those splitter outputs into the 8 capture tap inputs on `CaptureTapProcessor`.
   - Returns a `channelTapMap: Record<number, number>` mapping each physical channel index to its ring buffer tap slot (`0..7`).
+- **Global Reference Channel (`globalReferenceChannel`) with Per-Measurement Override**:
+  - In Hardware Audio mode, the Topbar defines the **Global Reference Channel** (`-1` = `Internal Gen`, or `0..N-1` = physical `In Ch 1..N`).
+  - Each `LiveMeasurementSlotConfig` defaults to `referenceChannel = REFERENCE_CHANNEL_GLOBAL (-2)` ("Follow Global Ref"), resolved via `resolveEffectiveReferenceChannel(slot.referenceChannel, globalReferenceChannel)`. Individual slots can override their reference channel under **Advanced Settings** in the Live Measurement Inspector.
 - **Internal Loopback Reference (`referenceChannel = -1`)**: Selecting `Internal Generator Loopback` reads directly from slot `8` (`INTERNAL_LOOPBACK_SLOT_INDEX`) of the `MultiChannelRingBuffer`, providing sample-synchronous digital reference without an external loopback cable.
+- **Shared Transform/Averaging vs. Per-Slot DSP Settings**:
+  - Transform and averaging parameters (`fftSize`, `windowType`, `averagingType`, `fifoDepth`, `lpfCutoffHz`, `octaveSmoothing`, `estimator`) are **shared across all active Live Measurement slots** (`SHARED_MEASUREMENT_CONFIG_KEYS`) so all live traces and `Math Union` spatial averages share identical frequency bins and temporal/frequency resolution.
+  - Alignment and channel conditioning parameters (`delayMs`, `gainDb`, `invertPolarity`, `inputFilter`, `activeCalibrationId`) are **independent per Live Measurement slot**.
 - **Pause Behavior**: Pausing measurement (`Space` or **Pause** button) halts both sample capture and hardware Signal Generator output so the room falls silent immediately while inspecting traces.
 
 ### 2.2 Lock-Free Multi-Channel SPSC Ring Buffer (`src/audio/ring-buffer.ts`)

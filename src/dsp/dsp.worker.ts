@@ -38,6 +38,10 @@ import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipeline,
   MeasurementPipelineConfig,
+  REFERENCE_CHANNEL_GLOBAL,
+  SHARED_MEASUREMENT_CONFIG_KEYS,
+  resolveEffectiveReferenceChannel,
+  splitMeasurementConfigPartial,
 } from './analyzer-pipeline.js';
 import { parseCalibrationFile } from './calibration.js';
 import {
@@ -51,6 +55,13 @@ import {
   SyntheticAcousticRig,
 } from './synthetic-rig.js';
 
+export {
+  REFERENCE_CHANNEL_GLOBAL,
+  SHARED_MEASUREMENT_CONFIG_KEYS,
+  resolveEffectiveReferenceChannel,
+  splitMeasurementConfigPartial,
+};
+
 export type InputSourceMode = 'simulator' | 'hardware';
 
 export interface LiveMeasurementSlotConfig {
@@ -60,7 +71,7 @@ export interface LiveMeasurementSlotConfig {
   readonly visible: boolean;
   readonly simulatorPreset: SimulatorPresetId;
   readonly measurementChannel: number;
-  readonly referenceChannel: number; // -1 = Internal Generator Loopback
+  readonly referenceChannel: number; // -2 = Follow Global Ref, -1 = Internal Generator Loopback, >=0 = Physical In Ch
   readonly config: MeasurementPipelineConfig;
   readonly activeCalibrationId: string | null;
 }
@@ -72,6 +83,7 @@ export type WorkerInboundMessage =
       type: 'sync-live-slots';
       slots: readonly LiveMeasurementSlotConfig[];
       channelTapMap: Record<number, number>;
+      globalReferenceChannel?: number;
     }
   | {
       type: 'set-simulator-preset';
@@ -102,6 +114,7 @@ let sampleRate = 48000;
 let inputMode: InputSourceMode = 'simulator';
 let isPaused = false;
 let channelTapMap: Record<number, number> = { 0: 0, 1: 1 };
+let globalReferenceChannel = 1;
 
 const generator = new SignalGenerator(sampleRate);
 let ringBuffer: MultiChannelRingBuffer | null = null;
@@ -116,7 +129,7 @@ function createDefaultPrimarySlot(): LiveMeasurementSlotConfig {
     visible: true,
     simulatorPreset: 'pa-room-modes',
     measurementChannel: 0,
-    referenceChannel: 1,
+    referenceChannel: REFERENCE_CHANNEL_GLOBAL,
     config: { ...DEFAULT_MEASUREMENT_CONFIG, sampleRate },
     activeCalibrationId: null,
   };
@@ -170,12 +183,17 @@ function routeHardwareSamplesToSlots(
         ? channels[tapM].subarray(0, sampleCount)
         : zeroSlice;
 
+    const effectiveRef = resolveEffectiveReferenceChannel(
+      rt.slot.referenceChannel,
+      globalReferenceChannel
+    );
+
     let bufR: Float32Array;
-    if (rt.slot.referenceChannel < 0) {
+    if (effectiveRef < 0) {
       bufR =
         channels[INTERNAL_LOOPBACK_SLOT_INDEX]?.subarray(0, sampleCount) ?? zeroSlice;
     } else {
-      const tapR = channelTapMap[rt.slot.referenceChannel];
+      const tapR = channelTapMap[effectiveRef];
       bufR =
         tapR !== undefined && channels[tapR]
           ? channels[tapR].subarray(0, sampleCount)
@@ -274,6 +292,10 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
 
       case 'sync-live-slots': {
         channelTapMap = { ...msg.channelTapMap };
+        const prevGlobalRef = globalReferenceChannel;
+        if (typeof msg.globalReferenceChannel === 'number') {
+          globalReferenceChannel = msg.globalReferenceChannel;
+        }
         const incomingIds = new Set(msg.slots.map((s) => s.id));
         for (const existingId of Array.from(slots.keys())) {
           if (!incomingIds.has(existingId)) {
@@ -285,9 +307,17 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           if (existing) {
             const presetChanged =
               existing.slot.simulatorPreset !== slotCfg.simulatorPreset;
+            const prevEffectiveRef = resolveEffectiveReferenceChannel(
+              existing.slot.referenceChannel,
+              prevGlobalRef
+            );
+            const nextEffectiveRef = resolveEffectiveReferenceChannel(
+              slotCfg.referenceChannel,
+              globalReferenceChannel
+            );
             const channelChanged =
               existing.slot.measurementChannel !== slotCfg.measurementChannel ||
-              existing.slot.referenceChannel !== slotCfg.referenceChannel;
+              prevEffectiveRef !== nextEffectiveRef;
             existing.slot = slotCfg;
             existing.pipeline.updateConfig({ ...slotCfg.config, sampleRate });
             if (presetChanged) {
@@ -338,14 +368,36 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
             item.pipeline.updateConfig({ sampleRate });
           }
         }
+        const { sharedPartial, perSlotPartial } = splitMeasurementConfigPartial(
+          msg.config
+        );
+        const hasShared = Object.keys(sharedPartial).length > 0;
+        if (hasShared) {
+          for (const item of slots.values()) {
+            item.pipeline.updateConfig(sharedPartial);
+            item.slot = { ...item.slot, config: item.pipeline.getConfig() };
+          }
+        }
         const rt = getOrCreateSlotRuntime(msg.slotId);
-        rt.pipeline.updateConfig(msg.config);
-        rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
-        self.postMessage({
-          type: 'measurement-config-updated',
-          slotId: rt.slot.id,
-          config: rt.pipeline.getConfig(),
-        });
+        if (Object.keys(perSlotPartial).length > 0) {
+          rt.pipeline.updateConfig(perSlotPartial);
+          rt.slot = { ...rt.slot, config: rt.pipeline.getConfig() };
+        }
+        if (hasShared) {
+          for (const item of slots.values()) {
+            self.postMessage({
+              type: 'measurement-config-updated',
+              slotId: item.slot.id,
+              config: item.pipeline.getConfig(),
+            });
+          }
+        } else {
+          self.postMessage({
+            type: 'measurement-config-updated',
+            slotId: rt.slot.id,
+            config: rt.pipeline.getConfig(),
+          });
+        }
         break;
       }
 

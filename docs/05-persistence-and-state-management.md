@@ -82,6 +82,7 @@ export interface WorkspaceSessionSnapshot {
   readonly hardwareRouting: {
     readonly selectedDeviceId: string;
     readonly selectedDeviceLabel: string;
+    readonly globalReferenceChannel: number;
     readonly generatorOutputChannel: number;
   };
 }

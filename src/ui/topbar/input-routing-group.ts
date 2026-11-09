@@ -19,24 +19,20 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import { AudioDeviceOption } from '../../audio/audio-engine.js';
 import { InputSourceMode } from '../../dsp/dsp.worker.js';
-import { SIMULATOR_PRESETS, SimulatorPresetId } from '../../dsp/synthetic-rig.js';
 
 export interface InputRoutingGroupProps {
   readonly audioInputMode: InputSourceMode;
-  readonly simulatorPreset: SimulatorPresetId;
   readonly audioDevices: readonly AudioDeviceOption[];
   readonly selectedDeviceId: string;
   readonly selectedDeviceLabel?: string;
   readonly availableChannels: number;
-  readonly measurementChannel: number;
-  readonly referenceChannel: number;
+  readonly globalReferenceChannel: number;
   readonly onInputModeChange: (e: Event) => void;
-  readonly onSimulatorPresetChange: (e: Event) => void;
   readonly onDeviceChange: (deviceId: string) => void;
-  readonly onChannelRoutingChange: (measCh: number, refCh: number) => void;
+  readonly onGlobalReferenceChannelChange: (refCh: number) => void;
 }
 
 export function renderInputRoutingGroup(props: InputRoutingGroupProps): TemplateResult {
@@ -58,20 +54,8 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
         <option value="hardware">Hardware Audio Input (Mic/Interface)</option>
       </select>
 
-      ${props.audioInputMode === 'simulator'
+      ${props.audioInputMode === 'hardware'
         ? html`
-            <select
-              aria-label="Simulator Preset"
-              data-testid="select-simulator-preset"
-              .value=${props.simulatorPreset}
-              @change=${props.onSimulatorPresetChange}
-            >
-              ${Object.values(SIMULATOR_PRESETS).map(
-                (p) => html`<option value=${p.id}>${p.name}</option>`
-              )}
-            </select>
-          `
-        : html`
             <select
               aria-label="Audio Device"
               data-testid="select-audio-device"
@@ -95,50 +79,35 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
                   </option>`
               )}
             </select>
-            <span class="toolbar-label" title="Measurement Microphone Input Channel">M:</span>
-            <select
-              aria-label="Measurement Input Channel"
-              data-testid="select-meas-channel"
-              .value=${String(props.measurementChannel)}
-              @change=${(e: Event) =>
-                props.onChannelRoutingChange(
-                  Number((e.target as HTMLSelectElement).value),
-                  props.referenceChannel
-                )}
-            >
-              ${inputChannelIndices.map(
-                (ch) =>
-                  html`<option value=${String(ch)} ?selected=${ch === props.measurementChannel}>
-                    In Ch ${ch + 1}
-                  </option>`
-              )}
-            </select>
             <span
               class="toolbar-label"
-              title="Reference Timing Channel (Physical Loopback Input or Internal Signal Generator)"
+              title="Global Reference Timing Channel (Physical Loopback Input or Internal Signal Generator)"
               >Ref:</span
             >
             <select
-              aria-label="Reference Channel"
+              aria-label="Global Reference Channel"
               data-testid="select-ref-channel"
-              .value=${String(props.referenceChannel)}
+              .value=${String(props.globalReferenceChannel)}
               @change=${(e: Event) =>
-                props.onChannelRoutingChange(
-                  props.measurementChannel,
+                props.onGlobalReferenceChannelChange(
                   Number((e.target as HTMLSelectElement).value)
                 )}
             >
-              <option value="-1" ?selected=${props.referenceChannel === -1}>
+              <option value="-1" ?selected=${props.globalReferenceChannel === -1}>
                 Internal Gen
               </option>
               ${inputChannelIndices.map(
                 (ch) =>
-                  html`<option value=${String(ch)} ?selected=${ch === props.referenceChannel}>
+                  html`<option
+                    value=${String(ch)}
+                    ?selected=${ch === props.globalReferenceChannel}
+                  >
                     In Ch ${ch + 1} (Loopback)
                   </option>`
               )}
             </select>
-          `}
+          `
+        : nothing}
     </div>
   `;
 }

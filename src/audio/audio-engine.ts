@@ -29,8 +29,12 @@
 import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipelineConfig,
+  REFERENCE_CHANNEL_GLOBAL,
+  SHARED_MEASUREMENT_CONFIG_KEYS,
+  resolveEffectiveReferenceChannel,
+  splitMeasurementConfigPartial,
 } from '../dsp/analyzer-pipeline.js';
-import {
+import type {
   InputSourceMode,
   LiveMeasurementSlotConfig,
   WorkerInboundMessage,
@@ -53,6 +57,12 @@ import {
 import { AudioDeviceOption, HardwareAudioRouter } from './hardware-audio-router.js';
 import { createRingBufferStorage, RingBufferStorage } from './ring-buffer.js';
 
+export {
+  REFERENCE_CHANNEL_GLOBAL,
+  SHARED_MEASUREMENT_CONFIG_KEYS,
+  resolveEffectiveReferenceChannel,
+  splitMeasurementConfigPartial,
+};
 export type { AudioDeviceOption, LiveMeasurementSlotConfig };
 
 export type LiveFramesCallback = (liveFrames: SourceData[]) => void;
@@ -82,7 +92,7 @@ export function createDefaultLiveSlot(
     visible: true,
     simulatorPreset: preset,
     measurementChannel: index === 0 ? 0 : index * 2,
-    referenceChannel: 1,
+    referenceChannel: REFERENCE_CHANNEL_GLOBAL,
     config: { ...DEFAULT_MEASUREMENT_CONFIG },
     activeCalibrationId: null,
   };
@@ -116,6 +126,7 @@ export class AudioEngine {
   private ringBufferStorage: RingBufferStorage | null = null;
 
   private inputMode: InputSourceMode = 'simulator';
+  private globalReferenceChannel: number = 1; // Default physical In Ch 2 (0-based index 1)
   private liveSlots: LiveMeasurementSlotConfig[] = [createDefaultLiveSlot()];
   private readonly latestFramesById = new Map<string, SourceData>();
   private generatorConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
@@ -185,14 +196,18 @@ export class AudioEngine {
     this.worker.postMessage(msg);
   }
 
-  private collectActivePhysicalChannels(): number[] {
+  collectActivePhysicalChannels(): number[] {
     const chs: number[] = [];
     for (const slot of this.liveSlots) {
       if (slot.measurementChannel >= 0) {
         chs.push(slot.measurementChannel);
       }
-      if (slot.referenceChannel >= 0) {
-        chs.push(slot.referenceChannel);
+      const effectiveRef = resolveEffectiveReferenceChannel(
+        slot.referenceChannel,
+        this.globalReferenceChannel
+      );
+      if (effectiveRef >= 0) {
+        chs.push(effectiveRef);
       }
     }
     return chs;
@@ -227,6 +242,7 @@ export class AudioEngine {
       type: 'sync-live-slots',
       slots: this.liveSlots,
       channelTapMap: tapMap,
+      globalReferenceChannel: this.globalReferenceChannel,
     });
     this.emitCurrentFrames();
   }
@@ -244,6 +260,15 @@ export class AudioEngine {
 
   getInputMode(): InputSourceMode {
     return this.inputMode;
+  }
+
+  getGlobalReferenceChannel(): number {
+    return this.globalReferenceChannel;
+  }
+
+  setGlobalReferenceChannel(refChannel: number): void {
+    this.globalReferenceChannel = refChannel;
+    this.syncSlotsToRouterAndWorker();
   }
 
   getLiveSlots(): readonly LiveMeasurementSlotConfig[] {
@@ -268,13 +293,16 @@ export class AudioEngine {
     const uid =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID().slice(0, 6)
-        : `${Date.now().toString(36)}-${ idx}`;
+        : `${Date.now().toString(36)}-${idx}`;
     const base = createDefaultLiveSlot(`live-${uid}`, idx);
+    const primaryCfg = this.liveSlots[0]?.config ?? DEFAULT_MEASUREMENT_CONFIG;
+    const { sharedPartial } = splitMeasurementConfigPartial(primaryCfg);
     const created: LiveMeasurementSlotConfig = {
       ...base,
       ...partial,
       config: {
         ...base.config,
+        ...sharedPartial,
         ...(partial?.config ?? {}),
       },
     };
@@ -356,9 +384,18 @@ export class AudioEngine {
     partial: Partial<MeasurementPipelineConfig>,
     slotId: string = this.liveSlots[0].id
   ): void {
-    this.liveSlots = this.liveSlots.map((s) =>
-      s.id === slotId ? { ...s, config: { ...s.config, ...partial } } : s
-    );
+    const { sharedPartial, perSlotPartial } = splitMeasurementConfigPartial(partial);
+    const hasShared = Object.keys(sharedPartial).length > 0;
+    this.liveSlots = this.liveSlots.map((s) => {
+      let nextCfg = s.config;
+      if (hasShared) {
+        nextCfg = { ...nextCfg, ...sharedPartial };
+      }
+      if (s.id === slotId && Object.keys(perSlotPartial).length > 0) {
+        nextCfg = { ...nextCfg, ...perSlotPartial };
+      }
+      return nextCfg !== s.config ? { ...s, config: nextCfg } : s;
+    });
     this.sendToWorker({
       type: 'update-measurement-config',
       slotId,

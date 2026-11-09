@@ -54,6 +54,14 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await expect(liveSlotNameInput).toHaveValue('Live Measurement #2');
     await liveSlotNameInput.fill('Sub Nearfield Live');
 
+    // Verify Topbar does not show per-slot preset, while Inspector shows it and hides Advanced controls by default
+    await expect(app.locator('[data-testid="select-simulator-preset"]')).toHaveCount(0);
+    await expect(app.locator('[data-testid="select-live-slot-preset"]')).toBeVisible();
+    await expect(app.locator('[data-testid="select-fft-size"]')).toHaveCount(0);
+    await app.locator('[data-testid="btn-toggle-advanced-meas"]').click();
+    await expect(app.locator('[data-testid="select-fft-size"]')).toBeVisible();
+    await expect(app.locator('[data-testid="select-smoothing"]')).toBeVisible();
+
     // Capture a stored trace
     await app.locator('[data-testid="btn-capture-trace"]').click();
     const storedItems = app.locator('[data-testid^="source-item-stored-"]');

@@ -51,6 +51,7 @@ export const WORKSPACE_SESSION_STORAGE_KEY = 'web-sound-meter:workspace:v1';
 export interface HardwareDeviceRoutingSnapshot {
   readonly selectedDeviceId: string;
   readonly selectedDeviceLabel: string;
+  readonly globalReferenceChannel: number;
   readonly generatorOutputChannel: number;
 }
 
@@ -138,6 +139,7 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
     hardwareRouting: {
       selectedDeviceId: '',
       selectedDeviceLabel: '',
+      globalReferenceChannel: 1,
       generatorOutputChannel: -1,
     },
   };

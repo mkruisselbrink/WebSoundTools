@@ -20,7 +20,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AudioEngine } from '../../src/audio/audio-engine.js';
+import {
+  AudioEngine,
+  REFERENCE_CHANNEL_GLOBAL,
+  resolveEffectiveReferenceChannel,
+} from '../../src/audio/audio-engine.js';
 import { HardwareAudioRouter } from '../../src/audio/hardware-audio-router.js';
 import { DEFAULT_GENERATOR_CONFIG } from '../../src/dsp/signal-generator.js';
 
@@ -212,6 +216,50 @@ describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
     );
     await expect(engine.setInputMode('hardware')).rejects.toThrow('Permission denied');
     expect(engine.getInputMode()).toBe('simulator');
+
+    engine.dispose();
+  });
+
+  it('AudioEngine resolves global reference channel (-2) with per-slot overrides and shares transform/averaging settings across all slots', () => {
+    const engine = new AudioEngine();
+    const slot1 = engine.getLiveSlot();
+    expect(slot1.referenceChannel).toBe(REFERENCE_CHANNEL_GLOBAL);
+    expect(engine.getGlobalReferenceChannel()).toBe(1);
+    expect(
+      resolveEffectiveReferenceChannel(
+        slot1.referenceChannel,
+        engine.getGlobalReferenceChannel()
+      )
+    ).toBe(1);
+
+    // Update shared transform/averaging parameter on slot1 -> new slot inherits it
+    engine.updateMeasurementConfig(
+      { fftSize: 16384, octaveSmoothing: '1/12', delayMs: 4.2 },
+      slot1.id
+    );
+    const slot2 = engine.addLiveSlot({ name: 'FOH Mic 2', measurementChannel: 2 });
+    expect(engine.getMeasurementConfig(slot2.id).fftSize).toBe(16384);
+    expect(engine.getMeasurementConfig(slot2.id).octaveSmoothing).toBe('1/12');
+    // Per-slot parameter (delayMs) is NOT inherited from slot1
+    expect(engine.getMeasurementConfig(slot2.id).delayMs).toBe(0);
+
+    // Updating a shared setting from slot2 propagates to slot1, while per-slot gainDb stays on slot2
+    engine.updateMeasurementConfig(
+      { windowType: 'blackman-harris', gainDb: 6.5 },
+      slot2.id
+    );
+    expect(engine.getMeasurementConfig(slot1.id).windowType).toBe('blackman-harris');
+    expect(engine.getMeasurementConfig(slot2.id).windowType).toBe('blackman-harris');
+    expect(engine.getMeasurementConfig(slot1.id).gainDb).toBe(0);
+    expect(engine.getMeasurementConfig(slot2.id).gainDb).toBe(6.5);
+
+    // Changing global reference channel updates collectActivePhysicalChannels for slots following global (-2)
+    engine.setGlobalReferenceChannel(7);
+    expect(engine.collectActivePhysicalChannels()).toEqual([0, 7, 2, 7]);
+
+    // Overriding slot2 reference channel to physical Ch 5 (index 4)
+    engine.updateLiveSlot(slot2.id, { referenceChannel: 4 });
+    expect(engine.collectActivePhysicalChannels()).toEqual([0, 7, 2, 4]);
 
     engine.dispose();
   });
