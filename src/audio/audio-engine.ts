@@ -44,7 +44,12 @@ import {
   SimulatorPresetId,
   SimulatorRigConfig,
 } from '../dsp/synthetic-rig.js';
-import { DEFAULT_SOURCE_PALETTE, SourceData } from '../sources/source-data.js';
+import {
+  DEFAULT_SOURCE_PALETTE,
+  SourceData,
+  createEmptyFrequencyDomainData,
+  createEmptyTimeDomainData,
+} from '../sources/source-data.js';
 import { AudioDeviceOption, HardwareAudioRouter } from './hardware-audio-router.js';
 import { createRingBufferStorage, RingBufferStorage } from './ring-buffer.js';
 
@@ -83,6 +88,28 @@ export function createDefaultLiveSlot(
   };
 }
 
+export function createSkeletonLiveFrame(slot: LiveMeasurementSlotConfig): SourceData {
+  const N = slot.config.fftSize || 4096;
+  const binCount = (N >>> 1) + 1;
+  const sr = slot.config.sampleRate || 48000;
+  return {
+    id: slot.id,
+    name: slot.name,
+    kind: 'measurement',
+    color: slot.color,
+    visible: slot.visible,
+    active: true,
+    sampleRate: sr,
+    gainOffsetDb: 0,
+    delayOffsetMs: 0,
+    invertPolarity: slot.config.invertPolarity,
+    createdAt: new Date().toISOString(),
+    notes: '',
+    freqData: createEmptyFrequencyDomainData(binCount, sr),
+    timeData: createEmptyTimeDomainData(N, sr),
+  };
+}
+
 export class AudioEngine {
   private readonly worker: Worker;
   private readonly hardwareRouter = new HardwareAudioRouter();
@@ -90,6 +117,7 @@ export class AudioEngine {
 
   private inputMode: InputSourceMode = 'simulator';
   private liveSlots: LiveMeasurementSlotConfig[] = [createDefaultLiveSlot()];
+  private readonly latestFramesById = new Map<string, SourceData>();
   private generatorConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
 
   private selectedDeviceId: string = '';
@@ -116,9 +144,14 @@ export class AudioEngine {
 
       if (msg.type === 'measurement-frames' && Array.isArray(msg.frames)) {
         const frames = msg.frames as SourceData[];
-        for (const listener of this.liveFramesListeners) {
-          listener(frames);
+        for (const f of frames) {
+          this.latestFramesById.set(f.id, f);
         }
+        this.emitCurrentFrames();
+      } else if (msg.type === 'measurement-frame' && msg.sourceData) {
+        const sd = msg.sourceData as SourceData;
+        this.latestFramesById.set(sd.id, sd);
+        this.emitCurrentFrames();
       } else if (msg.type === 'measurement-config-updated' && msg.config) {
         const slotId = (msg.slotId as string) || this.liveSlots[0].id;
         const updatedConfig = msg.config as MeasurementPipelineConfig;
@@ -165,6 +198,27 @@ export class AudioEngine {
     return chs;
   }
 
+  private emitCurrentFrames(): void {
+    const frames = this.liveSlots.map((slot) => {
+      const existing = this.latestFramesById.get(slot.id);
+      if (existing) {
+        return {
+          ...existing,
+          id: slot.id,
+          name: slot.name,
+          color: slot.color,
+          visible: slot.visible,
+        };
+      }
+      const skeleton = createSkeletonLiveFrame(slot);
+      this.latestFramesById.set(slot.id, skeleton);
+      return skeleton;
+    });
+    for (const listener of this.liveFramesListeners) {
+      listener(frames);
+    }
+  }
+
   private syncSlotsToRouterAndWorker(): void {
     const tapMap = this.hardwareRouter.setActivePhysicalChannels(
       this.collectActivePhysicalChannels()
@@ -174,10 +228,12 @@ export class AudioEngine {
       slots: this.liveSlots,
       channelTapMap: tapMap,
     });
+    this.emitCurrentFrames();
   }
 
   onLiveFrames(listener: LiveFramesCallback): () => void {
     this.liveFramesListeners.add(listener);
+    this.emitCurrentFrames();
     return () => this.liveFramesListeners.delete(listener);
   }
 

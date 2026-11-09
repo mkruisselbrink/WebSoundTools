@@ -123,25 +123,26 @@ self.addEventListener('fetch', (event) => {
         });
       }
 
-      const cachedAsset =
-        (await cache.match(request)) || (await cache.match(url.pathname));
-      if (cachedAsset) {
-        return withCrossOriginIsolationHeaders(cachedAsset);
-      }
-
+      // Network-First with Offline Cache Fallback keyed by exact full URL (including search params)
       try {
         const networkResponse = await fetch(request);
         if (networkResponse && networkResponse.ok) {
           await cache.put(request, networkResponse.clone());
+          return withCrossOriginIsolationHeaders(networkResponse);
         }
-        return withCrossOriginIsolationHeaders(networkResponse);
-      } catch (err) {
-        const fallbackByPath = await cache.match(url.pathname);
-        if (fallbackByPath) {
-          return withCrossOriginIsolationHeaders(fallbackByPath);
-        }
-        throw err;
+      } catch {
+        // Offline fallback
       }
+
+      const cachedAsset = await cache.match(request);
+      if (cachedAsset) {
+        return withCrossOriginIsolationHeaders(cachedAsset);
+      }
+
+      return new Response('Offline and asset not in cache.', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     })()
   );
 });
@@ -168,7 +169,7 @@ function wsmOfflineSwPlugin(): Plugin {
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
           res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-          res.end(buildServiceWorkerScript('wsm-precache-dev', devPrecache));
+          res.end(buildServiceWorkerScript('wsm-precache-v2-dev', devPrecache));
           return;
         }
         next();
@@ -182,7 +183,7 @@ function wsmOfflineSwPlugin(): Plugin {
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
           res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-          res.end(buildServiceWorkerScript('wsm-precache-dev', devPrecache));
+          res.end(buildServiceWorkerScript('wsm-precache-v2-dev', devPrecache));
           return;
         }
         next();
@@ -204,7 +205,7 @@ function wsmOfflineSwPlugin(): Plugin {
         if (fileName.endsWith('.map')) continue;
         urls.add(`./${fileName}`);
       }
-      const cacheName = `wsm-precache-${computeShortHash(sortedFiles)}`;
+      const cacheName = `wsm-precache-v2-${computeShortHash(sortedFiles)}`;
       this.emitFile({
         type: 'asset',
         fileName: 'sw.js',

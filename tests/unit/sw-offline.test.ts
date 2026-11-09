@@ -153,7 +153,7 @@ describe('PWA Offline Service Worker Core & Registration', () => {
     expect(await res.text()).toBe('precached:/index.html');
   });
 
-  it('serves static assets Cache-First and populates runtime cache on cache miss', async () => {
+  it('serves static assets Network-First when online and falls back to precached/runtime cache when offline', async () => {
     const storage = new MockCacheStorage();
     await installPrecache(storage, 'wsm-precache-v1', ['/assets/precached.js']);
 
@@ -161,37 +161,34 @@ describe('PWA Offline Service Worker Core & Registration', () => {
       return new Response(`network:${new URL(req.url).pathname}`, { status: 200 });
     });
 
-    // 1. Hit precached asset without calling network
-    const hitRes = await handleServiceWorkerFetch(
-      new Request('https://soundmeter.example/assets/precached.js'),
+    // 1. Online request fetches fresh asset from network and updates cache
+    const onlineReq = new Request('https://soundmeter.example/assets/worker.js');
+    const onlineRes = await handleServiceWorkerFetch(
+      onlineReq,
       storage,
       'wsm-precache-v1',
       netFetch
     );
-    expect(await hitRes.text()).toBe('precached:/assets/precached.js');
-    expect(netFetch).not.toHaveBeenCalled();
-
-    // 2. Miss -> fetches from network and caches for subsequent offline request
-    const missReq = new Request('https://soundmeter.example/assets/worker.js');
-    const missRes = await handleServiceWorkerFetch(
-      missReq,
-      storage,
-      'wsm-precache-v1',
-      netFetch
-    );
-    expect(await missRes.text()).toBe('network:/assets/worker.js');
+    expect(await onlineRes.text()).toBe('network:/assets/worker.js');
     expect(netFetch).toHaveBeenCalledTimes(1);
 
-    // 3. Subsequent request while offline hits runtime cache
+    // 2. Offline request falls back to runtime cache or precached asset
     const offlineFetch = vi.fn().mockRejectedValue(new Error('Offline'));
-    const secondRes = await handleServiceWorkerFetch(
-      missReq,
+    const cachedRuntimeRes = await handleServiceWorkerFetch(
+      onlineReq,
       storage,
       'wsm-precache-v1',
       offlineFetch
     );
-    expect(await secondRes.text()).toBe('network:/assets/worker.js');
-    expect(offlineFetch).not.toHaveBeenCalled();
+    expect(await cachedRuntimeRes.text()).toBe('network:/assets/worker.js');
+
+    const cachedPrecacheRes = await handleServiceWorkerFetch(
+      new Request('https://soundmeter.example/assets/precached.js'),
+      storage,
+      'wsm-precache-v1',
+      offlineFetch
+    );
+    expect(await cachedPrecacheRes.text()).toBe('precached:/assets/precached.js');
   });
 
   it('registers the Service Worker safely and handles unsupported environments', async () => {
@@ -206,3 +203,4 @@ describe('PWA Offline Service Worker Core & Registration', () => {
     expect(await registerOfflineServiceWorker({ register: failingSpy })).toBe(false);
   });
 });
+

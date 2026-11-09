@@ -23,10 +23,14 @@
  * Pure Service Worker caching and Cross-Origin Isolation (`COOP`/`COEP`) core (`src/pwa/sw-core.ts`).
  *
  * Ensures that:
- *  1. All application shell, DSP Worker, AudioWorklet, and icon assets are precached or runtime-cached.
- *  2. Navigation requests (including URL query states like `/?layout=3&plots=magnitude,phase`)
+ *  1. All application shell, DSP Worker, AudioWorklet, and icon assets are precached on install
+ *     and updated in CacheStorage when online (Network-First with Offline Cache Fallback).
+ *  2. Query-qualified module URLs (such as Vite's `?worker&url` vs. `?worker_file&type=module`)
+ *     are keyed by their full URL including search parameters so wrapper modules and worker scripts
+ *     never collide in CacheStorage.
+ *  3. Navigation requests (including URL query states like `/?layout=3&plots=magnitude,phase`)
  *     fall back cleanly to cached `/index.html` when offline.
- *  3. Cached responses always carry `Cross-Origin-Opener-Policy: same-origin` and
+ *  4. Responses always carry `Cross-Origin-Opener-Policy: same-origin` and
  *     `Cross-Origin-Embedder-Policy: require-corp` so `SharedArrayBuffer` works offline.
  */
 
@@ -89,7 +93,7 @@ export function shouldInterceptRequest(request: Request, scopeOrigin: string): b
   if (url.origin !== scopeOrigin) {
     return false;
   }
-  // Ignore Vite HMR websocket/ping endpoints in dev mode
+  // Ignore Vite HMR client/ping endpoints in dev mode
   if (url.pathname.startsWith('/@vite') || url.searchParams.has('html-proxy')) {
     return false;
   }
@@ -103,7 +107,6 @@ export async function handleServiceWorkerFetch(
   fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
   const cache = await cacheStorage.open(cacheName);
-  const url = new URL(request.url);
   const acceptHeader = request.headers.get('accept') ?? '';
   const isNavigation =
     request.mode === 'navigate' || acceptHeader.includes('text/html');
@@ -136,16 +139,25 @@ export async function handleServiceWorkerFetch(
     });
   }
 
-  // Static assets (JS, Worker, AudioWorklet, Manifest, Icons): Cache-First with runtime caching
-  const cachedAsset =
-    (await cache.match(request)) ?? (await cache.match(url.pathname));
+  // Network-First with Offline Cache Fallback (keyed by full request URL including query string)
+  try {
+    const networkResponse = await fetchImpl(request);
+    if (networkResponse && networkResponse.ok) {
+      await cache.put(request, networkResponse.clone());
+      return withCrossOriginIsolationHeaders(networkResponse);
+    }
+  } catch {
+    // Offline — fall through to cache
+  }
+
+  const cachedAsset = await cache.match(request);
   if (cachedAsset) {
     return withCrossOriginIsolationHeaders(cachedAsset);
   }
 
-  const networkResponse = await fetchImpl(request);
-  if (networkResponse && networkResponse.ok) {
-    await cache.put(request, networkResponse.clone());
-  }
-  return withCrossOriginIsolationHeaders(networkResponse);
+  return new Response('Offline and asset not in cache.', {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }

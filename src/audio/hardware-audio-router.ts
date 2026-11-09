@@ -51,6 +51,7 @@ export interface HardwareStreamStartOptions {
 
 export class HardwareAudioRouter {
   private audioContext: AudioContext | null = null;
+  private workletModuleLoaded = false;
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private splitterNode: ChannelSplitterNode | null = null;
@@ -150,7 +151,11 @@ export class HardwareAudioRouter {
 
     if (!this.audioContext) {
       this.audioContext = new AudioContext({ sampleRate: 48000 });
+      this.workletModuleLoaded = false;
+    }
+    if (!this.workletModuleLoaded) {
       await this.audioContext.audioWorklet.addModule(CaptureWorkletUrl);
+      this.workletModuleLoaded = true;
     }
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
@@ -166,16 +171,36 @@ export class HardwareAudioRouter {
       // Fallback to default stereo destination if browser disallows explicit channelCount
     }
 
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: options.deviceId ? { exact: options.deviceId } : undefined,
-        echoCancellation: { exact: false },
-        noiseSuppression: { exact: false },
-        autoGainControl: { exact: false },
-        channelCount: { ideal: 64 },
-        sampleRate: { ideal: this.audioContext.sampleRate },
-      },
-    });
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: options.deviceId ? { exact: options.deviceId } : undefined,
+          echoCancellation: { exact: false },
+          noiseSuppression: { exact: false },
+          autoGainControl: { exact: false },
+          channelCount: { ideal: 64 },
+          sampleRate: { ideal: this.audioContext.sampleRate },
+        },
+      });
+    } catch (err) {
+      // If a saved deviceId was unplugged or the driver rejected `{ exact: false }`,
+      // retry with ideal boolean constraints before failing.
+      const errName = (err as { name?: string })?.name;
+      if (errName === 'OverconstrainedError' || errName === 'NotFoundError') {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: options.deviceId ? { ideal: options.deviceId } : undefined,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: { ideal: 64 },
+            sampleRate: { ideal: this.audioContext.sampleRate },
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
     const trackSettings = this.mediaStream.getAudioTracks()[0]?.getSettings?.();
@@ -287,6 +312,7 @@ export class HardwareAudioRouter {
     if (this.audioContext) {
       void this.audioContext.close();
       this.audioContext = null;
+      this.workletModuleLoaded = false;
     }
   }
 }
