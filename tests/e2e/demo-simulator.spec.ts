@@ -21,14 +21,19 @@
 
 import { test, expect } from '@playwright/test';
 
-test.describe('WebSoundMeter Demo Simulator E2E', () => {
-  test('boots in Demo Simulator mode, updates SPL meters, finds delay, captures traces, and persists state across reloads', async ({
+test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', () => {
+  test('boots in Demo Simulator mode, supports multiple simultaneous Live Measurements, captures traces, and persists state across reloads and offline mode', async ({
     page,
+    context,
   }) => {
     await page.goto('/');
 
     const app = page.locator('web-sound-meter-app');
     await expect(app).toBeVisible();
+
+    // Verify PWA manifest link is present
+    const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
+    expect(manifestHref).toBe('/manifest.webmanifest');
 
     // Wait for simulator worker frames to populate SPL meter and Delay Finder
     const splValue = app.locator('[data-testid="spl-main-value"]');
@@ -42,6 +47,12 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     const refDelayInput = app.locator('[data-testid="input-ref-delay-ms"]');
     const refDelayVal = Number(await refDelayInput.inputValue());
     expect(refDelayVal).toBeCloseTo(8.5, 1);
+
+    // Add a second simultaneous Live Measurement source (+ Meas)
+    await app.locator('[data-testid="btn-add-meas"]').click();
+    const liveSlotNameInput = app.locator('[data-testid="input-live-slot-name"]');
+    await expect(liveSlotNameInput).toHaveValue('Live Measurement #2');
+    await liveSlotNameInput.fill('Sub Nearfield Live');
 
     // Capture a stored trace
     await app.locator('[data-testid="btn-capture-trace"]').click();
@@ -57,7 +68,9 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     await expect(storedItems).toHaveCount(1);
 
     // Toggle Live Measurement visibility off and ensure it stays off across incoming frames
-    const liveVisibilityCheckbox = app.getByLabel('Toggle visibility for Live Measurement');
+    const liveVisibilityCheckbox = app.getByLabel(
+      'Toggle visibility for Live Measurement'
+    );
     await expect(liveVisibilityCheckbox).toBeChecked();
     await liveVisibilityCheckbox.uncheck();
     await page.waitForTimeout(150);
@@ -79,14 +92,29 @@ test.describe('WebSoundMeter Demo Simulator E2E', () => {
     await app.locator('[data-testid="btn-add-union"]').click();
     await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
 
-    // Reload the page and verify layout, Stored Trace, Virtual EQ, Math Union, and Live visibility persist
+    // Wait for Service Worker to be ready and controlling the page
+    await page.evaluate(async () => {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.ready;
+      }
+    });
+
+    // Reload the page and verify layout, both Live Measurements, Stored Trace, Virtual EQ, and Math Union persist
     await page.reload();
     await expect(app.locator('chart-panel')).toHaveCount(2);
+    await expect(app.locator('[data-testid^="source-item-live-"]')).toHaveCount(2);
     await expect(app.locator('[data-testid^="source-item-stored-"]')).toHaveCount(1);
     await expect(app.locator('[data-testid^="source-item-eq-"]')).toHaveCount(1);
     await expect(app.locator('[data-testid^="source-item-union-"]')).toHaveCount(1);
     await expect(
       app.getByLabel('Toggle visibility for Live Measurement')
     ).not.toBeChecked();
+
+    // Verify offline reload works via Service Worker
+    await context.setOffline(true);
+    await page.reload();
+    await expect(app.locator('chart-panel')).toHaveCount(2);
+    await expect(app.locator('[data-testid^="source-item-live-"]')).toHaveCount(2);
+    await context.setOffline(false);
   });
 });

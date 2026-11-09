@@ -21,7 +21,7 @@
 
 /**
  * Pure reactive store managing the acoustic source graph:
- *  - Live measurement frame + persistent visibility state
+ *  - One or more simultaneous Live Measurement frames + per-slot persistent visibility state
  *  - Stored trace snapshots + IndexedDB persistence
  *  - Virtual Parametric EQ sources with memoized frequency/impulse evaluation + IndexedDB persistence
  *  - Math / Union sources with memoized vector/power evaluation + IndexedDB persistence
@@ -83,9 +83,15 @@ function generateShortId(prefix: string): string {
   return `${prefix}-${uid}`;
 }
 
+export function isLiveSourceId(id: string): boolean {
+  return id === 'live-measurement' || id.startsWith('live-');
+}
+
 export class SourceStore {
-  private liveSource: SourceData | null = null;
-  private liveSourceVisible = true;
+  private liveSources: SourceData[] = [];
+  private readonly liveVisibility = new Map<string, boolean>([
+    ['live-measurement', true],
+  ]);
   private storedSources: SourceData[] = [];
   private eqSources: EqualizerSourceConfig[] = [];
   private unionSources: UnionSourceConfig[] = [];
@@ -103,7 +109,7 @@ export class SourceStore {
     { cfg: UnionSourceConfig; inputs: SourceData[]; data: SourceData }
   >();
   private lastAllSourcesRef: {
-    live: SourceData | null;
+    live: SourceData[];
     stored: SourceData[];
     eq: EqualizerSourceConfig[];
     union: UnionSourceConfig[];
@@ -158,7 +164,7 @@ export class SourceStore {
   }
 
   ensureValidSelectedSourceId(): boolean {
-    if (this.selectedSourceId === 'live-measurement') {
+    if (isLiveSourceId(this.selectedSourceId)) {
       return false;
     }
     const exists =
@@ -166,22 +172,47 @@ export class SourceStore {
       this.eqSources.some((s) => s.id === this.selectedSourceId) ||
       this.unionSources.some((s) => s.id === this.selectedSourceId);
     if (!exists) {
-      this.selectedSourceId = 'live-measurement';
+      this.selectedSourceId = this.liveSources[0]?.id ?? 'live-measurement';
       return true;
     }
     return false;
   }
 
-  getLiveSource(): SourceData | null {
-    return this.liveSource;
+  getActiveLiveSourceId(): string {
+    if (isLiveSourceId(this.selectedSourceId)) {
+      return this.selectedSourceId;
+    }
+    return this.liveSources[0]?.id ?? 'live-measurement';
   }
 
-  getLiveSourceVisible(): boolean {
-    return this.liveSourceVisible;
+  getLiveSources(): readonly SourceData[] {
+    return this.liveSources;
   }
 
-  setLiveSourceVisible(visible: boolean): void {
-    this.toggleVisibility('live-measurement', visible);
+  getLiveSource(id?: string): SourceData | null {
+    const targetId = id ?? this.getActiveLiveSourceId();
+    return (
+      this.liveSources.find((s) => s.id === targetId) ??
+      this.liveSources[0] ??
+      null
+    );
+  }
+
+  getLiveSourceVisible(id: string = 'live-measurement'): boolean {
+    return this.liveVisibility.get(id) ?? true;
+  }
+
+  setLiveSourceVisible(visible: boolean, id: string = 'live-measurement'): void {
+    this.toggleVisibility(id, visible);
+  }
+
+  removeLiveSource(id: string): void {
+    this.liveSources = this.liveSources.filter((s) => s.id !== id);
+    this.liveVisibility.delete(id);
+    if (this.selectedSourceId === id) {
+      this.selectedSourceId = this.liveSources[0]?.id ?? 'live-measurement';
+    }
+    this.notify();
   }
 
   getStoredSources(): readonly SourceData[] {
@@ -206,9 +237,17 @@ export class SourceStore {
     this.notify();
   }
 
-  setLiveFrame(live: SourceData): void {
-    this.liveSource = this.liveSourceVisible ? live : { ...live, visible: false };
+  setLiveFrames(frames: readonly SourceData[]): void {
+    this.liveSources = frames.map((frame) => {
+      const vis = this.liveVisibility.get(frame.id) ?? frame.visible ?? true;
+      this.liveVisibility.set(frame.id, vis);
+      return frame.visible === vis ? frame : { ...frame, visible: vis };
+    });
     this.notify();
+  }
+
+  setLiveFrame(live: SourceData): void {
+    this.setLiveFrames([live]);
   }
 
   getActiveEq(): EqualizerSourceConfig | null {
@@ -222,7 +261,7 @@ export class SourceStore {
   getAllSources(): SourceData[] {
     if (
       this.lastAllSourcesRef &&
-      this.lastAllSourcesRef.live === this.liveSource &&
+      this.lastAllSourcesRef.live === this.liveSources &&
       this.lastAllSourcesRef.stored === this.storedSources &&
       this.lastAllSourcesRef.eq === this.eqSources &&
       this.lastAllSourcesRef.union === this.unionSources
@@ -230,11 +269,7 @@ export class SourceStore {
       return this.lastAllSourcesRef.result;
     }
 
-    const list: SourceData[] = [];
-    if (this.liveSource) {
-      list.push(this.liveSource);
-    }
-    list.push(...this.storedSources);
+    const list: SourceData[] = [...this.liveSources, ...this.storedSources];
 
     for (const eqCfg of this.eqSources) {
       const target = eqCfg.targetSourceId
@@ -269,7 +304,7 @@ export class SourceStore {
     }
 
     this.lastAllSourcesRef = {
-      live: this.liveSource,
+      live: this.liveSources,
       stored: this.storedSources,
       eq: this.eqSources,
       union: this.unionSources,
@@ -282,7 +317,7 @@ export class SourceStore {
   captureCurrentTrace(): SourceData | null {
     const allSources = this.getAllSources();
     const target =
-      allSources.find((s) => s.id === this.selectedSourceId) ?? this.liveSource;
+      allSources.find((s) => s.id === this.selectedSourceId) ?? this.getLiveSource();
     if (!target) return null;
 
     const paletteIdx = (this.storedSources.length + 1) % DEFAULT_SOURCE_PALETTE.length;
@@ -303,7 +338,7 @@ export class SourceStore {
     this.storedSources = this.storedSources.filter((s) => s.id !== id);
     void this.persistence.remove(id);
     if (this.selectedSourceId === id) {
-      this.selectedSourceId = 'live-measurement';
+      this.selectedSourceId = this.getActiveLiveSourceId();
     }
     this.notify();
   }
@@ -322,11 +357,11 @@ export class SourceStore {
   }
 
   toggleVisibility(id: string, visible: boolean): void {
-    if (id === 'live-measurement') {
-      this.liveSourceVisible = visible;
-      if (this.liveSource) {
-        this.liveSource = { ...this.liveSource, visible };
-      }
+    if (isLiveSourceId(id)) {
+      this.liveVisibility.set(id, visible);
+      this.liveSources = this.liveSources.map((s) =>
+        s.id === id ? { ...s, visible } : s
+      );
     } else if (id.startsWith('stored-')) {
       this.storedSources = this.storedSources.map((s) => {
         if (s.id !== id) return s;
@@ -360,7 +395,7 @@ export class SourceStore {
       color: '#10b981',
       visible: true,
       bands: createDefaultEqBands(),
-      targetSourceId: 'live-measurement',
+      targetSourceId: this.getActiveLiveSourceId(),
     };
     this.eqSources = [...this.eqSources, newEq];
     this.selectedSourceId = id;
@@ -374,7 +409,7 @@ export class SourceStore {
     this.eqEvalCache.delete(id);
     void this.persistence.removeEq?.(id);
     if (this.selectedSourceId === id) {
-      this.selectedSourceId = 'live-measurement';
+      this.selectedSourceId = this.getActiveLiveSourceId();
     }
     this.notify();
   }
@@ -439,7 +474,11 @@ export class SourceStore {
 
   addUnionSource(): UnionSourceConfig {
     const id = generateShortId('union');
-    const allIds = ['live-measurement', ...this.storedSources.map((s) => s.id)];
+    const liveIds = this.liveSources.map((s) => s.id);
+    const allIds = [
+      ...(liveIds.length > 0 ? liveIds : ['live-measurement']),
+      ...this.storedSources.map((s) => s.id),
+    ];
     const newUnion: UnionSourceConfig = {
       id,
       name: `Math Union #${this.unionSources.length + 1}`,
@@ -460,7 +499,7 @@ export class SourceStore {
     this.unionEvalCache.delete(id);
     void this.persistence.removeUnion?.(id);
     if (this.selectedSourceId === id) {
-      this.selectedSourceId = 'live-measurement';
+      this.selectedSourceId = this.getActiveLiveSourceId();
     }
     this.notify();
   }

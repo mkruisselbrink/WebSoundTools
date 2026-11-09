@@ -26,6 +26,7 @@
 export interface AppShortcutActions {
   readonly onCaptureTrace: () => void;
   readonly onFindAndApplyDelay: () => void;
+  readonly onAddLiveSource?: () => void;
 }
 
 export interface ShortcutKeyboardEventLike {
@@ -76,6 +77,10 @@ export function dispatchAppKeydown(
     actions.onFindAndApplyDelay();
     return true;
   }
+  if ((e.key === 'm' || e.key === 'M') && actions.onAddLiveSource) {
+    e.preventDefault?.();
+    actions.onAddLiveSource();
+    return true;
+  }
   return false;
 }
-

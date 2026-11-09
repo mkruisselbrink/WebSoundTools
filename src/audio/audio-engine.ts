@@ -59,9 +59,9 @@ export type SlotConfigUpdateCallback = (
 const SIMULATOR_PRESET_CYCLE: readonly SimulatorPresetId[] = [
   'pa-room-modes',
   'sub-top-misaligned',
-  'stage-monitor-comb',
+  'comb-filtering',
   'flat-delayed',
-  'noisy-venue',
+  'noisy-crowd',
 ];
 
 export function createDefaultLiveSlot(

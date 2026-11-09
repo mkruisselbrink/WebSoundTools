@@ -20,6 +20,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { createDefaultLiveSlot } from '../../src/audio/audio-engine.js';
+import { DEFAULT_MEASUREMENT_CONFIG } from '../../src/dsp/analyzer-pipeline.js';
 import {
   WORKSPACE_SESSION_STORAGE_KEY,
   createDefaultWorkspaceSession,
@@ -44,25 +46,38 @@ describe('workspace-session', () => {
     expect(loadWorkspaceSession(createMemoryStorage())).toEqual(defaults);
   });
 
-  it('saves and loads workspace session including DSP settings, calibration ID, and hardware routing', () => {
+  it('saves and loads workspace session including multiple live measurement slots, per-slot DSP settings, calibration IDs, and hardware routing', () => {
     const mem = createMemoryStorage();
+    const slot1 = {
+      ...createDefaultLiveSlot('live-measurement', 0),
+      visible: false,
+      activeCalibrationId: 'cal-umik1',
+      measurementChannel: 13,
+      referenceChannel: 15,
+      config: {
+        ...DEFAULT_MEASUREMENT_CONFIG,
+        fftSize: 16384,
+        octaveSmoothing: '1/12' as const,
+        delayMs: 8.5,
+      },
+    };
+    const slot2 = {
+      ...createDefaultLiveSlot('live-sub', 1),
+      name: 'Sub Nearfield (Ch 28)',
+      simulatorPreset: 'sub-top-misaligned' as const,
+      measurementChannel: 27,
+      referenceChannel: -1,
+    };
+
     const custom = {
       ...createDefaultWorkspaceSession(),
       layoutPreset: 'tf-dual' as const,
       chartPlotTypes: ['magnitude', 'phase'] as ('magnitude' | 'phase')[],
       audioInputMode: 'hardware' as const,
-      liveSourceVisible: false,
-      activeCalibrationId: 'cal-umik1',
-      measConfig: {
-        fftSize: 16384,
-        octaveSmoothing: '1/12' as const,
-        delayMs: 8.5,
-      },
+      liveSlots: [slot1, slot2],
       hardwareRouting: {
-        selectedDeviceId: 'usb-scarlett',
-        selectedDeviceLabel: 'Scarlett 2i2 USB',
-        measurementChannel: 0,
-        referenceChannel: 1,
+        selectedDeviceId: 'dante-32',
+        selectedDeviceLabel: 'Dante Virtual Soundcard (32ch)',
         generatorOutputChannel: 2,
       },
     };
@@ -71,10 +86,17 @@ describe('workspace-session', () => {
     const loaded = loadWorkspaceSession(mem);
     expect(loaded.layoutPreset).toBe('tf-dual');
     expect(loaded.audioInputMode).toBe('hardware');
-    expect(loaded.liveSourceVisible).toBe(false);
-    expect(loaded.activeCalibrationId).toBe('cal-umik1');
-    expect(loaded.measConfig.fftSize).toBe(16384);
-    expect(loaded.hardwareRouting.selectedDeviceLabel).toBe('Scarlett 2i2 USB');
+    expect(loaded.liveSlots).toHaveLength(2);
+    expect(loaded.liveSlots[0].visible).toBe(false);
+    expect(loaded.liveSlots[0].activeCalibrationId).toBe('cal-umik1');
+    expect(loaded.liveSlots[0].config.fftSize).toBe(16384);
+    expect(loaded.liveSlots[0].measurementChannel).toBe(13);
+    expect(loaded.liveSlots[1].name).toBe('Sub Nearfield (Ch 28)');
+    expect(loaded.liveSlots[1].measurementChannel).toBe(27);
+    expect(loaded.liveSlots[1].simulatorPreset).toBe('sub-top-misaligned');
+    expect(loaded.hardwareRouting.selectedDeviceLabel).toBe(
+      'Dante Virtual Soundcard (32ch)'
+    );
     expect(loaded.hardwareRouting.generatorOutputChannel).toBe(2);
   });
 

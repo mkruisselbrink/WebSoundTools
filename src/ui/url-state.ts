@@ -223,3 +223,4 @@ export function syncBrowserUrlState(
     window.history.replaceState(null, '', nextUrl);
   }
 }
+

@@ -22,17 +22,18 @@
 /**
  * Lightweight Synchronous Workspace Session Snapshot (`localStorage`).
  *
- * Stores scalar DSP settings, generator preferences, hardware channel routing,
- * remembered device label, active calibration ID, and fallback view state so
- * the application renders synchronously on frame 1 without layout shift.
+ * Stores multi-slot Live Measurement configurations (channel routing, simulator preset,
+ * DSP settings, calibration curve ID, visibility), generator preferences, hardware device
+ * selection, and fallback view state so the application hydrates synchronously on frame 1.
  */
 
+import { createDefaultLiveSlot } from '../audio/audio-engine.js';
 import { PlotType } from '../charts/plot-types.js';
 import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipelineConfig,
 } from '../dsp/analyzer-pipeline.js';
-import { InputSourceMode } from '../dsp/dsp.worker.js';
+import { InputSourceMode, LiveMeasurementSlotConfig } from '../dsp/dsp.worker.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
   SignalGeneratorConfig,
@@ -47,15 +48,25 @@ import { DEFAULT_URL_VIEW_STATE } from '../ui/url-state.js';
 
 export const WORKSPACE_SESSION_STORAGE_KEY = 'web-sound-meter:workspace:v1';
 
-export interface HardwareRoutingSnapshot {
+export interface HardwareDeviceRoutingSnapshot {
   readonly selectedDeviceId: string;
   readonly selectedDeviceLabel: string;
-  readonly measurementChannel: number;
-  readonly referenceChannel: number;
   readonly generatorOutputChannel: number;
 }
 
-export interface WorkspaceSessionSnapshotV1 {
+export interface SerializedLiveSlot {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+  readonly visible: boolean;
+  readonly simulatorPreset: SimulatorPresetId;
+  readonly measurementChannel: number;
+  readonly referenceChannel: number;
+  readonly config: Partial<MeasurementPipelineConfig>;
+  readonly activeCalibrationId: string | null;
+}
+
+export interface WorkspaceSessionSnapshot {
   readonly version: 1;
   readonly layoutPreset: LayoutPreset;
   readonly chartPlotTypes: PlotType[];
@@ -64,17 +75,50 @@ export interface WorkspaceSessionSnapshotV1 {
   readonly splWeighting: WeightingCurve;
   readonly splTime: MeterIntegrationTime;
   readonly selectedSourceId: string;
-  readonly liveSourceVisible: boolean;
-  readonly measConfig: Partial<MeasurementPipelineConfig>;
-  readonly activeCalibrationId: string | null;
+  readonly liveSlots: LiveMeasurementSlotConfig[];
   readonly genConfig: Pick<
     SignalGeneratorConfig,
     'enabled' | 'type' | 'levelDbFs' | 'sineFrequencyHz'
   >;
-  readonly hardwareRouting: HardwareRoutingSnapshot;
+  readonly hardwareRouting: HardwareDeviceRoutingSnapshot;
 }
 
-export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshotV1 {
+function hydrateLiveSlot(
+  raw: Partial<SerializedLiveSlot>,
+  index: number
+): LiveMeasurementSlotConfig {
+  const fallback = createDefaultLiveSlot(
+    typeof raw.id === 'string' && raw.id.length > 0
+      ? raw.id
+      : index === 0
+        ? 'live-measurement'
+        : `live-${index + 1}`,
+    index
+  );
+  return {
+    id: fallback.id,
+    name: typeof raw.name === 'string' && raw.name.length > 0 ? raw.name : fallback.name,
+    color: typeof raw.color === 'string' && raw.color.length > 0 ? raw.color : fallback.color,
+    visible: typeof raw.visible === 'boolean' ? raw.visible : fallback.visible,
+    simulatorPreset: raw.simulatorPreset ?? fallback.simulatorPreset,
+    measurementChannel:
+      typeof raw.measurementChannel === 'number'
+        ? raw.measurementChannel
+        : fallback.measurementChannel,
+    referenceChannel:
+      typeof raw.referenceChannel === 'number'
+        ? raw.referenceChannel
+        : fallback.referenceChannel,
+    config: {
+      ...DEFAULT_MEASUREMENT_CONFIG,
+      ...(raw.config ?? {}),
+    },
+    activeCalibrationId:
+      typeof raw.activeCalibrationId === 'string' ? raw.activeCalibrationId : null,
+  };
+}
+
+export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
   return {
     version: 1,
     layoutPreset: DEFAULT_URL_VIEW_STATE.layoutPreset,
@@ -84,21 +128,7 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshotV1 {
     splWeighting: DEFAULT_URL_VIEW_STATE.splWeighting,
     splTime: DEFAULT_URL_VIEW_STATE.splTime,
     selectedSourceId: DEFAULT_URL_VIEW_STATE.selectedSourceId,
-    liveSourceVisible: true,
-    measConfig: {
-      fftSize: DEFAULT_MEASUREMENT_CONFIG.fftSize,
-      windowType: DEFAULT_MEASUREMENT_CONFIG.windowType,
-      averagingType: DEFAULT_MEASUREMENT_CONFIG.averagingType,
-      fifoDepth: DEFAULT_MEASUREMENT_CONFIG.fifoDepth,
-      lpfCutoffHz: DEFAULT_MEASUREMENT_CONFIG.lpfCutoffHz,
-      octaveSmoothing: DEFAULT_MEASUREMENT_CONFIG.octaveSmoothing,
-      estimator: DEFAULT_MEASUREMENT_CONFIG.estimator,
-      delayMs: DEFAULT_MEASUREMENT_CONFIG.delayMs,
-      gainDb: DEFAULT_MEASUREMENT_CONFIG.gainDb,
-      inputFilter: DEFAULT_MEASUREMENT_CONFIG.inputFilter,
-      invertPolarity: DEFAULT_MEASUREMENT_CONFIG.invertPolarity,
-    },
-    activeCalibrationId: null,
+    liveSlots: [createDefaultLiveSlot('live-measurement', 0)],
     genConfig: {
       enabled: DEFAULT_GENERATOR_CONFIG.enabled,
       type: DEFAULT_GENERATOR_CONFIG.type,
@@ -108,8 +138,6 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshotV1 {
     hardwareRouting: {
       selectedDeviceId: '',
       selectedDeviceLabel: '',
-      measurementChannel: 0,
-      referenceChannel: 1,
       generatorOutputChannel: -1,
     },
   };
@@ -125,17 +153,24 @@ function getDefaultStorage(): Storage | null {
 
 export function loadWorkspaceSession(
   storage: Pick<Storage, 'getItem'> | null = getDefaultStorage()
-): WorkspaceSessionSnapshotV1 {
+): WorkspaceSessionSnapshot {
   const defaults = createDefaultWorkspaceSession();
   if (!storage) return defaults;
 
   try {
     const raw = storage.getItem(WORKSPACE_SESSION_STORAGE_KEY);
     if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as Partial<WorkspaceSessionSnapshotV1>;
+    const parsed = JSON.parse(raw) as Partial<WorkspaceSessionSnapshot> & {
+      liveSlots?: Partial<SerializedLiveSlot>[];
+    };
     if (!parsed || parsed.version !== 1) {
       return defaults;
     }
+
+    const hydratedSlots =
+      Array.isArray(parsed.liveSlots) && parsed.liveSlots.length > 0
+        ? parsed.liveSlots.map((s, idx) => hydrateLiveSlot(s, idx))
+        : defaults.liveSlots;
 
     return {
       version: 1,
@@ -145,22 +180,11 @@ export function loadWorkspaceSession(
           ? parsed.chartPlotTypes
           : defaults.chartPlotTypes,
       audioInputMode: parsed.audioInputMode ?? defaults.audioInputMode,
-      simulatorPreset: parsed.simulatorPreset ?? defaults.simulatorPreset,
+      simulatorPreset: parsed.simulatorPreset ?? hydratedSlots[0].simulatorPreset,
       splWeighting: parsed.splWeighting ?? defaults.splWeighting,
       splTime: parsed.splTime ?? defaults.splTime,
       selectedSourceId: parsed.selectedSourceId ?? defaults.selectedSourceId,
-      liveSourceVisible:
-        typeof parsed.liveSourceVisible === 'boolean'
-          ? parsed.liveSourceVisible
-          : defaults.liveSourceVisible,
-      measConfig: {
-        ...defaults.measConfig,
-        ...(parsed.measConfig ?? {}),
-      },
-      activeCalibrationId:
-        typeof parsed.activeCalibrationId === 'string'
-          ? parsed.activeCalibrationId
-          : null,
+      liveSlots: hydratedSlots,
       genConfig: {
         ...defaults.genConfig,
         ...(parsed.genConfig ?? {}),
@@ -176,7 +200,7 @@ export function loadWorkspaceSession(
 }
 
 export function saveWorkspaceSession(
-  snapshot: WorkspaceSessionSnapshotV1,
+  snapshot: WorkspaceSessionSnapshot,
   storage: Pick<Storage, 'setItem'> | null = getDefaultStorage()
 ): void {
   if (!storage) return;

@@ -24,7 +24,15 @@ import {
   InputPreFilterType,
   MeasurementPipelineConfig,
 } from '../../dsp/analyzer-pipeline.js';
+import {
+  InputSourceMode,
+  LiveMeasurementSlotConfig,
+} from '../../dsp/dsp.worker.js';
 import { OctaveSmoothingType } from '../../dsp/smoothing.js';
+import {
+  SIMULATOR_PRESETS,
+  SimulatorPresetId,
+} from '../../dsp/synthetic-rig.js';
 import { AveragingType, TransferEstimatorType } from '../../dsp/transfer-function.js';
 import {
   WINDOW_FUNCTION_LABELS,
@@ -33,6 +41,19 @@ import {
 import { StoredCalibrationFile } from '../../sources/session-storage.js';
 
 export interface LiveMeasurementInspectorHandlers {
+  readonly slot?: LiveMeasurementSlotConfig;
+  readonly audioInputMode?: InputSourceMode;
+  readonly availableChannels?: number;
+  readonly canDeleteSlot?: boolean;
+  readonly onUpdateSlotMeta?: (
+    partial: Partial<
+      Pick<
+        LiveMeasurementSlotConfig,
+        'name' | 'simulatorPreset' | 'measurementChannel' | 'referenceChannel'
+      >
+    >
+  ) => void;
+  readonly onDeleteSlot?: () => void;
   readonly savedCalibrations?: readonly StoredCalibrationFile[];
   readonly activeCalibrationId?: string | null;
   readonly onSelectCalibration?: (calibrationId: string | null) => void;
@@ -48,15 +69,132 @@ export function renderLiveMeasurementInspector(
 ): TemplateResult {
   const savedCals = handlers.savedCalibrations ?? [];
   const activeCalId = handlers.activeCalibrationId ?? '';
+  const slot = handlers.slot;
+  const inputMode = handlers.audioInputMode ?? 'simulator';
+  const availCh = Math.max(2, handlers.availableChannels ?? 2);
+  const channelOptions = Array.from({ length: availCh }, (_, i) => i);
 
   return html`
     <div class="section-card" data-testid="inspector-live-measurement">
       <div class="section-header">
-        <span>Live Measurement Settings</span>
-        <button @click=${handlers.onResetAveraging}>Reset Avg</button>
+        <span>${slot ? `${slot.name} Settings` : 'Live Measurement Settings'}</span>
+        <div style="display:flex;gap:4px;">
+          <button @click=${handlers.onResetAveraging}>Reset Avg</button>
+          ${handlers.canDeleteSlot
+            ? html`
+                <button
+                  style="color:#f43f5e;"
+                  data-testid="btn-delete-live-slot"
+                  title="Remove this Live Measurement source"
+                  @click=${handlers.onDeleteSlot}
+                >
+                  Delete
+                </button>
+              `
+            : nothing}
+        </div>
       </div>
 
       <div class="prop-grid">
+        ${slot
+          ? html`
+              <div class="prop-field full-width">
+                <label>Measurement Name</label>
+                <input
+                  type="text"
+                  aria-label="Live Measurement Name"
+                  data-testid="input-live-slot-name"
+                  .value=${slot.name}
+                  @input=${(e: Event) =>
+                    handlers.onUpdateSlotMeta?.({
+                      name: (e.target as HTMLInputElement).value,
+                    })}
+                />
+              </div>
+
+              ${inputMode === 'simulator'
+                ? html`
+                    <div class="prop-field full-width">
+                      <label>Simulator Rig Preset</label>
+                      <select
+                        aria-label="Slot Simulator Preset"
+                        data-testid="select-live-slot-preset"
+                        .value=${slot.simulatorPreset}
+                        @change=${(e: Event) =>
+                          handlers.onUpdateSlotMeta?.({
+                            simulatorPreset: (e.target as HTMLSelectElement)
+                              .value as SimulatorPresetId,
+                          })}
+                      >
+                        ${Object.values(SIMULATOR_PRESETS).map(
+                          (preset) =>
+                            html`<option
+                              value=${preset.id}
+                              ?selected=${preset.id === slot.simulatorPreset}
+                            >
+                              ${preset.name}
+                            </option>`
+                        )}
+                      </select>
+                    </div>
+                  `
+                : html`
+                    <div class="prop-field">
+                      <label>Meas Channel (M)</label>
+                      <select
+                        aria-label="Slot Measurement Channel"
+                        data-testid="select-live-slot-meas-channel"
+                        .value=${String(slot.measurementChannel)}
+                        @change=${(e: Event) =>
+                          handlers.onUpdateSlotMeta?.({
+                            measurementChannel: Number(
+                              (e.target as HTMLSelectElement).value
+                            ),
+                          })}
+                      >
+                        ${channelOptions.map(
+                          (ch) =>
+                            html`<option
+                              value=${String(ch)}
+                              ?selected=${ch === slot.measurementChannel}
+                            >
+                              Ch ${ch + 1}
+                            </option>`
+                        )}
+                      </select>
+                    </div>
+
+                    <div class="prop-field">
+                      <label>Ref Channel (R)</label>
+                      <select
+                        aria-label="Slot Reference Channel"
+                        data-testid="select-live-slot-ref-channel"
+                        .value=${String(slot.referenceChannel)}
+                        @change=${(e: Event) =>
+                          handlers.onUpdateSlotMeta?.({
+                            referenceChannel: Number(
+                              (e.target as HTMLSelectElement).value
+                            ),
+                          })}
+                      >
+                        <option value="-1" ?selected=${slot.referenceChannel === -1}>
+                          Internal Gen Loopback
+                        </option>
+                        ${channelOptions.map(
+                          (ch) =>
+                            html`<option
+                              value=${String(ch)}
+                              ?selected=${ch === slot.referenceChannel}
+                            >
+                              Ch ${ch + 1}
+                            </option>`
+                        )}
+                      </select>
+                    </div>
+                  `}
+            `
+          : nothing}
+
         <div class="prop-field">
           <label>FFT Size</label>
           <select

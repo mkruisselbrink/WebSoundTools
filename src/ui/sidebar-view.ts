@@ -30,6 +30,7 @@ export interface SidebarViewProps {
   readonly allSources: readonly SourceData[];
   readonly selectedSourceId: string;
   readonly inspectorContent: TemplateResult;
+  readonly onAddLiveSource?: () => void;
   readonly onAddEqSource: () => void;
   readonly onAddUnionSource: () => void;
   readonly onSelectSource: (id: string) => void;
@@ -53,6 +54,17 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
         <div class="section-header">
           <span>Sources (${props.allSources.length})</span>
           <div style="display:flex;gap:4px;">
+            ${props.onAddLiveSource
+              ? html`
+                  <button
+                    data-testid="btn-add-meas"
+                    title="Add Simultaneous Live Measurement Source (M)"
+                    @click=${props.onAddLiveSource}
+                  >
+                    + Meas
+                  </button>
+                `
+              : nothing}
             <button
               data-testid="btn-add-eq"
               title="Add Virtual Parametric EQ Source"
@@ -106,4 +118,3 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
     </aside>
   `;
 }
-

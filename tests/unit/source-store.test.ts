@@ -32,14 +32,21 @@ import {
 } from '../../src/sources/source-store.js';
 import { UnionSourceConfig } from '../../src/sources/union-source.js';
 
-function createMockLiveFrame(sampleRate = 48000): SourceData {
+function createMockLiveFrame(
+  id: string = 'live-measurement',
+  name: string = 'Live Measurement',
+  magValue: number = 1.0,
+  sampleRate = 48000
+): SourceData {
   const freqData = createEmptyFrequencyDomainData(65, sampleRate);
-  freqData.magnitude.fill(1.0);
+  freqData.magnitude.fill(magValue);
+  freqData.phaseReal.fill(1.0);
+  freqData.phaseImag.fill(0.0);
   const timeData = createEmptyTimeDomainData(128, sampleRate);
-  timeData.impulse[64] = 1.0;
+  timeData.impulse[64] = magValue;
   return {
-    id: 'live-measurement',
-    name: 'Live Measurement',
+    id,
+    name,
     kind: 'measurement',
     color: '#38bdf8',
     visible: true,
@@ -95,20 +102,42 @@ function createMemoryPersistence(): {
 }
 
 describe('SourceStore', () => {
-  it('preserves live measurement visibility across incoming DSP frames', () => {
+  it('preserves per-slot live measurement visibility across incoming DSP frames and supports multiple simultaneous live sources', () => {
     const { adapter } = createMemoryPersistence();
     const store = new SourceStore(adapter);
 
-    store.setLiveFrame(createMockLiveFrame());
-    expect(store.getLiveSource()?.visible).toBe(true);
+    const f1 = createMockLiveFrame('live-measurement', 'FOH Center', 1.0);
+    const f2 = createMockLiveFrame('live-2', 'FOH Outfill', 0.5);
+    store.setLiveFrames([f1, f2]);
+    expect(store.getLiveSources()).toHaveLength(2);
+    expect(store.getLiveSource('live-measurement')?.visible).toBe(true);
+    expect(store.getLiveSource('live-2')?.visible).toBe(true);
 
-    // Hide live measurement
-    store.toggleVisibility('live-measurement', false);
-    expect(store.getLiveSource()?.visible).toBe(false);
+    // Hide second live measurement
+    store.toggleVisibility('live-2', false);
+    expect(store.getLiveSource('live-2')?.visible).toBe(false);
 
-    // Subsequent incoming frames must remain hidden
-    store.setLiveFrame(createMockLiveFrame());
-    expect(store.getLiveSource()?.visible).toBe(false);
+    // Subsequent incoming frames must preserve visibility per live slot
+    store.setLiveFrames([f1, f2]);
+    expect(store.getLiveSource('live-measurement')?.visible).toBe(true);
+    expect(store.getLiveSource('live-2')?.visible).toBe(false);
+
+    // Selecting 'live-2' makes it the active live source
+    store.setSelectedSourceId('live-2');
+    expect(store.getActiveLiveSourceId()).toBe('live-2');
+
+    // Adding a Math Union automatically defaults to averaging the active live sources
+    const union = store.addUnionSource();
+    expect(union.sourceIds).toEqual(['live-measurement', 'live-2']);
+    const evaluatedUnion = store.getAllSources().find((s) => s.id === union.id);
+    expect(evaluatedUnion).toBeDefined();
+    expect(evaluatedUnion!.freqData.magnitude[10]).toBeCloseTo(0.75, 4);
+
+    // Removing 'live-2' cleans it up and falls back active live source to 'live-measurement'
+    store.setSelectedSourceId('live-2');
+    store.removeLiveSource('live-2');
+    expect(store.getLiveSources()).toHaveLength(1);
+    expect(store.getSelectedSourceId()).toBe('live-measurement');
   });
 
   it('captures, updates, and deletes stored traces while syncing persistence', () => {

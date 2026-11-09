@@ -60,15 +60,16 @@ describe('keyboard-shortcuts', () => {
     expect(onCaptureTrace).not.toHaveBeenCalled();
   });
 
-  it('dispatches capture and delay actions for Space, C, and D outside form fields', () => {
+  it('dispatches capture, delay, and add-live-source actions for Space, C, D, and M outside form fields', () => {
     const onCaptureTrace = vi.fn();
     const onFindAndApplyDelay = vi.fn();
+    const onAddLiveSource = vi.fn();
     const preventDefault = vi.fn();
 
     expect(
       dispatchAppKeydown(
         { code: 'Space', key: ' ', target: { tagName: 'DIV' }, preventDefault },
-        { onCaptureTrace, onFindAndApplyDelay }
+        { onCaptureTrace, onFindAndApplyDelay, onAddLiveSource }
       )
     ).toBe(true);
     expect(onCaptureTrace).toHaveBeenCalledTimes(1);
@@ -77,10 +78,18 @@ describe('keyboard-shortcuts', () => {
     expect(
       dispatchAppKeydown(
         { key: 'd', target: { tagName: 'DIV' }, preventDefault },
-        { onCaptureTrace, onFindAndApplyDelay }
+        { onCaptureTrace, onFindAndApplyDelay, onAddLiveSource }
       )
     ).toBe(true);
     expect(onFindAndApplyDelay).toHaveBeenCalledTimes(1);
+
+    expect(
+      dispatchAppKeydown(
+        { key: 'm', target: { tagName: 'DIV' }, preventDefault },
+        { onCaptureTrace, onFindAndApplyDelay, onAddLiveSource }
+      )
+    ).toBe(true);
+    expect(onAddLiveSource).toHaveBeenCalledTimes(1);
   });
 });
 

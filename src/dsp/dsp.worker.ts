@@ -137,7 +137,7 @@ function getOrCreateSlotRuntime(slotId: string): LiveSlotRuntime {
       rt = slots.values().next().value!;
     }
   }
-  return rt;
+  return rt!;
 }
 
 // Initialize primary slot immediately
