@@ -150,7 +150,7 @@ export class HardwareAudioRouter {
     this.setActivePhysicalChannels(options.activePhysicalChannels);
 
     if (!this.audioContext) {
-      this.audioContext = new AudioContext({ sampleRate: 48000 });
+      this.audioContext = new AudioContext({ latencyHint: 'interactive' });
       this.workletModuleLoaded = false;
     }
     if (!this.workletModuleLoaded) {

@@ -249,6 +249,8 @@ export class ChartPanelElement extends LitElement {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    this.glRenderer?.dispose();
+    this.glRenderer = null;
   }
 
   protected firstUpdated(): void {
@@ -329,7 +331,7 @@ export class ChartPanelElement extends LitElement {
 
   private resetZoom = (): void => {
     this.applyDefaultBoundsForPlot(this.plotType);
-    this.drawFrame();
+    this.scheduleDrawFrame();
   };
 
   private zoomY = (factor: number): void => {

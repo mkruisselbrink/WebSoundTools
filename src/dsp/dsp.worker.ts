@@ -138,19 +138,24 @@ function createDefaultPrimarySlot(): LiveMeasurementSlotConfig {
 function getOrCreateSlotRuntime(slotId: string): LiveSlotRuntime {
   let rt = slots.get(slotId);
   if (!rt) {
-    if (slots.size === 0) {
-      const def = createDefaultPrimarySlot();
-      rt = {
-        slot: def,
-        pipeline: new MeasurementPipeline({ ...def.config, sampleRate }),
-        simulatorRig: new SyntheticAcousticRig(sampleRate, def.simulatorPreset),
-      };
-      slots.set(def.id, rt);
-    } else {
-      rt = slots.values().next().value!;
-    }
+    const primary = slots.values().next().value;
+    const def = createDefaultPrimarySlot();
+    const sharedPartial = primary
+      ? splitMeasurementConfigPartial(primary.slot.config).sharedPartial
+      : {};
+    const slotCfg: LiveMeasurementSlotConfig = {
+      ...def,
+      id: slotId,
+      config: { ...def.config, ...sharedPartial, sampleRate },
+    };
+    rt = {
+      slot: slotCfg,
+      pipeline: new MeasurementPipeline(slotCfg.config),
+      simulatorRig: new SyntheticAcousticRig(sampleRate, slotCfg.simulatorPreset),
+    };
+    slots.set(slotCfg.id, rt);
   }
-  return rt!;
+  return rt;
 }
 
 // Initialize primary slot immediately

@@ -94,8 +94,11 @@ export class GlTraceRenderer {
     gl.attachShader(prog, vs);
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
 
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      gl.deleteProgram?.(prog);
       return;
     }
 
@@ -145,14 +148,33 @@ export class GlTraceRenderer {
   ): void {
     if (!this.gl) return;
     const gl = this.gl;
-    gl.viewport(
-      plotLeftPx,
-      canvasHeightPx - plotTopPx - plotHeightPx,
-      plotWidthPx,
-      plotHeightPx
-    );
+    const yBottom = canvasHeightPx - plotTopPx - plotHeightPx;
+    gl.viewport(plotLeftPx, yBottom, plotWidthPx, plotHeightPx);
+    if (typeof gl.scissor === 'function') {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(plotLeftPx, yBottom, plotWidthPx, plotHeightPx);
+    }
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  dispose(): void {
+    if (!this.gl) return;
+    const gl = this.gl;
+    if (this.vbo) {
+      gl.deleteBuffer?.(this.vbo);
+      this.vbo = null;
+    }
+    if (this.vao) {
+      gl.deleteVertexArray?.(this.vao);
+      this.vao = null;
+    }
+    if (this.program) {
+      gl.deleteProgram?.(this.program);
+      this.program = null;
+    }
+    this.uColorLoc = null;
+    this.gl = null;
   }
 
   drawTrace(

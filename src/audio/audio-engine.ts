@@ -126,6 +126,7 @@ export class AudioEngine {
   private ringBufferStorage: RingBufferStorage | null = null;
 
   private inputMode: InputSourceMode = 'simulator';
+  private inputModeSwitchSeq: number = 0;
   private globalReferenceChannel: number = 1; // Default physical In Ch 2 (0-based index 1)
   private liveSlots: LiveMeasurementSlotConfig[] = [createDefaultLiveSlot()];
   private readonly latestFramesById = new Map<string, SourceData>();
@@ -478,6 +479,7 @@ export class AudioEngine {
     refChannel?: number,
     slotId: string = this.liveSlots[0].id
   ): Promise<void> {
+    const switchSeq = ++this.inputModeSwitchSeq;
     this.inputMode = mode;
     if (measChannel !== undefined || refChannel !== undefined) {
       const slot = this.getLiveSlot(slotId);
@@ -510,14 +512,23 @@ export class AudioEngine {
         },
       });
 
+      if (switchSeq !== this.inputModeSwitchSeq) {
+        if (this.inputMode === 'simulator') {
+          this.hardwareRouter.stopStream();
+        }
+        return;
+      }
+
       this.syncSlotsToRouterAndWorker();
       if (hwSampleRate !== this.liveSlots[0].config.sampleRate) {
         this.updateMeasurementConfig({ sampleRate: hwSampleRate }, this.liveSlots[0].id);
       }
       this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
     } catch (err) {
-      this.inputMode = 'simulator';
-      this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
+      if (switchSeq === this.inputModeSwitchSeq) {
+        this.inputMode = 'simulator';
+        this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
+      }
       throw err;
     }
   }
