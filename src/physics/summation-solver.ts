@@ -58,6 +58,8 @@ import {
   type Vec3,
 } from './transform3d.js';
 
+const LN10_OVER_20 = Math.LN10 / 20;
+
 export interface ActiveRadiator {
   readonly id: string;
   readonly label: string;
@@ -120,7 +122,6 @@ export interface SectionGridResult {
 
 interface EvaluationBands {
   readonly frequenciesHz: Float32Array;
-  /** Linear energy weights `10^((W_prog + W_IEC) / 10)` normalized so unweighted flat 0 dB sums sensibly. */
   readonly energyWeights: Float32Array;
   readonly airAbsorptionDbPerM: Float32Array;
   readonly wavenumbersRadPerM: Float32Array;
@@ -280,7 +281,6 @@ function buildEvaluationBands(
     if (freqs.length === 0) {
       freqs = [1000];
     }
-    // Normalize program energy across N bands so broadband total equals single-source broadband rating
     const bandNorm = 1 / freqs.length;
     weights = freqs.map((f) => {
       let progDb = 0;
@@ -309,10 +309,18 @@ function buildEvaluationBands(
   };
 }
 
+/**
+ * Precomputed per-radiator lookup table baking `P_drive_1m * H_DSP(f_k) * D_onAxis(f_k)`
+ * AND interpolating the balloon's `M * P` off-axis linear amplitude slice onto each evaluation
+ * frequency `f_k` ONCE per frame, turning per-pixel evaluation into pure Float32 table reads!
+ */
 interface PrecomputedRadiatorFreqTable {
   readonly radiator: ActiveRadiator;
-  /** Complex `P_drive_1m * H_DSP(f_k)` per evaluation frequency [2 * F]. */
-  readonly driveDspReIm: Float64Array;
+  /** Complex `P_drive_1m * H_DSP(f_k) * D_onAxis(f_k)` [2 * F]. */
+  readonly onAxisDriveReIm: Float64Array;
+  /** Pre-baked linear directional gain `10^(attDb / 20)` per `[k * M * P + m * P + p]`. */
+  readonly offAxisLinGain: Float32Array;
+  readonly hasOffAxisPhase: boolean;
 }
 
 function precomputeRadiatorTables(
@@ -320,16 +328,209 @@ function precomputeRadiatorTables(
   frequenciesHz: Float32Array
 ): PrecomputedRadiatorFreqTable[] {
   const F = frequenciesHz.length;
+
   return radiators.map((rad) => {
-    const driveLin = Math.pow(10, rad.drive1mDbSpl / 20);
-    const driveDspReIm = new Float64Array(F * 2);
+    const balloon = rad.balloon;
+    const M = balloon.meridianAnglesDeg.length;
+    const P = balloon.polarAnglesDeg.length;
+    const sliceSize = M * P;
+    const driveLin = Math.exp(rad.drive1mDbSpl * LN10_OVER_20);
+
+    const onAxisDriveReIm = new Float64Array(F * 2);
+    const offAxisLinGain = new Float32Array(F * sliceSize);
+
     for (let k = 0; k < F; k++) {
-      const h = evaluateCompiledDspAtFrequency(rad.dspChain, frequenciesHz[k]);
-      driveDspReIm[k * 2] = h.re * driveLin;
-      driveDspReIm[k * 2 + 1] = h.im * driveLin;
+      const freq = frequenciesHz[k];
+      const hDsp = evaluateCompiledDspAtFrequency(rad.dspChain, freq);
+      const onAxis = sampleDirectivityBalloon(balloon, 0, 0, freq);
+
+      // Combine driveLin * H_DSP(f) * D_onAxis(f)
+      const cRe =
+        (hDsp.re * onAxis.linearComplex.re - hDsp.im * onAxis.linearComplex.im) * driveLin;
+      const cIm =
+        (hDsp.re * onAxis.linearComplex.im + hDsp.im * onAxis.linearComplex.re) * driveLin;
+      onAxisDriveReIm[k * 2] = cRe;
+      onAxisDriveReIm[k * 2 + 1] = cIm;
+
+      // Find bounding frequency indices in balloon once for this band k
+      const bFreqs = balloon.frequenciesHz;
+      const bN = bFreqs.length;
+      let f0 = 0;
+      let f1 = 0;
+      let tf = 0;
+      if (bN > 1 && freq > bFreqs[0]) {
+        if (freq >= bFreqs[bN - 1]) {
+          f0 = bN - 1;
+          f1 = bN - 1;
+        } else {
+          let lo = 0;
+          let hi = bN - 1;
+          while (hi - lo > 1) {
+            const mid = (lo + hi) >>> 1;
+            if (bFreqs[mid] <= freq) lo = mid;
+            else hi = mid;
+          }
+          f0 = lo;
+          f1 = hi;
+          const span = Math.log(bFreqs[hi] / bFreqs[lo]);
+          tf = span > 1e-9 ? Math.log(freq / bFreqs[lo]) / span : 0;
+        }
+      }
+
+      const base0 = f0 * sliceSize;
+      const base1 = f1 * sliceSize;
+      const dstBase = k * sliceSize;
+      const att = balloon.attenuationDb;
+
+      for (let idx = 0; idx < sliceSize; idx++) {
+        const a0 = att[base0 + idx];
+        const attDb = f0 === f1 ? a0 : a0 + (att[base1 + idx] - a0) * tf;
+        offAxisLinGain[dstBase + idx] = Math.exp(attDb * LN10_OVER_20);
+      }
     }
-    return { radiator: rad, driveDspReIm };
+
+    return {
+      radiator: rad,
+      onAxisDriveReIm,
+      offAxisLinGain,
+      hasOffAxisPhase: Boolean(balloon.offAxisPhaseRad),
+    };
   });
+}
+
+function findGridInterp(
+  grid: Float32Array,
+  val: number
+): { i0: number; i1: number; t: number } {
+  const n = grid.length;
+  if (n <= 1 || val <= grid[0]) return { i0: 0, i1: 0, t: 0 };
+  if (val >= grid[n - 1]) return { i0: n - 1, i1: n - 1, t: 0 };
+
+  // Fast O(1) uniform-step check (almost all balloons use uniform 5 deg / 10 deg grids)
+  const step = (grid[n - 1] - grid[0]) / (n - 1);
+  if (step > 1e-6) {
+    const pos = (val - grid[0]) / step;
+    const idx = Math.min(n - 2, Math.max(0, Math.floor(pos)));
+    if (grid[idx] <= val && val <= grid[idx + 1]) {
+      const span = grid[idx + 1] - grid[idx];
+      return { i0: idx, i1: idx + 1, t: span > 1e-9 ? (val - grid[idx]) / span : 0 };
+    }
+  }
+
+  let lo = 0;
+  let hi = n - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >>> 1;
+    if (grid[mid] <= val) lo = mid;
+    else hi = mid;
+  }
+  const span = grid[hi] - grid[lo];
+  return { i0: lo, i1: hi, t: span > 1e-9 ? (val - grid[lo]) / span : 0 };
+}
+
+function accumulateRayContribution(
+  entry: PrecomputedRadiatorFreqTable,
+  distanceM: number,
+  polarDeg: number,
+  meridianDeg: number,
+  reflectionScale: number,
+  bands: EvaluationBands,
+  sumScratchRe: Float64Array,
+  sumScratchIm: Float64Array
+): void {
+  const rad = entry.radiator;
+  const balloon = rad.balloon;
+  const F = bands.frequenciesHz.length;
+  const invDist = reflectionScale / distanceM;
+
+  if (entry.hasOffAxisPhase) {
+    const driveLin = Math.exp(rad.drive1mDbSpl * LN10_OVER_20);
+    for (let k = 0; k < F; k++) {
+      const freq = bands.frequenciesHz[k];
+      const bSample = sampleDirectivityBalloon(balloon, polarDeg, meridianDeg, freq);
+      const hDsp = evaluateCompiledDspAtFrequency(rad.dspChain, freq);
+      const airGain = Math.exp(-bands.airAbsorptionDbPerM[k] * distanceM * LN10_OVER_20);
+      const pathScale = invDist * airGain * driveLin;
+
+      const kDist = -bands.wavenumbersRadPerM[k] * distanceM;
+      const propRe = Math.cos(kDist) * pathScale;
+      const propIm = Math.sin(kDist) * pathScale;
+
+      const dhRe = bSample.linearComplex.re * hDsp.re - bSample.linearComplex.im * hDsp.im;
+      const dhIm = bSample.linearComplex.re * hDsp.im + bSample.linearComplex.im * hDsp.re;
+      sumScratchRe[k] += dhRe * propRe - dhIm * propIm;
+      sumScratchIm[k] += dhRe * propIm + dhIm * propRe;
+    }
+    return;
+  }
+
+  // Fast O(1) angle interpolation shared across ALL F frequency bands!
+  const clampedPolar = Math.max(0, Math.min(180, polarDeg));
+  const { i0: p0, i1: p1, t: tp } = findGridInterp(balloon.polarAnglesDeg, clampedPolar);
+
+  let foldedM = meridianDeg % 360;
+  if (foldedM < 0) foldedM += 360;
+  if (balloon.symmetry === 'axial') {
+    foldedM = 0;
+  } else if (balloon.symmetry === 'quadrant') {
+    if (foldedM > 270) foldedM = 360 - foldedM;
+    else if (foldedM > 180) foldedM = foldedM - 180;
+    else if (foldedM > 90) foldedM = 180 - foldedM;
+  }
+
+  const mGrid = balloon.meridianAnglesDeg;
+  const M = mGrid.length;
+  const P = balloon.polarAnglesDeg.length;
+  let m0 = 0;
+  let m1 = 0;
+  let tm = 0;
+  if (M > 1) {
+    if (balloon.symmetry === 'none' && foldedM > mGrid[M - 1]) {
+      m0 = M - 1;
+      m1 = 0;
+      const span = 360 - mGrid[M - 1] + mGrid[0];
+      tm = span > 1e-9 ? (foldedM - mGrid[M - 1]) / span : 0;
+    } else {
+      const mb = findGridInterp(mGrid, foldedM);
+      m0 = mb.i0;
+      m1 = mb.i1;
+      tm = mb.t;
+    }
+  }
+
+  const w00 = (1 - tm) * (1 - tp);
+  const w01 = (1 - tm) * tp;
+  const w10 = tm * (1 - tp);
+  const w11 = tm * tp;
+  const off00 = m0 * P + p0;
+  const off01 = m0 * P + p1;
+  const off10 = m1 * P + p0;
+  const off11 = m1 * P + p1;
+  const sliceSize = M * P;
+
+  const onAxisReIm = entry.onAxisDriveReIm;
+  const offLin = entry.offAxisLinGain;
+
+  for (let k = 0; k < F; k++) {
+    const base = k * sliceSize;
+    const dirGain =
+      w00 * offLin[base + off00] +
+      w01 * offLin[base + off01] +
+      w10 * offLin[base + off10] +
+      w11 * offLin[base + off11];
+
+    const airGain = Math.exp(-bands.airAbsorptionDbPerM[k] * distanceM * LN10_OVER_20);
+    const scale = invDist * airGain * dirGain;
+
+    const phase = -bands.wavenumbersRadPerM[k] * distanceM;
+    const propRe = Math.cos(phase) * scale;
+    const propIm = Math.sin(phase) * scale;
+
+    const sRe = onAxisReIm[k * 2];
+    const sIm = onAxisReIm[k * 2 + 1];
+    sumScratchRe[k] += sRe * propRe - sIm * propIm;
+    sumScratchIm[k] += sRe * propIm + sIm * propRe;
+  }
 }
 
 /**
@@ -353,66 +554,32 @@ export function evaluatePointSplDb(
   for (let rIdx = 0; rIdx < tables.length; rIdx++) {
     const entry = tables[rIdx];
     const rad = entry.radiator;
-    const dspReIm = entry.driveDspReIm;
 
-    // 1. Direct path
     const dir = computeLocalDirection(rad.position, rad.basis, receptor);
-    const invDist = 1 / dir.distanceM;
+    accumulateRayContribution(
+      entry,
+      dir.distanceM,
+      dir.polarDeg,
+      dir.meridianDeg,
+      1.0,
+      bands,
+      sumScratchRe,
+      sumScratchIm
+    );
 
-    for (let k = 0; k < F; k++) {
-      const freq = bands.frequenciesHz[k];
-      const bSample = sampleDirectivityBalloon(rad.balloon, dir.polarDeg, dir.meridianDeg, freq);
-      const airGain = Math.pow(10, (-bands.airAbsorptionDbPerM[k] * dir.distanceM) / 20);
-      const pathScale = invDist * airGain;
-
-      const kDist = -bands.wavenumbersRadPerM[k] * dir.distanceM;
-      const propRe = Math.cos(kDist) * pathScale;
-      const propIm = Math.sin(kDist) * pathScale;
-
-      // D * prop
-      const dRe = bSample.linearComplex.re;
-      const dIm = bSample.linearComplex.im;
-      const dpRe = dRe * propRe - dIm * propIm;
-      const dpIm = dRe * propIm + dIm * propRe;
-
-      // * (drive * H_DSP)
-      const sRe = dspReIm[k * 2];
-      const sIm = dspReIm[k * 2 + 1];
-      sumScratchRe[k] += dpRe * sRe - dpIm * sIm;
-      sumScratchIm[k] += dpRe * sIm + dpIm * sRe;
-    }
-
-    // 2. Planar image-source reflections (e.g. ground bounce)
     for (let m = 0; m < rad.imagePoses.length; m++) {
       const img = rad.imagePoses[m];
       const imgDir = computeLocalDirection(img.pose.position, img.pose.basis, receptor);
-      const imgInvDist = img.reflectionFactor / imgDir.distanceM;
-
-      for (let k = 0; k < F; k++) {
-        const freq = bands.frequenciesHz[k];
-        const bSample = sampleDirectivityBalloon(
-          rad.balloon,
-          imgDir.polarDeg,
-          imgDir.meridianDeg,
-          freq
-        );
-        const airGain = Math.pow(10, (-bands.airAbsorptionDbPerM[k] * imgDir.distanceM) / 20);
-        const pathScale = imgInvDist * airGain;
-
-        const kDist = -bands.wavenumbersRadPerM[k] * imgDir.distanceM;
-        const propRe = Math.cos(kDist) * pathScale;
-        const propIm = Math.sin(kDist) * pathScale;
-
-        const dRe = bSample.linearComplex.re;
-        const dIm = bSample.linearComplex.im;
-        const dpRe = dRe * propRe - dIm * propIm;
-        const dpIm = dRe * propIm + dIm * propRe;
-
-        const sRe = dspReIm[k * 2];
-        const sIm = dspReIm[k * 2 + 1];
-        sumScratchRe[k] += dpRe * sRe - dpIm * sIm;
-        sumScratchIm[k] += dpRe * sIm + dpIm * sRe;
-      }
+      accumulateRayContribution(
+        entry,
+        imgDir.distanceM,
+        imgDir.polarDeg,
+        imgDir.meridianDeg,
+        img.reflectionFactor,
+        bands,
+        sumScratchRe,
+        sumScratchIm
+      );
     }
   }
 
