@@ -1,0 +1,20 @@
+{
+  "name": "WebSpeakerSim — Live Sound Loudspeaker & SPL Prediction",
+  "short_name": "WebSpeakerSim",
+  "description": "Browser-based 3D live-sound loudspeaker placement, subwoofer array design, and direct-field SPL/phase prediction tool.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060911",
+  "theme_color": "#060911",
+  "categories": ["music", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

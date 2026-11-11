@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1120" />
+      <stop offset="100%" stop-color="#060911" />
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)" stroke="#1e293b" stroke-width="12" />
+  <!-- Speaker Enclosure -->
+  <polygon points="84,200 132,200 184,160 184,352 132,312 84,312" fill="#1e293b" stroke="#38bdf8" stroke-width="12" stroke-linejoin="round" />
+  <!-- Acoustic Dispersion Isobars -->
+  <path d="M 232 184 A 110 110 0 0 1 232 328" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round" />
+  <path d="M 296 144 A 176 176 0 0 1 296 368" fill="none" stroke="#f59e0b" stroke-width="16" stroke-linecap="round" />
+  <path d="M 364 104 A 244 244 0 0 1 364 408" fill="none" stroke="url(#wave)" stroke-width="16" stroke-linecap="round" />
+</svg>
