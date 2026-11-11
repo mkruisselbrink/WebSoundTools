@@ -28,7 +28,7 @@ WebSoundMeter/
 ├── LICENSE                              # GNU General Public License v3.0 (GPLv3)
 ├── public/
 │   ├── manifest.webmanifest             # PWA installability manifest
-│   └── icons/                           # Vector (SVG) and raster (192/512/maskable PNG) app icons
+│   └── icons/                           # Vector (SVG) and raster (192/512 PNG) app icons
 ├── docs/
 │   ├── 01-overview-and-comparison.md
 │   ├── 02-architecture-and-dsp-design.md
