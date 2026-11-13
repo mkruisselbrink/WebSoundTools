@@ -70,3 +70,4 @@ export function withCrossOriginIsolationHeaders(response: Response): Response {
     headers,
   });
 }
+

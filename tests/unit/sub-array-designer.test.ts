@@ -156,3 +156,4 @@ describe('sub-array-designer', () => {
     expect(rec.recommendedInvertPolarity).toBe(true);
   });
 });
+

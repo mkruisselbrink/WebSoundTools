@@ -150,3 +150,4 @@ export function getBuiltinSpeakers(): SpeakerDefinition[] {
 export function getBuiltinSpeakerById(id: string): SpeakerDefinition | undefined {
   return getBuiltinSpeakerMap().get(id);
 }
+

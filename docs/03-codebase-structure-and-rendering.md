@@ -106,3 +106,4 @@ Both `<wss-viewport-panel>` and `<wss-chart-panel>` stack two synchronized `<can
    - Evaluates a perceptually distinct acoustic false-color colormap (e.g., `70 dB` deep navy $\rightarrow$ cyan $\rightarrow$ green $\rightarrow$ yellow $\rightarrow$ orange $\rightarrow$ `110+ dB` crimson/magenta), masks pixels outside active venue/section bounds, and draws crisp anti-aliased `3 dB` / `6 dB` isobar contour lines via screen-space derivatives (`fwidth`).
 2. **Top Layer (`CanvasRenderingContext2D`):**
    - Renders crisp vector geometry, metric grid ticks, audience zone outlines, speaker enclosures with nominal $-6\text{ dB}$ dispersion wedges, virtual microphone pins, section cut lines, and hover SPL/coordinate readouts.
+

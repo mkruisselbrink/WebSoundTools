@@ -662,3 +662,4 @@ function drawRulerOverlay(
 function formatMeterTick(v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
+

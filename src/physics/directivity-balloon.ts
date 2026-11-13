@@ -506,3 +506,4 @@ export function synthesizeParametricBalloon(config: ParametricBalloonConfig): Di
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
+

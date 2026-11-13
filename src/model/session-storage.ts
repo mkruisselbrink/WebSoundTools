@@ -239,3 +239,4 @@ export class SessionStorageRepository {
     return rows.sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso));
   }
 }
+

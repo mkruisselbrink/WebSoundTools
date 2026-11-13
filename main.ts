@@ -22,3 +22,4 @@ import { registerOfflineServiceWorker } from './src/pwa/register-sw.js';
 import './src/ui/app-shell.js';
 
 void registerOfflineServiceWorker();
+

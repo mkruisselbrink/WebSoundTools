@@ -278,3 +278,4 @@ function estimateMinus6DbBeamwidth(
   }
   return 90;
 }
+

@@ -44,3 +44,4 @@ workerSelf.onmessage = (event: MessageEvent<SimulationWorkerRequest>) => {
     workerSelf.postMessage(response, transfer);
   }
 };
+

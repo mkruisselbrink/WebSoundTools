@@ -96,3 +96,4 @@ Given $N$ subwoofers arrayed laterally along $Y \in [-W/2, +W/2]$ at $X = x_0$ a
 - Each cabinet at $y_n$ receives delay:
   $$\tau_n = \frac{\sqrt{R_{\text{arc}}^2 + y_n^2} - R_{\text{arc}}}{c}$$
   curving the wavefront symmetrically without physically moving heavy enclosures.
+

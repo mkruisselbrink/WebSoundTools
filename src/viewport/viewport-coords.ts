@@ -166,3 +166,4 @@ export function sampleScalarGridBilinear(
   const bot = v01 + (v11 - v01) * tx;
   return top + (bot - top) * ty;
 }
+

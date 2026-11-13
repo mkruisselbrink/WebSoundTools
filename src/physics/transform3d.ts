@@ -250,3 +250,4 @@ export const DEFAULT_GROUND_REFLECTOR: PlanarReflector = {
   reflectionFactor: 0.9,
   enabled: true,
 };
+

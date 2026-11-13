@@ -148,3 +148,4 @@ export function collectResponseTransferables(res: SimulationWorkerResponse): Arr
   }
   return Array.from(buffers);
 }
+

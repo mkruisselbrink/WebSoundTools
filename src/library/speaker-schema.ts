@@ -74,3 +74,4 @@ export interface SpeakerDefinition {
   readonly presets?: readonly SpeakerPresetEntry[];
   readonly balloon: DirectivityBalloon;
 }
+

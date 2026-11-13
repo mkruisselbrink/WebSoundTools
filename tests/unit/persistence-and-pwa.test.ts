@@ -165,3 +165,4 @@ describe('3-Tier Persistence & Offline PWA Core', () => {
     expect(wrapped.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
   });
 });
+

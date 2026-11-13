@@ -55,3 +55,4 @@ To maintain interactive 60 FPS manipulation while preserving fine frequency-doma
 ## 4. Licensing
 
 `WebSpeakerSim` is licensed under the **GNU General Public License v3.0 or later (`GPL-3.0-or-later`)**. All acoustic physics, 3D geometry, DSP filter math, and file parsers are implemented in clean, self-contained TypeScript over `Float32Array` buffers from published physical standards (ISO 9613-1, IEC 61672 weighting curves, classical piston/horn radiation theory, and RBJ Audio EQ Cookbook biquad transfer functions).
+

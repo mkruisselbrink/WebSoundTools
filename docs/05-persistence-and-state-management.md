@@ -30,3 +30,4 @@ Continuous slider or CAD drag interactions pass a `transactionKey` (e.g., `'drag
 Live-sound system preparation frequently takes place in arenas, basements, or festival fields without reliable network connectivity:
 - `vite.config.ts` emits a deterministic build-hashed `sw.js` precaching `index.html`, `manifest.webmanifest`, icons, and all compiled JS/Worker chunks.
 - Every cached response preserves `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers so `SharedArrayBuffer` (when used for zero-copy grid transfer) remains enabled even when launched 100% offline from the OS dock or home screen.
+

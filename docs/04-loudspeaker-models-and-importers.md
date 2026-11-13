@@ -77,3 +77,4 @@ All file imports run 100% locally in the browser and persist imported `SpeakerDe
 ### 4.2 Polar Text `.clf` & `.frd` / CSV Importers (`clf-importer.ts`, `frd-importer.ts`)
 - **`.clf` Tab-Delimited Text:** Parses metadata headers (`<CABINET>`, `<SENSITIVITY>`, `<MAXSPL>`, `<SYMMETRY>`) and horizontal/vertical/spherical band attenuation tables.
 - **`.frd` / CSV:** Imports single on-axis magnitude/phase `.frd` files (paired with parametric dispersion) or multi-angle polar `.frd` sets (`0 deg` .. `180 deg`) interpolated onto the 3D `DirectivityBalloon` grid.
+

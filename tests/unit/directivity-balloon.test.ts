@@ -86,3 +86,4 @@ describe('directivity-balloon & speaker library', () => {
     expect(cardFront - cardRear).toBeGreaterThan(15);
   });
 });
+

@@ -188,3 +188,4 @@ export function evaluateSurfaceListenerZ(
   const deckZ = surface.zStart + (surface.zEnd - surface.zStart) * u;
   return deckZ + surface.earHeightM;
 }
+

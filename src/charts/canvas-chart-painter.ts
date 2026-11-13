@@ -314,3 +314,4 @@ function paintSplHistogram(ctx: CanvasRenderingContext2D, params: ChartPaintPara
     ctx.setLineDash([]);
   }
 }
+

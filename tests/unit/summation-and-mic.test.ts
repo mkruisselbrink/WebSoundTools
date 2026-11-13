@@ -177,3 +177,4 @@ describe('summation-solver & virtual-mic-solver', () => {
     expect(res.stats.maxAudienceSplDb).toBeGreaterThan(res.stats.minAudienceSplDb);
   });
 });
+

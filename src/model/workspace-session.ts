@@ -109,3 +109,4 @@ export function clearWorkspaceSession(storage?: StorageLike): void {
   const target = resolveDefaultStorage(storage);
   target?.removeItem(WORKSPACE_STORAGE_KEY);
 }
+

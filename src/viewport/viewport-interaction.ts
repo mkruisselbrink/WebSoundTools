@@ -348,3 +348,4 @@ export class ViewportGestureController {
 function roundStep(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
+

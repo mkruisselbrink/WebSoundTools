@@ -123,3 +123,4 @@ export function replaceBrowserUrlState(state: UrlViewState): void {
   const nextUrl = `${window.location.pathname}${query}${window.location.hash}`;
   window.history.replaceState(null, '', nextUrl);
 }
+

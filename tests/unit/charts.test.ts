@@ -34,3 +34,4 @@ describe('chart plot-types & SPL histogram', () => {
     expect(sumPct).toBeCloseTo(100, 3);
   });
 });
+

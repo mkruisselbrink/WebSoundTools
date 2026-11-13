@@ -351,3 +351,4 @@ function normalizeDeg(deg: number): number {
   if (d <= -180) d += 360;
   return d;
 }
+

@@ -377,3 +377,4 @@ export function evaluateCompiledDspAtFrequency(
     im: filterH.re * rotIm + filterH.im * rotRe,
   };
 }
+
