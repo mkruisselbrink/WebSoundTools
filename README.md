@@ -76,6 +76,22 @@ npm run test:e2e
 
 ---
 
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Cmd / Ctrl + Z` | Undo last scene edit |
+| `Cmd / Ctrl + Shift + Z` / `Ctrl + Y` | Redo scene edit |
+| `P` | Add Point-Source Loudspeaker |
+| `S` | Add Subwoofer Array |
+| `M` | Add Virtual Measurement Microphone |
+| `G` | Toggle 1st-Order Ground Reflection |
+| `L` | Open Loudspeaker Library, Spec Builder & Importer |
+| `1` / `2` / `3` | Switch Layout (`Split` / `Plan Only` / `Section Only`) |
+| `Escape` | Close modal or clear active selection |
+
+---
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see [`LICENSE`](./LICENSE) for details.

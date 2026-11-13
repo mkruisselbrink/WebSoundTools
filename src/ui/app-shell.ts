@@ -82,6 +82,8 @@ export class WebSpeakerSimApp extends LitElement {
   // Counter incremented on store notifications to trigger Lit re-render
   @state() private storeRevision = 0;
 
+  private isSceneModified = false;
+  private isLoadingPreset = false;
   private unsubStore: (() => void) | null = null;
   private unsubSim: (() => void) | null = null;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,6 +131,7 @@ export class WebSpeakerSimApp extends LitElement {
       initialScene = getDemoPresetById(urlState.presetId).createScene();
     } else if (savedSession) {
       initialScene = savedSession.scene;
+      this.isSceneModified = true;
       if (savedSession.activePresetId) {
         this.activePresetId = savedSession.activePresetId;
       }
@@ -156,6 +159,9 @@ export class WebSpeakerSimApp extends LitElement {
 
     this.unsubStore = this.store.subscribe((changeKind) => {
       this.storeRevision++;
+      if (changeKind === 'scene' && !this.isLoadingPreset) {
+        this.isSceneModified = true;
+      }
       if (changeKind === 'scene' || changeKind === 'colormap') {
         this.scheduleAutosave();
       }
@@ -216,7 +222,7 @@ export class WebSpeakerSimApp extends LitElement {
 
   private syncUrlBar(): void {
     replaceBrowserUrlState({
-      presetId: this.activePresetId,
+      presetId: this.isSceneModified ? undefined : this.activePresetId,
       bandSelection: this.store.scene.bandSelection,
       layoutMode: this.layoutMode,
     });
@@ -238,7 +244,13 @@ export class WebSpeakerSimApp extends LitElement {
 
   private handleSelectPreset(presetId: string): void {
     this.activePresetId = presetId;
-    this.store.loadPreset(presetId);
+    this.isSceneModified = false;
+    this.isLoadingPreset = true;
+    try {
+      this.store.loadPreset(presetId);
+    } finally {
+      this.isLoadingPreset = false;
+    }
     this.syncUrlBar();
     this.scheduleAutosave();
     this.showToast(`Loaded venue preset: ${this.store.scene.name}`);
