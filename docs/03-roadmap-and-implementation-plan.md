@@ -34,7 +34,9 @@ WebSoundMeter/
 │   ├── 02-architecture-and-dsp-design.md
 │   ├── 03-roadmap-and-implementation-plan.md
 │   ├── 04-testing-and-simulation-design.md
-│   └── 05-persistence-and-state-management.md
+│   ├── 05-persistence-and-state-management.md
+│   ├── 06-spl-history-and-logging.md
+│   └── 07-feedback-detection-design.md
 ├── src/
 │   ├── main.ts                          # Application bootstrap & Service Worker registration
 │   ├── pwa/

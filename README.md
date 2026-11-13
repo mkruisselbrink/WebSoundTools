@@ -55,6 +55,8 @@ Detailed architecture and design documentation is available in [`docs/`](./docs/
 - [`docs/03-roadmap-and-implementation-plan.md`](./docs/03-roadmap-and-implementation-plan.md)
 - [`docs/04-testing-and-simulation-design.md`](./docs/04-testing-and-simulation-design.md)
 - [`docs/05-persistence-and-state-management.md`](./docs/05-persistence-and-state-management.md)
+- [`docs/06-spl-history-and-logging.md`](./docs/06-spl-history-and-logging.md)
+- [`docs/07-feedback-detection-design.md`](./docs/07-feedback-detection-design.md)
 
 ---
 
