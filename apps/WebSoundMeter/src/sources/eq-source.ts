@@ -5,10 +5,9 @@
 /**
  * Virtual Parametric Equalizer, Delay, Polarity & Crossover Modeling Source (`src/sources/eq-source.ts`).
  *
- * Upgraded to full `@foh/dsp` `SourceDspConfig` (Gain, Electronic Delay e^{-j*omega*tau},
+ * Evaluates a complete `@foh/dsp` `SourceDspConfig` chain (Gain, Electronic Delay e^{-j*omega*tau},
  * Polarity Inversion, Mute, Butterworth/Linkwitz-Riley 12–48 dB/oct HPF/LPF Crossovers,
- * and Parametric EQ bands evaluated at 192 kHz to prevent Nyquist cramping), while maintaining
- * 100% backward compatibility with legacy `{ bands: BiquadSpec[] }` IndexedDB records.
+ * and Parametric EQ bands at 192 kHz reference sample rate) across any target source's frequency bins.
  */
 
 import {
@@ -36,7 +35,7 @@ export interface EqualizerSourceConfig {
   name: string;
   color: string;
   visible: boolean;
-  /**Synchronized Parametric EQ bands view (kept in sync with `dsp.eqBands` for chart drag & legacy compatibility) */
+  /** Parametric EQ biquad bands synchronized with `dsp.eqBands` for interactive chart handles */
   bands: BiquadSpec[];
   /** Complete DSP chain configuration (Gain, Delay, Polarity, Mute, HPF/LPF Crossovers, Parametric EQ) */
   dsp?: SourceDspConfig;
@@ -78,7 +77,7 @@ export function createDefaultEqDspConfig(
 
 /**
  * Resolves a complete `SourceDspConfig` from an `EqualizerSourceConfig`,
- * seamlessly upgrading legacy records that only carry `bands: BiquadSpec[]`.
+ * deriving `eqBands` from `config.bands` when `config.dsp` is omitted.
  */
 export function resolveEqDspConfig(config: EqualizerSourceConfig): SourceDspConfig {
   const base = config.dsp ?? DEFAULT_SOURCE_DSP_CONFIG;

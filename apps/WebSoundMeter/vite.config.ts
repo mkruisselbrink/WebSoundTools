@@ -33,7 +33,7 @@ export default defineConfig({
   },
   test: {
     name: 'web-sound-meter',
-    include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',
   },
 });

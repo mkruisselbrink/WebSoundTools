@@ -1,33 +1,15 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * AudioEngine & Multi-Slot DSP Worker Controller (`src/audio/audio-engine.ts`).
+ * AudioEngine & Multi-Slot DSP Worker Controller.
  *
- * Manages background `dsp.worker.ts` lifecycle, multi-slot Live Measurement configurations,
- * message dispatch, and dynamic physical hardware channel routing via `HardwareAudioRouter`.
+ * Manages background `dsp.worker.ts` lifecycle, multi-slot Live Measurement configurations
+ * via `LiveSlotManager`, message dispatch, and physical hardware routing via `HardwareAudioRouter`.
  */
 
 import {
-  DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipelineConfig,
   REFERENCE_CHANNEL_GLOBAL,
   SHARED_MEASUREMENT_CONFIG_KEYS,
@@ -38,7 +20,7 @@ import type {
   InputSourceMode,
   LiveMeasurementSlotConfig,
   WorkerInboundMessage,
-} from '../dsp/dsp.worker.js';
+} from '../dsp/dsp-worker-protocol.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
   SignalGeneratorConfig,
@@ -52,18 +34,20 @@ import {
   SimulatorPresetId,
   SimulatorRigConfig,
 } from '../dsp/synthetic-rig.js';
-import {
-  DEFAULT_SOURCE_PALETTE,
-  SourceData,
-  createEmptyFrequencyDomainData,
-  createEmptyTimeDomainData,
-} from '../sources/source-data.js';
+import { SourceData } from '../sources/source-data.js';
 import { AudioDeviceOption, HardwareAudioRouter } from './hardware-audio-router.js';
-import { createRingBufferStorage, RingBufferStorage } from './ring-buffer.js';
+import {
+  LiveSlotManager,
+  createDefaultLiveSlot,
+  createSkeletonLiveFrame,
+} from './live-slot-manager.js';
+import { RingBufferStorage, createRingBufferStorage } from './ring-buffer.js';
 
 export {
   REFERENCE_CHANNEL_GLOBAL,
   SHARED_MEASUREMENT_CONFIG_KEYS,
+  createDefaultLiveSlot,
+  createSkeletonLiveFrame,
   resolveEffectiveReferenceChannel,
   splitMeasurementConfigPartial,
 };
@@ -79,70 +63,19 @@ export type SplCheckpointsCallback = (
 ) => void;
 export type SplCsvExportCallback = (csv: string) => void;
 
-const SIMULATOR_PRESET_CYCLE: readonly SimulatorPresetId[] = [
-  'pa-room-modes',
-  'sub-top-misaligned',
-  'comb-filtering',
-  'flat-delayed',
-  'noisy-crowd',
-];
-
-export function createDefaultLiveSlot(
-  id: string = 'live-measurement',
-  index: number = 0
-): LiveMeasurementSlotConfig {
-  const paletteIdx = index % DEFAULT_SOURCE_PALETTE.length;
-  const preset = SIMULATOR_PRESET_CYCLE[index % SIMULATOR_PRESET_CYCLE.length];
-  return {
-    id,
-    name: index === 0 ? 'Live Measurement' : `Live Measurement #${index + 1}`,
-    color: DEFAULT_SOURCE_PALETTE[paletteIdx],
-    visible: true,
-    simulatorPreset: preset,
-    measurementChannel: index === 0 ? 0 : index * 2,
-    referenceChannel: REFERENCE_CHANNEL_GLOBAL,
-    config: { ...DEFAULT_MEASUREMENT_CONFIG },
-    activeCalibrationId: null,
-  };
-}
-
-export function createSkeletonLiveFrame(slot: LiveMeasurementSlotConfig): SourceData {
-  const N = slot.config.fftSize || 4096;
-  const binCount = (N >>> 1) + 1;
-  const sr = slot.config.sampleRate || 48000;
-  return {
-    id: slot.id,
-    name: slot.name,
-    kind: 'measurement',
-    color: slot.color,
-    visible: slot.visible,
-    active: true,
-    sampleRate: sr,
-    gainOffsetDb: 0,
-    delayOffsetMs: 0,
-    invertPolarity: slot.config.invertPolarity,
-    createdAt: new Date().toISOString(),
-    notes: '',
-    freqData: createEmptyFrequencyDomainData(binCount, sr),
-    timeData: createEmptyTimeDomainData(N, sr),
-  };
-}
-
 export class AudioEngine {
   private readonly worker: Worker;
   private readonly hardwareRouter = new HardwareAudioRouter();
+  private readonly slotManager = new LiveSlotManager();
   private ringBufferStorage: RingBufferStorage | null = null;
 
   private inputMode: InputSourceMode = 'simulator';
-  private inputModeSwitchSeq: number = 0;
-  private globalReferenceChannel: number = 1; // Default physical In Ch 2 (0-based index 1)
-  private liveSlots: LiveMeasurementSlotConfig[] = [createDefaultLiveSlot()];
+  private inputModeSwitchSeq = 0;
   private readonly latestFramesById = new Map<string, SourceData>();
   private generatorConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
 
-  private selectedDeviceId: string = '';
-  private isPaused: boolean = false;
-  private readonly calibrationNames = new Map<string, string>();
+  private selectedDeviceId = '';
+  private isPaused = false;
 
   private readonly liveFramesListeners = new Set<LiveFramesCallback>();
   private readonly configListeners = new Set<SlotConfigUpdateCallback>();
@@ -194,16 +127,14 @@ export class AudioEngine {
           listener(msg.csv);
         }
       } else if (msg.type === 'measurement-config-updated' && msg.config) {
-        const slotId = (msg.slotId as string) || this.liveSlots[0].id;
+        const slotId = (msg.slotId as string) || this.slotManager.getSlot().id;
         const updatedConfig = msg.config as MeasurementPipelineConfig;
-        this.liveSlots = this.liveSlots.map((s) =>
-          s.id === slotId ? { ...s, config: updatedConfig } : s
-        );
+        this.slotManager.replaceSlotConfig(slotId, updatedConfig);
         for (const listener of this.configListeners) {
           listener(slotId, updatedConfig);
         }
       } else if (msg.type === 'calibration-loaded' && msg.slotId) {
-        this.calibrationNames.set(
+        this.slotManager.setCalibrationLabel(
           msg.slotId as string,
           `${msg.name} (${msg.pointCount} pts)`
         );
@@ -227,24 +158,11 @@ export class AudioEngine {
   }
 
   collectActivePhysicalChannels(): number[] {
-    const chs: number[] = [];
-    for (const slot of this.liveSlots) {
-      if (slot.measurementChannel >= 0) {
-        chs.push(slot.measurementChannel);
-      }
-      const effectiveRef = resolveEffectiveReferenceChannel(
-        slot.referenceChannel,
-        this.globalReferenceChannel
-      );
-      if (effectiveRef >= 0) {
-        chs.push(effectiveRef);
-      }
-    }
-    return chs;
+    return this.slotManager.collectActivePhysicalChannels();
   }
 
   private emitCurrentFrames(): void {
-    const frames = this.liveSlots.map((slot) => {
+    const frames = this.slotManager.getSlots().map((slot) => {
       const existing = this.latestFramesById.get(slot.id);
       if (existing) {
         return {
@@ -270,9 +188,9 @@ export class AudioEngine {
     );
     this.sendToWorker({
       type: 'sync-live-slots',
-      slots: this.liveSlots,
+      slots: this.slotManager.getSlots(),
       channelTapMap: tapMap,
-      globalReferenceChannel: this.globalReferenceChannel,
+      globalReferenceChannel: this.slotManager.getGlobalReferenceChannel(),
     });
     this.emitCurrentFrames();
   }
@@ -303,73 +221,41 @@ export class AudioEngine {
   }
 
   getGlobalReferenceChannel(): number {
-    return this.globalReferenceChannel;
+    return this.slotManager.getGlobalReferenceChannel();
   }
 
   setGlobalReferenceChannel(refChannel: number): void {
-    this.globalReferenceChannel = refChannel;
+    this.slotManager.setGlobalReferenceChannel(refChannel);
     this.syncSlotsToRouterAndWorker();
   }
 
   getLiveSlots(): readonly LiveMeasurementSlotConfig[] {
-    return this.liveSlots;
+    return this.slotManager.getSlots();
   }
 
   getLiveSlot(slotId: string = 'live-measurement'): LiveMeasurementSlotConfig {
-    return (
-      this.liveSlots.find((s) => s.id === slotId) ??
-      this.liveSlots[0] ??
-      createDefaultLiveSlot()
-    );
+    return this.slotManager.getSlot(slotId);
   }
 
   setLiveSlots(slots: readonly LiveMeasurementSlotConfig[]): void {
-    this.liveSlots = slots.length > 0 ? [...slots] : [createDefaultLiveSlot()];
+    this.slotManager.setSlots(slots);
     this.syncSlotsToRouterAndWorker();
   }
 
   addLiveSlot(partial?: Partial<LiveMeasurementSlotConfig>): LiveMeasurementSlotConfig {
-    const idx = this.liveSlots.length;
-    const uid =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID().slice(0, 6)
-        : `${Date.now().toString(36)}-${idx}`;
-    const base = createDefaultLiveSlot(`live-${uid}`, idx);
-    const primaryCfg = this.liveSlots[0]?.config ?? DEFAULT_MEASUREMENT_CONFIG;
-    const { sharedPartial } = splitMeasurementConfigPartial(primaryCfg);
-    const created: LiveMeasurementSlotConfig = {
-      ...base,
-      ...partial,
-      config: {
-        ...base.config,
-        ...sharedPartial,
-        ...(partial?.config ?? {}),
-      },
-    };
-    this.liveSlots = [...this.liveSlots, created];
+    const created = this.slotManager.addSlot(partial);
     this.syncSlotsToRouterAndWorker();
     return created;
   }
 
   removeLiveSlot(slotId: string): void {
-    if (this.liveSlots.length <= 1) return;
-    this.liveSlots = this.liveSlots.filter((s) => s.id !== slotId);
-    this.calibrationNames.delete(slotId);
-    this.syncSlotsToRouterAndWorker();
+    if (this.slotManager.removeSlot(slotId)) {
+      this.syncSlotsToRouterAndWorker();
+    }
   }
 
-  updateLiveSlot(
-    slotId: string,
-    partial: Partial<LiveMeasurementSlotConfig>
-  ): void {
-    this.liveSlots = this.liveSlots.map((slot) => {
-      if (slot.id !== slotId) return slot;
-      return {
-        ...slot,
-        ...partial,
-        config: partial.config ? { ...slot.config, ...partial.config } : slot.config,
-      };
-    });
+  updateLiveSlot(slotId: string, partial: Partial<LiveMeasurementSlotConfig>): void {
+    this.slotManager.updateSlot(slotId, partial);
     this.syncSlotsToRouterAndWorker();
   }
 
@@ -390,7 +276,7 @@ export class AudioEngine {
   }
 
   getCalibrationName(slotId: string = 'live-measurement'): string | null {
-    return this.calibrationNames.get(slotId) ?? null;
+    return this.slotManager.getCalibrationLabel(slotId);
   }
 
   getPaused(): boolean {
@@ -405,37 +291,24 @@ export class AudioEngine {
 
   setSimulatorPreset(
     presetId: SimulatorPresetId,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): void {
-    this.liveSlots = this.liveSlots.map((s) =>
-      s.id === slotId ? { ...s, simulatorPreset: presetId } : s
-    );
+    this.slotManager.updateSlot(slotId, { simulatorPreset: presetId });
     this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: presetId });
   }
 
   setCustomSimulatorConfig(
     config: SimulatorRigConfig,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): void {
     this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: config });
   }
 
   updateMeasurementConfig(
     partial: Partial<MeasurementPipelineConfig>,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): void {
-    const { sharedPartial, perSlotPartial } = splitMeasurementConfigPartial(partial);
-    const hasShared = Object.keys(sharedPartial).length > 0;
-    this.liveSlots = this.liveSlots.map((s) => {
-      let nextCfg = s.config;
-      if (hasShared) {
-        nextCfg = { ...nextCfg, ...sharedPartial };
-      }
-      if (s.id === slotId && Object.keys(perSlotPartial).length > 0) {
-        nextCfg = { ...nextCfg, ...perSlotPartial };
-      }
-      return nextCfg !== s.config ? { ...s, config: nextCfg } : s;
-    });
+    this.slotManager.applyMeasurementConfigPartial(partial, slotId);
     this.sendToWorker({
       type: 'update-measurement-config',
       slotId,
@@ -452,17 +325,17 @@ export class AudioEngine {
   loadCalibrationFile(
     text: string,
     name: string,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): void {
     this.sendToWorker({ type: 'load-calibration', slotId, text, name });
   }
 
-  clearCalibration(slotId: string = this.liveSlots[0].id): void {
-    this.calibrationNames.delete(slotId);
+  clearCalibration(slotId: string = this.slotManager.getSlot().id): void {
+    this.slotManager.clearCalibrationLabel(slotId);
     this.sendToWorker({ type: 'clear-calibration', slotId });
   }
 
-  findAndApplyDelay(slotId: string = this.liveSlots[0].id): void {
+  findAndApplyDelay(slotId: string = this.slotManager.getSlot().id): void {
     this.sendToWorker({ type: 'apply-estimated-delay', slotId });
   }
 
@@ -527,7 +400,7 @@ export class AudioEngine {
     measurementChannel: number,
     referenceChannel: number,
     generatorOutputChannel?: number,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): void {
     if (generatorOutputChannel !== undefined) {
       this.hardwareRouter.setGeneratorOutputChannel(generatorOutputChannel);
@@ -544,7 +417,7 @@ export class AudioEngine {
     deviceId?: string,
     measChannel?: number,
     refChannel?: number,
-    slotId: string = this.liveSlots[0].id
+    slotId: string = this.slotManager.getSlot().id
   ): Promise<void> {
     const switchSeq = ++this.inputModeSwitchSeq;
     this.inputMode = mode;
@@ -587,8 +460,9 @@ export class AudioEngine {
       }
 
       this.syncSlotsToRouterAndWorker();
-      if (hwSampleRate !== this.liveSlots[0].config.sampleRate) {
-        this.updateMeasurementConfig({ sampleRate: hwSampleRate }, this.liveSlots[0].id);
+      const primarySlot = this.slotManager.getSlot();
+      if (hwSampleRate !== primarySlot.config.sampleRate) {
+        this.updateMeasurementConfig({ sampleRate: hwSampleRate }, primarySlot.id);
       }
       this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
     } catch (err) {

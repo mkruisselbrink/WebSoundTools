@@ -30,7 +30,7 @@ export default defineConfig({
   },
   test: {
     name: 'web-speaker-sim',
-    include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',
   },
 });

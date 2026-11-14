@@ -1,33 +1,9 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
  * Main Application Shell (`<web-sound-meter-app>` Lit 3 Web Component).
- *
- * Coordinates:
- *  - Persistent Top Bar (`topbar/topbar-view.ts`) tracking the active Live Measurement slot
- *  - Multi-Chart Stack (1 to 3 synchronized `<chart-panel>` instances)
- *  - Multi-Channel Live Measurements + Reactive `SourceStore` (`sources/source-store.ts`)
- *  - URL Query State (`url-state.ts`) + `localStorage` Workspace Session (`workspace-session.ts`)
- *    + `IndexedDB` v2 Stored Traces, Virtual EQs, Math Unions, and Calibration Curves
  */
 
 import { LitElement, html } from 'lit';
@@ -40,37 +16,22 @@ import {
 import '../charts/chart-panel.js';
 import { PlotType } from '../charts/plot-types.js';
 import { MeasurementPipelineConfig } from '../dsp/analyzer-pipeline.js';
-import { parseCalibrationFile } from '@foh/acoustics';
-import { InputSourceMode } from '../dsp/dsp.worker.js';
+import type { InputSourceMode } from '../dsp/dsp-worker-protocol.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
   GeneratorSignalType,
   SignalGeneratorConfig,
 } from '../dsp/signal-generator.js';
+import { SplHistoryWindowSec } from '../dsp/spl-history.js';
+import { CalibrationManager } from '../sources/calibration-manager.js';
 import {
-  DEFAULT_SPL_ALERT_THRESHOLDS,
-  SplAlertThresholds,
-  SplHistoryWindowSec,
-} from '../dsp/spl-history.js';
-import {
-  MeterIntegrationTime,
-  WeightingCurve,
-} from '../dsp/weighting-meters.js';
-import {
-  StoredCalibrationFile,
   clearSplShowCheckpointsFromDb,
-  deleteCalibrationFileFromDb,
-  loadAllCalibrationFilesFromDb,
   loadAllSplShowCheckpointsFromDb,
-  saveCalibrationFileToDb,
   saveSplShowCheckpointsToDb,
 } from '../sources/session-storage.js';
 import { SourceData, exportSourceDataToFrd } from '../sources/source-data.js';
 import { SourceStore, isLiveSourceId } from '../sources/source-store.js';
-import {
-  loadWorkspaceSession,
-  saveWorkspaceSession,
-} from '../sources/workspace-session.js';
+import { loadWorkspaceSession } from '../sources/workspace-session.js';
 import { appShellStyles } from './app-shell-styles.js';
 import { renderEqInspector } from './inspectors/eq-source-inspector.js';
 import { renderLiveMeasurementInspector } from './inspectors/live-measurement-inspector.js';
@@ -84,17 +45,15 @@ import {
   UrlViewState,
   WorkspaceMode,
   parseUrlViewState,
-  plotsForLayoutPreset,
   syncBrowserUrlState,
 } from './url-state.js';
+import {
+  LayoutPreset,
+  WorkspaceLayoutController,
+  downloadTextFile,
+} from './workspace-store.js';
 
-export type LayoutPreset =
-  | 'tf-dual'
-  | 'pa-triple'
-  | 'rta-mix'
-  | 'show-dual'
-  | 'show-triple'
-  | 'single';
+export type { LayoutPreset };
 
 @customElement('web-sound-meter-app')
 export class WebSoundMeterApp extends LitElement {
@@ -102,74 +61,40 @@ export class WebSoundMeterApp extends LitElement {
 
   private engine: AudioEngine | null = null;
   private readonly sourceStore = new SourceStore();
+  private readonly workspace = new WorkspaceLayoutController();
+  private readonly calibrationMgr = new CalibrationManager();
   private unsubscribeStore: (() => void) | null = null;
   private hardwareStreamDeferred = false;
-
-  @state()
-  private audioInputMode: InputSourceMode = 'simulator';
 
   @state()
   private audioDevices: AudioDeviceOption[] = [];
 
   @state()
-  private selectedDeviceId: string = '';
+  private selectedDeviceId = '';
 
   @state()
-  private selectedDeviceLabel: string = '';
+  private selectedDeviceLabel = '';
 
   @state()
-  private availableChannels: number = 2;
+  private availableChannels = 2;
 
   @state()
-  private availableOutputChannels: number = 2;
+  private availableOutputChannels = 2;
 
   @state()
-  private globalReferenceChannel: number = 1;
+  private globalReferenceChannel = 1;
 
   @state()
-  private generatorOutputChannel: number = -1;
+  private generatorOutputChannel = -1;
 
   @state()
-  private showAdvancedMeasSettings: boolean = false;
-
-  @state()
-  private savedCalibrations: StoredCalibrationFile[] = [];
+  private showAdvancedMeasSettings = false;
 
   @state()
   private genConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
 
   @state()
-  private isPaused: boolean = false;
-
-  @state()
-  private workspaceMode: WorkspaceMode = 'tuning';
-
-  @state()
-  private layoutPreset: LayoutPreset = 'pa-triple';
-
-  private tuningLayoutPreset: LayoutPreset = 'pa-triple';
-
-  private showLayoutPreset: LayoutPreset = 'show-dual';
-
-  @state()
-  private chartPlotTypes: PlotType[] = ['magnitude', 'phase', 'impulse'];
-
-  @state()
-  private tuningChartPlotTypes: PlotType[] = ['magnitude', 'phase', 'impulse'];
-
-  @state()
-  private showChartPlotTypes: PlotType[] = ['rta', 'spl-history'];
-
-  @state()
-  private splAlertThresholds: SplAlertThresholds = {
-    ...DEFAULT_SPL_ALERT_THRESHOLDS,
-  };
-
-  @state()
-  private splWeighting: WeightingCurve = 'A';
-
-  @state()
-  private splTime: MeterIntegrationTime = 'Fast';
+  private isPaused = false;
 
   private keydownHandler = (e: KeyboardEvent) => {
     dispatchAppKeydown(e, {
@@ -201,19 +126,19 @@ export class WebSoundMeterApp extends LitElement {
   private popstateHandler = () => {
     const next = parseUrlViewState(window.location.search, this.getUrlViewState());
     const nextMode: WorkspaceMode = next.workspaceMode ?? 'tuning';
-    this.workspaceMode = nextMode;
-    if (nextMode === 'show' && this.audioInputMode === 'hardware' && this.genConfig.enabled) {
+    this.workspace.workspaceMode = nextMode;
+    if (nextMode === 'show' && this.workspace.audioInputMode === 'hardware' && this.genConfig.enabled) {
       this.updateGenerator({ enabled: false });
     }
-    this.layoutPreset = next.layoutPreset;
-    this.chartPlotTypes = next.chartPlotTypes;
+    this.workspace.layoutPreset = next.layoutPreset;
+    this.workspace.chartPlotTypes = next.chartPlotTypes;
     const activeId = this.sourceStore.getActiveLiveSourceId();
     const activeSlot = this.engine?.getLiveSlot(activeId);
     if (activeSlot && next.simulatorPreset !== activeSlot.simulatorPreset) {
       this.engine?.setSimulatorPreset(next.simulatorPreset, activeId);
     }
-    this.splWeighting = next.splWeighting;
-    this.splTime = next.splTime;
+    this.workspace.splWeighting = next.splWeighting;
+    this.workspace.splTime = next.splTime;
     this.sourceStore.setSelectedSourceId(next.selectedSourceId);
     this.persistState('none');
     this.requestUpdate();
@@ -224,49 +149,7 @@ export class WebSoundMeterApp extends LitElement {
 
     const session = loadWorkspaceSession();
     const searchStr = typeof window !== 'undefined' ? window.location.search : '';
-    const initialUrl = parseUrlViewState(searchStr, {
-      workspaceMode: session.workspaceMode,
-      layoutPreset: session.layoutPreset,
-      chartPlotTypes: session.chartPlotTypes,
-      audioInputMode: session.audioInputMode,
-      simulatorPreset: session.simulatorPreset,
-      splWeighting: session.splWeighting,
-      splTime: session.splTime,
-      selectedSourceId: session.selectedSourceId,
-    });
-
-    this.workspaceMode = initialUrl.workspaceMode ?? session.workspaceMode ?? 'tuning';
-    this.tuningLayoutPreset =
-      session.layoutPreset === 'show-dual' || session.layoutPreset === 'show-triple'
-        ? 'pa-triple'
-        : session.layoutPreset;
-    this.showLayoutPreset = 'show-dual';
-    this.tuningChartPlotTypes = [...session.chartPlotTypes];
-    this.showChartPlotTypes = [...(session.showChartPlotTypes ?? ['rta', 'spl-history'])];
-    this.splAlertThresholds = {
-      ...DEFAULT_SPL_ALERT_THRESHOLDS,
-      ...session.splAlertThresholds,
-    };
-
-    const hasExplicitUrlPlots =
-      searchStr.includes('plots=') || searchStr.includes('layout=');
-    if (this.workspaceMode === 'show' && !hasExplicitUrlPlots) {
-      this.layoutPreset = this.showLayoutPreset;
-      this.chartPlotTypes = [...this.showChartPlotTypes];
-    } else {
-      this.layoutPreset = initialUrl.layoutPreset;
-      this.chartPlotTypes = initialUrl.chartPlotTypes;
-      if (this.workspaceMode === 'show') {
-        this.showLayoutPreset = initialUrl.layoutPreset;
-        this.showChartPlotTypes = [...initialUrl.chartPlotTypes];
-      } else {
-        this.tuningLayoutPreset = initialUrl.layoutPreset;
-        this.tuningChartPlotTypes = [...initialUrl.chartPlotTypes];
-      }
-    }
-    this.audioInputMode = initialUrl.audioInputMode;
-    this.splWeighting = initialUrl.splWeighting;
-    this.splTime = initialUrl.splTime;
+    const initialUrl = this.workspace.hydrateFromSessionAndUrl(session, searchStr);
 
     this.selectedDeviceId = session.hardwareRouting.selectedDeviceId;
     this.selectedDeviceLabel = session.hardwareRouting.selectedDeviceLabel;
@@ -292,15 +175,14 @@ export class WebSoundMeterApp extends LitElement {
     this.engine.setGlobalReferenceChannel(this.globalReferenceChannel);
     this.engine.setLiveSlots(hydratedSlots);
     const safeGenConfig =
-      this.workspaceMode === 'show' && this.audioInputMode === 'hardware'
+      this.workspace.workspaceMode === 'show' && this.workspace.audioInputMode === 'hardware'
         ? { ...session.genConfig, enabled: false }
         : session.genConfig;
     this.engine.updateGeneratorConfig(safeGenConfig);
     this.engine.setGeneratorOutputChannel(this.generatorOutputChannel);
     this.genConfig = { ...this.engine.getGeneratorConfig() };
 
-    if (this.audioInputMode === 'hardware') {
-      // On reload in hardware mode, start paused until user clicks Resume (user gesture)
+    if (this.workspace.audioInputMode === 'hardware') {
       this.isPaused = true;
       this.hardwareStreamDeferred = true;
       this.engine.setPaused(true);
@@ -324,7 +206,7 @@ export class WebSoundMeterApp extends LitElement {
     });
     this.engine.onSplCsvExported((csvText: string) => {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      this.downloadTextFile(
+      downloadTextFile(
         csvText,
         `websoundmeter-spl-log-${stamp}.csv`,
         'text/csv;charset=utf-8'
@@ -354,71 +236,43 @@ export class WebSoundMeterApp extends LitElement {
   }
 
   private async hydratePersistentStores(): Promise<void> {
-    const [, calibrations, splCheckpoints] = await Promise.all([
+    const [, , splCheckpoints] = await Promise.all([
       this.sourceStore.loadFromPersistence(),
-      loadAllCalibrationFilesFromDb(),
+      this.calibrationMgr.hydrateAndSyncEngine(this.engine),
       loadAllSplShowCheckpointsFromDb(),
     ]);
-    this.savedCalibrations = calibrations;
-
-    if (this.engine) {
-      for (const slot of this.engine.getLiveSlots()) {
-        if (slot.activeCalibrationId) {
-          const match = calibrations.find((c) => c.id === slot.activeCalibrationId);
-          if (match) {
-            this.engine.loadCalibrationFile(match.text, match.name, slot.id);
-          } else {
-            this.engine.updateLiveSlot(slot.id, { activeCalibrationId: null });
-          }
-        }
-      }
-      if (splCheckpoints.length > 0) {
-        this.engine.hydrateSplHistory(splCheckpoints);
-      }
+    if (this.engine && splCheckpoints.length > 0) {
+      this.engine.hydrateSplHistory(splCheckpoints);
     }
     this.persistState('replace');
+    this.requestUpdate();
   }
 
   private getUrlViewState(): UrlViewState {
     const activeSlot = this.engine?.getLiveSlot(
       this.sourceStore.getActiveLiveSourceId()
     );
-    return {
-      ...(this.workspaceMode === 'show' ? { workspaceMode: 'show' as const } : {}),
-      layoutPreset: this.layoutPreset,
-      chartPlotTypes: this.chartPlotTypes,
-      audioInputMode: this.audioInputMode,
+    return this.workspace.buildUrlViewState({
       simulatorPreset: activeSlot?.simulatorPreset ?? 'pa-room-modes',
-      splWeighting: this.splWeighting,
-      splTime: this.splTime,
       selectedSourceId: this.sourceStore.getSelectedSourceId(),
-    };
+    });
   }
 
   private persistState(urlMode: 'push' | 'replace' | 'none' = 'replace'): void {
-    const viewState = this.getUrlViewState();
-    if (urlMode !== 'none') {
-      syncBrowserUrlState(viewState, urlMode);
-    }
+    const activeSlot = this.engine?.getLiveSlot(
+      this.sourceStore.getActiveLiveSourceId()
+    );
     const currentSlots = (this.engine?.getLiveSlots() ?? []).map((s) => ({
       ...s,
       visible: this.sourceStore.getLiveSourceVisible(s.id),
     }));
 
-    saveWorkspaceSession({
-      version: 1,
-      ...viewState,
-      workspaceMode: this.workspaceMode,
-      chartPlotTypes: this.tuningChartPlotTypes,
-      showChartPlotTypes: this.showChartPlotTypes,
-      splAlertThresholds: this.splAlertThresholds,
+    this.workspace.persist({
+      urlMode,
+      simulatorPreset: activeSlot?.simulatorPreset ?? 'pa-room-modes',
+      selectedSourceId: this.sourceStore.getSelectedSourceId(),
       liveSlots: currentSlots,
-      genConfig: {
-        enabled: this.genConfig.enabled,
-        type: this.genConfig.type,
-        levelDbFs: this.genConfig.levelDbFs,
-        sineFrequencyHz: this.genConfig.sineFrequencyHz,
-      },
+      genConfig: this.genConfig,
       hardwareRouting: {
         selectedDeviceId: this.selectedDeviceId,
         selectedDeviceLabel: this.selectedDeviceLabel,
@@ -429,59 +283,22 @@ export class WebSoundMeterApp extends LitElement {
   }
 
   private setWorkspaceMode(mode: WorkspaceMode): void {
-    if (this.workspaceMode === mode) return;
-    if (this.workspaceMode === 'tuning') {
-      this.tuningLayoutPreset = this.layoutPreset;
-      this.tuningChartPlotTypes = [...this.chartPlotTypes];
-    } else {
-      this.showLayoutPreset = this.layoutPreset;
-      this.showChartPlotTypes = [...this.chartPlotTypes];
-    }
-
-    this.workspaceMode = mode;
-    if (mode === 'show') {
-      // Safety interlock: mute hardware output test generator when entering Show mode
-      if (this.audioInputMode === 'hardware' && this.genConfig.enabled) {
-        this.updateGenerator({ enabled: false });
-      }
-      this.layoutPreset = this.showLayoutPreset;
-      this.chartPlotTypes = [...this.showChartPlotTypes];
-    } else {
-      this.layoutPreset = this.tuningLayoutPreset;
-      this.chartPlotTypes = [...this.tuningChartPlotTypes];
+    if (!this.workspace.switchWorkspaceMode(mode)) return;
+    if (
+      mode === 'show' &&
+      this.workspace.audioInputMode === 'hardware' &&
+      this.genConfig.enabled
+    ) {
+      this.updateGenerator({ enabled: false });
     }
     this.persistState('push');
-  }
-
-  private downloadTextFile(
-    content: string,
-    filename: string,
-    mimeType: string
-  ): void {
-    if (typeof document === 'undefined' || typeof URL === 'undefined') return;
-    const blob = new Blob([content], { type: mimeType });
-    if (typeof URL.createObjectURL !== 'function') return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    this.requestUpdate();
   }
 
   private setLayoutPreset(preset: LayoutPreset): void {
-    this.layoutPreset = preset;
-    this.chartPlotTypes = plotsForLayoutPreset(preset, this.chartPlotTypes[0]);
-    if (this.workspaceMode === 'show') {
-      this.showLayoutPreset = preset;
-      this.showChartPlotTypes = [...this.chartPlotTypes];
-    } else {
-      this.tuningLayoutPreset = preset;
-      this.tuningChartPlotTypes = [...this.chartPlotTypes];
-    }
+    this.workspace.applyLayoutPreset(preset);
     this.persistState('push');
+    this.requestUpdate();
   }
 
   private handleAddLiveSource = (): void => {
@@ -506,10 +323,10 @@ export class WebSoundMeterApp extends LitElement {
     deviceId: string
   ): Promise<void> => {
     if (!this.engine) return;
-    const modeChanged = this.audioInputMode !== mode;
-    this.audioInputMode = mode;
+    const modeChanged = this.workspace.audioInputMode !== mode;
+    this.workspace.audioInputMode = mode;
     if (mode === 'hardware') {
-      if (this.workspaceMode === 'show' && this.genConfig.enabled) {
+      if (this.workspace.workspaceMode === 'show' && this.genConfig.enabled) {
         this.updateGenerator({ enabled: false });
       }
       this.selectedDeviceId = deviceId;
@@ -531,9 +348,10 @@ export class WebSoundMeterApp extends LitElement {
         }
       }
     } catch {
-      this.audioInputMode = this.engine.getInputMode();
+      this.workspace.audioInputMode = this.engine.getInputMode();
     }
     this.persistState(modeChanged ? 'push' : 'none');
+    this.requestUpdate();
   };
 
   private handleEqBandDrag = (
@@ -547,70 +365,17 @@ export class WebSoundMeterApp extends LitElement {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    file.text().then((text) => {
-      const parsed = parseCalibrationFile(text, file.name);
-      const id = `cal-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const record: StoredCalibrationFile = {
-        id,
-        name: file.name,
-        text,
-        pointCount: parsed.points.length,
-        createdAt: new Date().toISOString(),
-      };
-      this.savedCalibrations = [
-        ...this.savedCalibrations.filter((c) => c.id !== id),
-        record,
-      ];
-      void saveCalibrationFileToDb(record);
-      this.engine?.updateLiveSlot(slotId, { activeCalibrationId: id });
-      this.engine?.loadCalibrationFile(text, file.name, slotId);
+    void this.calibrationMgr.uploadFileForSlot(slotId, file, this.engine).then(() => {
       this.persistState('none');
       this.requestUpdate();
     });
-  };
-
-  private handleSelectCalibration = (
-    slotId: string,
-    calibrationId: string | null
-  ): void => {
-    this.engine?.updateLiveSlot(slotId, { activeCalibrationId: calibrationId });
-    if (!calibrationId) {
-      this.engine?.clearCalibration(slotId);
-    } else {
-      const found = this.savedCalibrations.find((c) => c.id === calibrationId);
-      if (found) {
-        this.engine?.loadCalibrationFile(found.text, found.name, slotId);
-      }
-    }
-    this.persistState('none');
-    this.requestUpdate();
-  };
-
-  private handleDeleteCalibration = (
-    slotId: string,
-    calibrationId: string
-  ): void => {
-    this.savedCalibrations = this.savedCalibrations.filter(
-      (c) => c.id !== calibrationId
-    );
-    void deleteCalibrationFileFromDb(calibrationId);
-    if (this.engine) {
-      for (const slot of this.engine.getLiveSlots()) {
-        if (slot.activeCalibrationId === calibrationId) {
-          this.engine.updateLiveSlot(slot.id, { activeCalibrationId: null });
-          this.engine.clearCalibration(slot.id);
-        }
-      }
-    }
-    this.persistState('none');
-    this.requestUpdate();
   };
 
   private handleTogglePause = async (): Promise<void> => {
     const nextPaused = !this.isPaused;
     if (
       !nextPaused &&
-      this.audioInputMode === 'hardware' &&
+      this.workspace.audioInputMode === 'hardware' &&
       this.hardwareStreamDeferred &&
       this.engine
     ) {
@@ -621,7 +386,7 @@ export class WebSoundMeterApp extends LitElement {
         this.availableChannels = this.engine.getAvailableChannels();
         this.availableOutputChannels = this.engine.getAvailableOutputChannels();
       } catch {
-        this.audioInputMode = this.engine.getInputMode();
+        this.workspace.audioInputMode = this.engine.getInputMode();
         this.persistState('replace');
       }
     }
@@ -639,7 +404,7 @@ export class WebSoundMeterApp extends LitElement {
     const liveHandlers = {
       slot: liveSlot,
       delayEstimate: activeLiveSource?.delayEstimate,
-      audioInputMode: this.audioInputMode,
+      audioInputMode: this.workspace.audioInputMode,
       availableChannels: this.availableChannels,
       globalReferenceChannel: this.globalReferenceChannel,
       showAdvanced: this.showAdvancedMeasSettings,
@@ -665,12 +430,18 @@ export class WebSoundMeterApp extends LitElement {
         this.sourceStore.captureCurrentTrace();
         this.persistState('replace');
       },
-      savedCalibrations: this.savedCalibrations,
+      savedCalibrations: this.calibrationMgr.getAll(),
       activeCalibrationId: liveSlot.activeCalibrationId,
-      onSelectCalibration: (calId: string | null) =>
-        this.handleSelectCalibration(liveSlot.id, calId),
-      onDeleteCalibration: (calId: string) =>
-        this.handleDeleteCalibration(liveSlot.id, calId),
+      onSelectCalibration: (calId: string | null) => {
+        this.calibrationMgr.selectForSlot(liveSlot.id, calId, this.engine);
+        this.persistState('none');
+        this.requestUpdate();
+      },
+      onDeleteCalibration: (calId: string) => {
+        this.calibrationMgr.deleteCalibration(calId, this.engine);
+        this.persistState('none');
+        this.requestUpdate();
+      },
       onResetAveraging: () => this.engine?.resetAveraging(liveSlot.id),
       onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => {
         this.engine?.updateMeasurementConfig(partial, liveSlot.id);
@@ -700,7 +471,7 @@ export class WebSoundMeterApp extends LitElement {
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, '-')
               .replace(/^-+|-+$/g, '') || 'trace';
-          this.downloadTextFile(frdText, `${slug}.frd`, 'text/plain;charset=utf-8');
+          downloadTextFile(frdText, `${slug}.frd`, 'text/plain;charset=utf-8');
         },
       });
     }
@@ -747,7 +518,7 @@ export class WebSoundMeterApp extends LitElement {
   render() {
     const allSources = this.sourceStore.getAllSources();
     const chartSources =
-      this.workspaceMode === 'show'
+      this.workspace.workspaceMode === 'show'
         ? allSources.filter((s) => s.kind !== 'stored' && s.kind !== 'union')
         : allSources;
     const activeEq = this.sourceStore.getActiveEq();
@@ -757,9 +528,9 @@ export class WebSoundMeterApp extends LitElement {
 
     return html`
       ${renderTopbar({
-        workspaceMode: this.workspaceMode,
-        layoutPreset: this.layoutPreset,
-        audioInputMode: this.audioInputMode,
+        workspaceMode: this.workspace.workspaceMode,
+        layoutPreset: this.workspace.layoutPreset,
+        audioInputMode: this.workspace.audioInputMode,
         audioDevices: this.audioDevices,
         selectedDeviceId: this.selectedDeviceId,
         selectedDeviceLabel: this.selectedDeviceLabel,
@@ -769,10 +540,10 @@ export class WebSoundMeterApp extends LitElement {
         generatorOutputChannel: this.generatorOutputChannel,
         genConfig: this.genConfig,
         isPaused: this.isPaused,
-        splWeighting: this.splWeighting,
-        splTime: this.splTime,
+        splWeighting: this.workspace.splWeighting,
+        splTime: this.workspace.splTime,
         levels: activeLiveSource?.levels,
-        splAlertThresholds: this.splAlertThresholds,
+        splAlertThresholds: this.workspace.splAlertThresholds,
         onWorkspaceModeChange: (mode) => this.setWorkspaceMode(mode),
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
         onInputSourceSelect: this.handleInputSourceSelect,
@@ -794,35 +565,31 @@ export class WebSoundMeterApp extends LitElement {
           void this.handleTogglePause();
         },
         onSplWeightingChange: (curve) => {
-          this.splWeighting = curve;
+          this.workspace.splWeighting = curve;
           this.persistState('replace');
+          this.requestUpdate();
         },
         onSplTimeChange: (time) => {
-          this.splTime = time;
+          this.workspace.splTime = time;
           this.persistState('replace');
+          this.requestUpdate();
         },
       })}
 
       <div class="workspace">
         <main class="charts-column">
-          ${this.chartPlotTypes.map(
+          ${this.workspace.chartPlotTypes.map(
             (pt, idx) => html`
               <chart-panel
                 data-testid="chart-panel-${idx}"
                 .plotType=${pt}
                 .sources=${chartSources}
                 .eqBands=${activeEq ? activeEq.bands : null}
-                .splAlertThresholds=${this.splAlertThresholds}
+                .splAlertThresholds=${this.workspace.splAlertThresholds}
                 @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {
-                  const updated = [...this.chartPlotTypes];
-                  updated[idx] = e.detail.plotType;
-                  this.chartPlotTypes = updated;
-                  if (this.workspaceMode === 'show') {
-                    this.showChartPlotTypes = [...updated];
-                  } else {
-                    this.tuningChartPlotTypes = [...updated];
-                  }
+                  this.workspace.updateChartPlotTypeAt(idx, e.detail.plotType);
                   this.persistState('replace');
+                  this.requestUpdate();
                 }}
                 @spl-window-change=${(
                   e: CustomEvent<{ windowSec: SplHistoryWindowSec }>
@@ -835,16 +602,16 @@ export class WebSoundMeterApp extends LitElement {
           )}
         </main>
 
-        ${this.workspaceMode === 'show'
+        ${this.workspace.workspaceMode === 'show'
           ? renderShowSidebar({
-              audioInputMode: this.audioInputMode,
+              audioInputMode: this.workspace.audioInputMode,
               availableChannels: this.availableChannels,
               globalReferenceChannel: this.globalReferenceChannel,
               selectedSourceId: activeLiveId,
               liveSlots: this.engine?.getLiveSlots() ?? [],
               liveSources: this.sourceStore.getLiveSources(),
               feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
-              splAlertThresholds: this.splAlertThresholds,
+              splAlertThresholds: this.workspace.splAlertThresholds,
               onAddLiveSource: this.handleAddLiveSource,
               onSelectSlot: (slotId) => {
                 this.sourceStore.setSelectedSourceId(slotId);
@@ -874,11 +641,12 @@ export class WebSoundMeterApp extends LitElement {
                 this.sourceStore.clearFeedbackRingLog();
               },
               onUpdateSplThresholds: (partial) => {
-                this.splAlertThresholds = {
-                  ...this.splAlertThresholds,
+                this.workspace.splAlertThresholds = {
+                  ...this.workspace.splAlertThresholds,
                   ...partial,
                 };
                 this.persistState('none');
+                this.requestUpdate();
               },
               onResetShowLog: () => {
                 this.engine?.resetSplHistory();
@@ -889,7 +657,7 @@ export class WebSoundMeterApp extends LitElement {
               },
             })
           : renderSidebar({
-              audioInputMode: this.audioInputMode,
+              audioInputMode: this.workspace.audioInputMode,
               simulatorPreset: activeSlot.simulatorPreset,
               allSources,
               selectedSourceId: this.sourceStore.getSelectedSourceId(),

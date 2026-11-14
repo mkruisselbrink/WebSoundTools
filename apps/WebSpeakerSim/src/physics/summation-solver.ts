@@ -1,26 +1,9 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
  * 3D direct-field + planar image-source complex acoustic summation solver for 2D Plan
- * and Side Section receptor grids (`src/physics/summation-solver.ts`).
+ * and Side Section receptor grids.
  */
 
 import {
@@ -29,75 +12,37 @@ import {
   computeFrequencyWeightingDb,
   computeSpeedOfSoundMpS,
 } from '@foh/acoustics';
-import {
-  DEFAULT_SOURCE_DSP_CONFIG,
-  compileDspChain,
-  evaluateCompiledDspAtFrequency,
-  type CompiledDspChain,
-} from '@foh/dsp';
+import { evaluateCompiledDspAtFrequency } from '@foh/dsp';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
-import {
-  evaluateSurfaceListenerZ,
-  type AnalysisBandSelection,
-  type AudienceSurface,
-  type DspGroup,
-  type ProjectScene,
-  type SectionBounds2D,
-  type ViewportBounds2D,
+import type {
+  AnalysisBandSelection,
+  ProjectScene,
+  SectionBounds2D,
+  ViewportBounds2D,
 } from '../model/project-types.js';
-import { sampleDirectivityBalloon, type DirectivityBalloon } from './directivity-balloon.js';
-import { expandSubwooferArray } from './sub-array-designer.js';
 import {
-  buildOrientationMatrix,
-  computeLocalDirection,
-  localToWorldVec3,
-  reflectPoseAcrossPlane,
-  type Mat3,
-  type PlanarReflector,
-  type ReflectedPose,
-  type Vec3,
-} from './transform3d.js';
+  CELL_MASK_AUDIENCE,
+  CELL_MASK_BACKGROUND,
+  CELL_MASK_STAGE,
+  computeCoverageStatistics,
+  resolvePlanPointSurface,
+  type CoverageStatistics,
+} from './coverage-stats.js';
+import { sampleDirectivityBalloon } from './directivity-balloon.js';
+import { expandSceneRadiators, type ActiveRadiator } from './radiator-expander.js';
+import { computeLocalDirection, type Vec3 } from './transform3d.js';
+
+export {
+  CELL_MASK_AUDIENCE,
+  CELL_MASK_BACKGROUND,
+  CELL_MASK_STAGE,
+  computeCoverageStatistics,
+  expandSceneRadiators,
+  type ActiveRadiator,
+  type CoverageStatistics,
+};
 
 const LN10_OVER_20 = Math.LN10 / 20;
-
-export interface ActiveRadiator {
-  readonly id: string;
-  readonly label: string;
-  readonly dspGroupId: string;
-  readonly speaker: SpeakerDefinition;
-  readonly balloon: DirectivityBalloon;
-  /** World acoustic center position in meters. */
-  readonly position: Vec3;
-  readonly basis: Mat3;
-  /** Pre-mirrored poses across all active planar reflectors. */
-  readonly imagePoses: ReadonlyArray<{
-    readonly reflectorId: string;
-    readonly reflectionFactor: number;
-    readonly pose: ReflectedPose;
-  }>;
-  /** Reference 1-meter nominal drive SPL in dB (`maxContinuousSpl1mDb + scene.driveOffsetDb`). */
-  readonly drive1mDbSpl: number;
-  readonly dspChain: CompiledDspChain;
-}
-
-export interface CoverageStatistics {
-  readonly audienceSampleCount: number;
-  readonly meanAudienceSplDb: number;
-  readonly minAudienceSplDb: number;
-  readonly maxAudienceSplDb: number;
-  readonly stdDevAudienceDb: number;
-  /** Percentage of audience receptor cells within +/- 3 dB of `meanAudienceSplDb`. */
-  readonly homogeneityPlusMinus3DbPercent: number;
-  readonly stageSampleCount: number;
-  readonly meanStageSplDb: number | null;
-  /** `meanAudienceSplDb - meanStageSplDb` in dB when a stage surface is present. */
-  readonly audienceToStageRejectionDb: number | null;
-}
-
-/** Surface classification per grid cell: 0 = background floor, 1 = audience zone, 2 = stage zone. */
-export const CELL_MASK_BACKGROUND = 0;
-export const CELL_MASK_AUDIENCE = 1;
-export const CELL_MASK_STAGE = 2;
 
 export interface PlanGridResult {
   readonly cols: number;
@@ -125,142 +70,6 @@ interface EvaluationBands {
   readonly energyWeights: Float32Array;
   readonly airAbsorptionDbPerM: Float32Array;
   readonly wavenumbersRadPerM: Float32Array;
-}
-
-/**
- * Expands all non-muted point sources (including L/R mirrored twins) and subwoofer arrays
- * into ready-to-evaluate 3D radiators with precomputed orientation & image-source matrices.
- */
-export function expandSceneRadiators(
-  scene: ProjectScene,
-  speakerMap: ReadonlyMap<string, SpeakerDefinition>
-): ActiveRadiator[] {
-  const c = computeSpeedOfSoundMpS(scene.atmosphere);
-  const groupMap = new Map<string, DspGroup>();
-  for (const g of scene.dspGroups) {
-    groupMap.set(g.id, g);
-  }
-
-  const activeReflectors: PlanarReflector[] = scene.reflectors.filter(
-    (r) => r.enabled && r.reflectionFactor > 1e-4
-  );
-
-  const radiators: ActiveRadiator[] = [];
-
-  const pushRadiator = (params: {
-    id: string;
-    label: string;
-    speakerId: string;
-    dspGroupId: string;
-    rawPosition: Vec3;
-    azimuthDeg: number;
-    tiltDeg: number;
-    rollDeg: number;
-    trimGainDb: number;
-    trimDelayMs: number;
-    invertPolarity: boolean;
-    muted: boolean;
-  }): void => {
-    if (params.muted) return;
-    const speaker = speakerMap.get(params.speakerId);
-    if (!speaker) return;
-
-    const groupDsp = groupMap.get(params.dspGroupId)?.dsp ?? DEFAULT_SOURCE_DSP_CONFIG;
-    const dspChain = compileDspChain(groupDsp, {
-      gainDb: params.trimGainDb,
-      delayMs: params.trimDelayMs,
-      invertPolarity: params.invertPolarity,
-      muted: params.muted,
-    });
-    if (dspChain.muted) return;
-
-    const basis = buildOrientationMatrix({
-      azimuthDeg: params.azimuthDeg,
-      tiltDeg: params.tiltDeg,
-      rollDeg: params.rollDeg,
-    });
-    const offsetWorld = localToWorldVec3(basis, speaker.acousticCenterOffset);
-    const position: Vec3 = {
-      x: params.rawPosition.x + offsetWorld.x,
-      y: params.rawPosition.y + offsetWorld.y,
-      z: params.rawPosition.z + offsetWorld.z,
-    };
-
-    const imagePoses = activeReflectors.map((ref) => ({
-      reflectorId: ref.id,
-      reflectionFactor: ref.reflectionFactor,
-      pose: reflectPoseAcrossPlane(position, basis, ref),
-    }));
-
-    radiators.push({
-      id: params.id,
-      label: params.label,
-      dspGroupId: params.dspGroupId,
-      speaker,
-      balloon: speaker.balloon,
-      position,
-      basis,
-      imagePoses,
-      drive1mDbSpl: speaker.maxContinuousSpl1mDb + scene.driveOffsetDb,
-      dspChain,
-    });
-  };
-
-  for (const ps of scene.pointSources) {
-    pushRadiator({
-      id: ps.id,
-      label: ps.name,
-      speakerId: ps.speakerId,
-      dspGroupId: ps.dspGroupId,
-      rawPosition: ps.position,
-      azimuthDeg: ps.orientation.azimuthDeg,
-      tiltDeg: ps.orientation.tiltDeg,
-      rollDeg: ps.orientation.rollDeg,
-      trimGainDb: ps.trimGainDb,
-      trimDelayMs: ps.trimDelayMs,
-      invertPolarity: ps.invertPolarity,
-      muted: ps.muted,
-    });
-
-    if (ps.mirrorLeftRight && Math.abs(ps.position.y) > 1e-3) {
-      pushRadiator({
-        id: `${ps.id}:mirror`,
-        label: `${ps.name} (R)`,
-        speakerId: ps.speakerId,
-        dspGroupId: ps.dspGroupId,
-        rawPosition: { x: ps.position.x, y: -ps.position.y, z: ps.position.z },
-        azimuthDeg: -ps.orientation.azimuthDeg,
-        tiltDeg: ps.orientation.tiltDeg,
-        rollDeg: -ps.orientation.rollDeg,
-        trimGainDb: ps.trimGainDb,
-        trimDelayMs: ps.trimDelayMs,
-        invertPolarity: ps.invertPolarity,
-        muted: ps.muted,
-      });
-    }
-  }
-
-  for (const sa of scene.subArrays) {
-    const cabs = expandSubwooferArray(sa, c);
-    for (const cab of cabs) {
-      pushRadiator({
-        id: cab.id,
-        label: cab.label,
-        speakerId: cab.speakerId,
-        dspGroupId: cab.dspGroupId,
-        rawPosition: cab.position,
-        azimuthDeg: cab.orientation.azimuthDeg,
-        tiltDeg: cab.orientation.tiltDeg,
-        rollDeg: cab.orientation.rollDeg,
-        trimGainDb: cab.trimGainDb,
-        trimDelayMs: cab.trimDelayMs,
-        invertPolarity: cab.invertPolarity,
-        muted: cab.muted,
-      });
-    }
-  }
-
-  return radiators;
 }
 
 function buildEvaluationBands(
@@ -309,16 +118,9 @@ function buildEvaluationBands(
   };
 }
 
-/**
- * Precomputed per-radiator lookup table baking `P_drive_1m * H_DSP(f_k) * D_onAxis(f_k)`
- * AND interpolating the balloon's `M * P` off-axis linear amplitude slice onto each evaluation
- * frequency `f_k` ONCE per frame, turning per-pixel evaluation into pure Float32 table reads!
- */
 interface PrecomputedRadiatorFreqTable {
   readonly radiator: ActiveRadiator;
-  /** Complex `P_drive_1m * H_DSP(f_k) * D_onAxis(f_k)` [2 * F]. */
   readonly onAxisDriveReIm: Float64Array;
-  /** Pre-baked linear directional gain `10^(attDb / 20)` per `[k * M * P + m * P + p]`. */
   readonly offAxisLinGain: Float32Array;
   readonly hasOffAxisPhase: boolean;
 }
@@ -327,32 +129,28 @@ function precomputeRadiatorTables(
   radiators: readonly ActiveRadiator[],
   frequenciesHz: Float32Array
 ): PrecomputedRadiatorFreqTable[] {
-  const F = frequenciesHz.length;
+  const fCount = frequenciesHz.length;
 
   return radiators.map((rad) => {
     const balloon = rad.balloon;
-    const M = balloon.meridianAnglesDeg.length;
-    const P = balloon.polarAnglesDeg.length;
-    const sliceSize = M * P;
+    const mCount = balloon.meridianAnglesDeg.length;
+    const pCount = balloon.polarAnglesDeg.length;
+    const sliceSize = mCount * pCount;
     const driveLin = Math.exp(rad.drive1mDbSpl * LN10_OVER_20);
 
-    const onAxisDriveReIm = new Float64Array(F * 2);
-    const offAxisLinGain = new Float32Array(F * sliceSize);
+    const onAxisDriveReIm = new Float64Array(fCount * 2);
+    const offAxisLinGain = new Float32Array(fCount * sliceSize);
 
-    for (let k = 0; k < F; k++) {
+    for (let k = 0; k < fCount; k++) {
       const freq = frequenciesHz[k];
       const hDsp = evaluateCompiledDspAtFrequency(rad.dspChain, freq);
       const onAxis = sampleDirectivityBalloon(balloon, 0, 0, freq);
 
-      // Combine driveLin * H_DSP(f) * D_onAxis(f)
-      const cRe =
+      onAxisDriveReIm[k * 2] =
         (hDsp.re * onAxis.linearComplex.re - hDsp.im * onAxis.linearComplex.im) * driveLin;
-      const cIm =
+      onAxisDriveReIm[k * 2 + 1] =
         (hDsp.re * onAxis.linearComplex.im + hDsp.im * onAxis.linearComplex.re) * driveLin;
-      onAxisDriveReIm[k * 2] = cRe;
-      onAxisDriveReIm[k * 2 + 1] = cIm;
 
-      // Find bounding frequency indices in balloon once for this band k
       const bFreqs = balloon.frequenciesHz;
       const bN = bFreqs.length;
       let f0 = 0;
@@ -406,7 +204,6 @@ function findGridInterp(
   if (n <= 1 || val <= grid[0]) return { i0: 0, i1: 0, t: 0 };
   if (val >= grid[n - 1]) return { i0: n - 1, i1: n - 1, t: 0 };
 
-  // Fast O(1) uniform-step check (almost all balloons use uniform 5 deg / 10 deg grids)
   const step = (grid[n - 1] - grid[0]) / (n - 1);
   if (step > 1e-6) {
     const pos = (val - grid[0]) / step;
@@ -440,12 +237,12 @@ function accumulateRayContribution(
 ): void {
   const rad = entry.radiator;
   const balloon = rad.balloon;
-  const F = bands.frequenciesHz.length;
+  const fCount = bands.frequenciesHz.length;
   const invDist = reflectionScale / distanceM;
 
   if (entry.hasOffAxisPhase) {
     const driveLin = Math.exp(rad.drive1mDbSpl * LN10_OVER_20);
-    for (let k = 0; k < F; k++) {
+    for (let k = 0; k < fCount; k++) {
       const freq = bands.frequenciesHz[k];
       const bSample = sampleDirectivityBalloon(balloon, polarDeg, meridianDeg, freq);
       const hDsp = evaluateCompiledDspAtFrequency(rad.dspChain, freq);
@@ -464,7 +261,6 @@ function accumulateRayContribution(
     return;
   }
 
-  // Fast O(1) angle interpolation shared across ALL F frequency bands!
   const clampedPolar = Math.max(0, Math.min(180, polarDeg));
   const { i0: p0, i1: p1, t: tp } = findGridInterp(balloon.polarAnglesDeg, clampedPolar);
 
@@ -479,17 +275,17 @@ function accumulateRayContribution(
   }
 
   const mGrid = balloon.meridianAnglesDeg;
-  const M = mGrid.length;
-  const P = balloon.polarAnglesDeg.length;
+  const mCount = mGrid.length;
+  const pCount = balloon.polarAnglesDeg.length;
   let m0 = 0;
   let m1 = 0;
   let tm = 0;
-  if (M > 1) {
-    if (balloon.symmetry === 'none' && foldedM > mGrid[M - 1]) {
-      m0 = M - 1;
+  if (mCount > 1) {
+    if (balloon.symmetry === 'none' && foldedM > mGrid[mCount - 1]) {
+      m0 = mCount - 1;
       m1 = 0;
-      const span = 360 - mGrid[M - 1] + mGrid[0];
-      tm = span > 1e-9 ? (foldedM - mGrid[M - 1]) / span : 0;
+      const span = 360 - mGrid[mCount - 1] + mGrid[0];
+      tm = span > 1e-9 ? (foldedM - mGrid[mCount - 1]) / span : 0;
     } else {
       const mb = findGridInterp(mGrid, foldedM);
       m0 = mb.i0;
@@ -502,16 +298,16 @@ function accumulateRayContribution(
   const w01 = (1 - tm) * tp;
   const w10 = tm * (1 - tp);
   const w11 = tm * tp;
-  const off00 = m0 * P + p0;
-  const off01 = m0 * P + p1;
-  const off10 = m1 * P + p0;
-  const off11 = m1 * P + p1;
-  const sliceSize = M * P;
+  const off00 = m0 * pCount + p0;
+  const off01 = m0 * pCount + p1;
+  const off10 = m1 * pCount + p0;
+  const off11 = m1 * pCount + p1;
+  const sliceSize = mCount * pCount;
 
   const onAxisReIm = entry.onAxisDriveReIm;
   const offLin = entry.offAxisLinGain;
 
-  for (let k = 0; k < F; k++) {
+  for (let k = 0; k < fCount; k++) {
     const base = k * sliceSize;
     const dirGain =
       w00 * offLin[base + off00] +
@@ -533,9 +329,6 @@ function accumulateRayContribution(
   }
 }
 
-/**
- * Evaluates weighted SPL (in dB) at a single 3D point `receptor` across precomputed bands.
- */
 export function evaluatePointSplDb(
   receptor: Vec3,
   tables: readonly PrecomputedRadiatorFreqTable[],
@@ -547,7 +340,7 @@ export function evaluatePointSplDb(
     return -120;
   }
 
-  const F = bands.frequenciesHz.length;
+  const fCount = bands.frequenciesHz.length;
   sumScratchRe.fill(0);
   sumScratchIm.fill(0);
 
@@ -584,7 +377,7 @@ export function evaluatePointSplDb(
   }
 
   let totalWeightedEnergy = 0;
-  for (let k = 0; k < F; k++) {
+  for (let k = 0; k < fCount; k++) {
     const magSq = sumScratchRe[k] * sumScratchRe[k] + sumScratchIm[k] * sumScratchIm[k];
     totalWeightedEnergy += magSq * bands.energyWeights[k];
   }
@@ -595,108 +388,6 @@ export function evaluatePointSplDb(
   return 10 * Math.log10(totalWeightedEnergy);
 }
 
-function resolvePlanPointSurface(
-  surfaces: readonly AudienceSurface[],
-  x: number,
-  y: number,
-  defaultZ: number
-): { z: number; mask: number } {
-  let chosenZ = defaultZ;
-  let chosenMask = CELL_MASK_BACKGROUND;
-  let highestAudienceZ = Number.NEGATIVE_INFINITY;
-
-  for (let i = 0; i < surfaces.length; i++) {
-    const surf = surfaces[i];
-    const z = evaluateSurfaceListenerZ(surf, x, y);
-    if (z === null) continue;
-
-    if (surf.role === 'audience') {
-      if (z >= highestAudienceZ) {
-        highestAudienceZ = z;
-        chosenZ = z;
-        chosenMask = CELL_MASK_AUDIENCE;
-      }
-    } else if (chosenMask === CELL_MASK_BACKGROUND) {
-      chosenZ = z;
-      chosenMask = CELL_MASK_STAGE;
-    }
-  }
-
-  return { z: chosenZ, mask: chosenMask };
-}
-
-export function computeCoverageStatistics(
-  splDb: Float32Array,
-  surfaceMask: Uint8Array
-): CoverageStatistics {
-  let audCount = 0;
-  let audSum = 0;
-  let audMin = Number.POSITIVE_INFINITY;
-  let audMax = Number.NEGATIVE_INFINITY;
-
-  let stgCount = 0;
-  let stgSum = 0;
-
-  for (let i = 0; i < splDb.length; i++) {
-    const val = splDb[i];
-    if (val <= -115) continue;
-    const mask = surfaceMask[i];
-    if (mask === CELL_MASK_AUDIENCE) {
-      audCount++;
-      audSum += val;
-      if (val < audMin) audMin = val;
-      if (val > audMax) audMax = val;
-    } else if (mask === CELL_MASK_STAGE) {
-      stgCount++;
-      stgSum += val;
-    }
-  }
-
-  if (audCount === 0) {
-    return {
-      audienceSampleCount: 0,
-      meanAudienceSplDb: 0,
-      minAudienceSplDb: 0,
-      maxAudienceSplDb: 0,
-      stdDevAudienceDb: 0,
-      homogeneityPlusMinus3DbPercent: 0,
-      stageSampleCount: stgCount,
-      meanStageSplDb: stgCount > 0 ? stgSum / stgCount : null,
-      audienceToStageRejectionDb: null,
-    };
-  }
-
-  const meanAud = audSum / audCount;
-  let sqDiffSum = 0;
-  let within3Db = 0;
-
-  for (let i = 0; i < splDb.length; i++) {
-    if (surfaceMask[i] !== CELL_MASK_AUDIENCE || splDb[i] <= -115) continue;
-    const diff = splDb[i] - meanAud;
-    sqDiffSum += diff * diff;
-    if (Math.abs(diff) <= 3.0) {
-      within3Db++;
-    }
-  }
-
-  const meanStage = stgCount > 0 ? stgSum / stgCount : null;
-
-  return {
-    audienceSampleCount: audCount,
-    meanAudienceSplDb: meanAud,
-    minAudienceSplDb: audMin,
-    maxAudienceSplDb: audMax,
-    stdDevAudienceDb: Math.sqrt(sqDiffSum / audCount),
-    homogeneityPlusMinus3DbPercent: (within3Db / audCount) * 100,
-    stageSampleCount: stgCount,
-    meanStageSplDb: meanStage,
-    audienceToStageRejectionDb: meanStage !== null ? meanAud - meanStage : null,
-  };
-}
-
-/**
- * Evaluates the 2D Plan View (Top-down X-Y) SPL field across audience/stage surfaces.
- */
 export function evaluatePlanGrid(
   scene: ProjectScene,
   speakerMap: ReadonlyMap<string, SpeakerDefinition>,
@@ -743,9 +434,6 @@ export function evaluatePlanGrid(
   };
 }
 
-/**
- * Evaluates the 2D Side Section View (X-Z vertical cut at `scene.sectionBounds.sliceYM`).
- */
 export function evaluateSectionGrid(
   scene: ProjectScene,
   speakerMap: ReadonlyMap<string, SpeakerDefinition>,

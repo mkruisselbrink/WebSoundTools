@@ -1,7 +1,5 @@
-/**
- * WebSpeakerSim
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
 import { DEMO_VENUE_PRESETS } from '../../src/library/demo-presets.js';

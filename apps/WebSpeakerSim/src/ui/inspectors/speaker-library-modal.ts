@@ -1,29 +1,9 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * `<wss-speaker-library-modal>` Lit 3 modal (`src/ui/inspectors/speaker-library-modal.ts`)
- * providing:
- *   1. Built-in + Custom/Imported Loudspeaker Catalog browser (with JSON export & delete)
- *   2. Datasheet Spec Builder (synthesize calibrated 3D directivity balloons from specs)
- *   3. Client-side `.gll`, `.clf`, `.frd`/`.csv`, and `.json` Loudspeaker File Importer
+ * `<wss-speaker-library-modal>` Lit 3 modal combining Catalog, Datasheet Spec Builder,
+ * and client-side `.gll` / `.clf` / `.frd` / `.csv` / `.json` Loudspeaker File Importer.
  */
 
 import '@foh/ui';
@@ -33,54 +13,18 @@ import {
   importSpeakerArrayBuffer,
   serializeSpeakerToJson,
 } from '../../library/importers/index.js';
-import type { SpeakerCategory, SpeakerDefinition } from '../../library/speaker-schema.js';
+import type { SpeakerDefinition } from '../../library/speaker-schema.js';
 import { buildSpeakerFromSpec } from '../../library/spec-builder.js';
 import type { ProjectStore } from '../../model/project-store.js';
+import { renderCatalogTab } from './catalog-tab.js';
+import { renderImportTab } from './import-tab.js';
+import { renderSpecBuilderTab, type SpecBuilderDraft } from './spec-builder-tab.js';
 
 type LibraryModalTab = 'catalog' | 'spec-builder' | 'import';
 
 @customElement('wss-speaker-library-modal')
 export class WssSpeakerLibraryModal extends LitElement {
   static styles = css`
-    .backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(3, 6, 12, 0.78);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 120;
-      padding: 16px;
-    }
-
-    .dialog {
-      width: min(700px, 96vw);
-      max-height: 88vh;
-      background: #0b1120;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      color: #f8fafc;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-      font-size: 12px;
-    }
-
-    .head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
-    }
-
-    .head-title {
-      font-weight: 700;
-      font-size: 13.5px;
-    }
-
     .tabs {
       display: flex;
       gap: 6px;
@@ -245,18 +189,19 @@ export class WssSpeakerLibraryModal extends LitElement {
   @state()
   private dragActive = false;
 
-  // Spec Builder fields
-  @state() private specName = 'Custom 12" 90×50 Top';
-  @state() private specManufacturer = 'Custom Spec';
-  @state() private specCategory: SpeakerCategory = 'point-source';
-  @state() private specHDeg = 90;
-  @state() private specVDeg = 50;
-  @state() private specLowHz = 55;
-  @state() private specHighHz = 19000;
-  @state() private specMaxSplDb = 132;
-  @state() private specLfPattern: 'omni' | 'cardioid' = 'omni';
+  @state()
+  private specDraft: SpecBuilderDraft = {
+    name: 'Custom 12" 90×50 Top',
+    manufacturer: 'Custom Spec',
+    category: 'point-source',
+    hDeg: 90,
+    vDeg: 50,
+    lowHz: 55,
+    highHz: 19000,
+    maxSplDb: 132,
+    lfPattern: 'omni',
+  };
 
-  // FRD fallback options
   @state() private frdHDeg = 90;
   @state() private frdVDeg = 60;
   @state() private frdMaxSplDb = 131;
@@ -267,16 +212,17 @@ export class WssSpeakerLibraryModal extends LitElement {
   }
 
   private createFromSpecBuilder(): void {
+    const d = this.specDraft;
     const spk = buildSpeakerFromSpec({
-      name: this.specName.trim() || 'Custom Spec Loudspeaker',
-      manufacturer: this.specManufacturer.trim() || 'Custom Spec',
-      category: this.specCategory,
-      horizontalDispersionDeg: this.specCategory === 'subwoofer' ? 360 : this.specHDeg,
-      verticalDispersionDeg: this.specCategory === 'subwoofer' ? 360 : this.specVDeg,
-      low3dBHz: this.specLowHz,
-      high3dBHz: this.specHighHz,
-      maxContinuousSpl1mDb: this.specMaxSplDb,
-      lfPattern: this.specLfPattern,
+      name: d.name.trim() || 'Custom Spec Loudspeaker',
+      manufacturer: d.manufacturer.trim() || 'Custom Spec',
+      category: d.category,
+      horizontalDispersionDeg: d.category === 'subwoofer' ? 360 : d.hDeg,
+      verticalDispersionDeg: d.category === 'subwoofer' ? 360 : d.vDeg,
+      low3dBHz: d.lowHz,
+      high3dBHz: d.highHz,
+      maxContinuousSpl1mDb: d.maxSplDb,
+      lfPattern: d.lfPattern,
     });
     this.store.upsertCustomSpeaker(spk);
     this.onSaveCustomSpeaker?.(spk);
@@ -352,269 +298,64 @@ export class WssSpeakerLibraryModal extends LitElement {
           </button>
           <button
             class="tab-btn"
-              data-testid="tab-spec-builder"
-              data-active=${String(this.activeTab === 'spec-builder')}
-              @click=${() => (this.activeTab = 'spec-builder')}
-            >
-              Datasheet Spec Builder
-            </button>
-            <button
-              class="tab-btn"
-              data-testid="tab-import-file"
-              data-active=${String(this.activeTab === 'import')}
-              @click=${() => (this.activeTab = 'import')}
-            >
-              Import .gll / .clf / .frd / .json
-            </button>
-          </div>
+            data-testid="tab-spec-builder"
+            data-active=${String(this.activeTab === 'spec-builder')}
+            @click=${() => (this.activeTab = 'spec-builder')}
+          >
+            Datasheet Spec Builder
+          </button>
+          <button
+            class="tab-btn"
+            data-testid="tab-import-file"
+            data-active=${String(this.activeTab === 'import')}
+            @click=${() => (this.activeTab = 'import')}
+          >
+            Import .gll / .clf / .frd / .json
+          </button>
+        </div>
 
-          <div class="body">
-            ${this.activeTab === 'catalog'
-              ? html`
-                  <div class="spk-list" data-testid="catalog-speaker-list">
-                    ${allSpeakers.map(
-                      (spk) => html`
-                        <div class="spk-card" data-testid="catalog-item-${spk.id}">
-                          <div>
-                            <div>
-                              <strong>${spk.name}</strong>
-                              <span style="color:#94a3b8"> — ${spk.manufacturer}</span>
-                              <span class="badge">${spk.origin}</span>
-                              <span class="badge">${spk.category}</span>
-                            </div>
-                            <div class="spk-meta">
-                              ${spk.nominalDispersionDeg.horizontal}°×${spk.nominalDispersionDeg
-                                .vertical}°
-                              · ${spk.passbandHz.low3dB}–${spk.passbandHz.high3dB} Hz · Max 1m:
-                              ${spk.maxContinuousSpl1mDb} dB SPL
-                            </div>
-                          </div>
-                          <div style="display:flex;gap:6px">
-                            <button class="btn" @click=${() => this.exportSpeakerJson(spk)}>
-                              JSON
-                            </button>
-                            ${spk.origin !== 'builtin'
-                              ? html`
-                                  <button
-                                    class="btn btn-danger"
-                                    data-testid="btn-delete-speaker-${spk.id}"
-                                    @click=${() => {
-                                      this.store.removeCustomSpeaker(spk.id);
-                                      this.onDeleteCustomSpeaker?.(spk.id);
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                `
-                              : ''}
-                          </div>
-                        </div>
-                      `
-                    )}
-                  </div>
-                `
-              : this.activeTab === 'spec-builder'
-                ? html`
-                    <div class="form-grid" data-testid="spec-builder-form">
-                      <div class="field">
-                        <label>Model Name</label>
-                        <input
-                          type="text"
-                          data-testid="spec-name-input"
-                          .value=${this.specName}
-                          @input=${(ev: Event) =>
-                            (this.specName = (ev.target as HTMLInputElement).value)}
-                        />
-                      </div>
-                      <div class="field">
-                        <label>Manufacturer / Series</label>
-                        <input
-                          type="text"
-                          .value=${this.specManufacturer}
-                          @input=${(ev: Event) =>
-                            (this.specManufacturer = (ev.target as HTMLInputElement).value)}
-                        />
-                      </div>
-                      <div class="field">
-                        <label>Enclosure Category</label>
-                        <select
-                          data-testid="spec-category-select"
-                          .value=${this.specCategory}
-                          @change=${(ev: Event) => {
-                            const cat = (ev.target as HTMLSelectElement).value as SpeakerCategory;
-                            this.specCategory = cat;
-                            if (cat === 'subwoofer') {
-                              this.specLowHz = 34;
-                              this.specHighHz = 110;
-                            } else {
-                              this.specLowHz = 55;
-                              this.specHighHz = 19000;
-                            }
-                          }}
-                        >
-                          <option value="point-source">Point-Source Top / Fill</option>
-                          <option value="subwoofer">Subwoofer Enclosure</option>
-                        </select>
-                      </div>
-                      <div class="field">
-                        <label>LF Enclosure Radiation</label>
-                        <select
-                          .value=${this.specLfPattern}
-                          @change=${(ev: Event) =>
-                            (this.specLfPattern = (ev.target as HTMLSelectElement).value as
-                              | 'omni'
-                              | 'cardioid')}
-                        >
-                          <option value="omni">Standard Omnidirectional LF</option>
-                          <option value="cardioid">Intrinsic Cardioid Enclosure</option>
-                        </select>
-                      </div>
+        <div class="body">
+          ${this.activeTab === 'catalog'
+            ? renderCatalogTab({
+                allSpeakers,
+                onExportJson: (spk) => this.exportSpeakerJson(spk),
+                onDeleteCustom: (speakerId) => {
+                  this.store.removeCustomSpeaker(speakerId);
+                  this.onDeleteCustomSpeaker?.(speakerId);
+                },
+              })
+            : this.activeTab === 'spec-builder'
+              ? renderSpecBuilderTab({
+                  draft: this.specDraft,
+                  onPatchDraft: (patch) => {
+                    this.specDraft = { ...this.specDraft, ...patch };
+                  },
+                  onCreate: () => this.createFromSpecBuilder(),
+                })
+              : renderImportTab({
+                  dragActive: this.dragActive,
+                  frdHDeg: this.frdHDeg,
+                  frdVDeg: this.frdVDeg,
+                  onSetDragActive: (active) => {
+                    this.dragActive = active;
+                  },
+                  onBrowseClick: () => {
+                    const input = this.renderRoot.querySelector(
+                      '#speaker-file-input'
+                    ) as HTMLInputElement | null;
+                    input?.click();
+                  },
+                  onFilesSelected: (files) => {
+                    void this.handleFiles(files);
+                  },
+                  onPatchFallbackDispersion: (patch) => {
+                    if (patch.frdHDeg !== undefined) this.frdHDeg = patch.frdHDeg;
+                    if (patch.frdVDeg !== undefined) this.frdVDeg = patch.frdVDeg;
+                  },
+                })}
 
-                      ${this.specCategory === 'point-source'
-                        ? html`
-                            <div class="field">
-                              <label>Horizontal Dispersion -6 dB (°)</label>
-                              <input
-                                type="number"
-                                min="30"
-                                max="160"
-                                step="5"
-                                data-testid="spec-h-deg"
-                                .value=${String(this.specHDeg)}
-                                @input=${(ev: Event) =>
-                                  (this.specHDeg = Number((ev.target as HTMLInputElement).value))}
-                              />
-                            </div>
-                            <div class="field">
-                              <label>Vertical Dispersion -6 dB (°)</label>
-                              <input
-                                type="number"
-                                min="20"
-                                max="140"
-                                step="5"
-                                data-testid="spec-v-deg"
-                                .value=${String(this.specVDeg)}
-                                @input=${(ev: Event) =>
-                                  (this.specVDeg = Number((ev.target as HTMLInputElement).value))}
-                              />
-                            </div>
-                          `
-                        : ''}
-
-                      <div class="field">
-                        <label>Low -3 dB Cutoff (Hz)</label>
-                        <input
-                          type="number"
-                          min="20"
-                          max="500"
-                          .value=${String(this.specLowHz)}
-                          @input=${(ev: Event) =>
-                            (this.specLowHz = Number((ev.target as HTMLInputElement).value))}
-                        />
-                      </div>
-                      <div class="field">
-                        <label>High -3 dB Cutoff (Hz)</label>
-                        <input
-                          type="number"
-                          min="60"
-                          max="22000"
-                          .value=${String(this.specHighHz)}
-                          @input=${(ev: Event) =>
-                            (this.specHighHz = Number((ev.target as HTMLInputElement).value))}
-                        />
-                      </div>
-                      <div class="field">
-                        <label>Max Continuous SPL @ 1 m (dB)</label>
-                        <input
-                          type="number"
-                          min="95"
-                          max="150"
-                          step="0.5"
-                          data-testid="spec-max-spl"
-                          .value=${String(this.specMaxSplDb)}
-                          @input=${(ev: Event) =>
-                            (this.specMaxSplDb = Number((ev.target as HTMLInputElement).value))}
-                        />
-                      </div>
-                    </div>
-
-                    <div style="margin-top:14px;display:flex;justify-content:flex-end">
-                      <button
-                        class="btn btn-primary"
-                        data-testid="btn-create-spec-speaker"
-                        @click=${() => this.createFromSpecBuilder()}
-                      >
-                        Synthesize 3D Balloon & Add to Library
-                      </button>
-                    </div>
-                  `
-                : html`
-                    <div
-                      class="dropzone"
-                      data-drag=${String(this.dragActive)}
-                      @dragover=${(ev: DragEvent) => {
-                        ev.preventDefault();
-                        this.dragActive = true;
-                      }}
-                      @dragleave=${() => (this.dragActive = false)}
-                      @drop=${(ev: DragEvent) => {
-                        ev.preventDefault();
-                        this.dragActive = false;
-                        void this.handleFiles(ev.dataTransfer?.files ?? null);
-                      }}
-                      @click=${() => {
-                        const input = this.renderRoot.querySelector(
-                          '#speaker-file-input'
-                        ) as HTMLInputElement | null;
-                        input?.click();
-                      }}
-                    >
-                      <div style="font-weight:600;font-size:13px;margin-bottom:4px">
-                        Drop loudspeaker files here or click to browse
-                      </div>
-                      <div style="color:#94a3b8;font-size:11px">
-                        Supports binary <code>.gll</code> (e.g. manufacturer GLL files), polar text
-                        <code>.clf</code>, measured curves <code>.frd</code> / <code>.csv</code>,
-                        and <code>.json</code> speaker definitions.
-                      </div>
-                      <input
-                        id="speaker-file-input"
-                        data-testid="speaker-file-input"
-                        type="file"
-                        multiple
-                        accept=".gll,.clf,.tab,.frd,.csv,.txt,.json"
-                        style="display:none"
-                        @change=${(ev: Event) => {
-                          const input = ev.target as HTMLInputElement;
-                          void this.handleFiles(input.files);
-                          input.value = '';
-                        }}
-                      />
-                    </div>
-
-                    <div class="form-grid">
-                      <div class="field">
-                        <label>.frd/.csv Nominal Horizontal (°)</label>
-                        <input
-                          type="number"
-                          .value=${String(this.frdHDeg)}
-                          @input=${(ev: Event) =>
-                            (this.frdHDeg = Number((ev.target as HTMLInputElement).value))}
-                        />
-                      </div>
-                      <div class="field">
-                        <label>.frd/.csv Nominal Vertical (°)</label>
-                        <input
-                          type="number"
-                          .value=${String(this.frdVDeg)}
-                          @input=${(ev: Event) =>
-                            (this.frdVDeg = Number((ev.target as HTMLInputElement).value))}
-                        />
-                      </div>
-                    </div>
-                  `}
-
-            ${this.statusMessage ? html`<div class="status">${this.statusMessage}</div>` : ''}
+          ${this.statusMessage ? html`<div class="status">${this.statusMessage}</div>` : ''}
+        </div>
       </foh-modal>
     `;
   }
@@ -625,4 +366,3 @@ declare global {
     'wss-speaker-library-modal': WssSpeakerLibraryModal;
   }
 }
-

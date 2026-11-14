@@ -1,64 +1,38 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Dedicated Background DSP Web Worker (`dsp.worker.ts`).
- *
- * Runs one or more simultaneous `MeasurementPipeline` slots at ~25 Hz, reading either:
- *  - Real-time multi-channel hardware samples from `MultiChannelRingBuffer` (in 'hardware' mode), OR
- *  - Deterministic simulated PA/room samples per slot from `SignalGenerator` + `SyntheticAcousticRig`
- *    (in 'simulator' mode).
+ * Dedicated Background DSP Web Worker (`dsp.worker.ts`) running multi-slot
+ * `MeasurementPipeline` instances at 25 Hz in either hardware or simulator mode.
  */
 
+import { parseCalibrationFile } from '@foh/acoustics';
 import {
   INTERNAL_LOOPBACK_SLOT_INDEX,
   MultiChannelRingBuffer,
-  RingBufferStorage,
   TOTAL_RING_BUFFER_SLOTS,
 } from '../audio/ring-buffer.js';
 import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipeline,
-  MeasurementPipelineConfig,
   REFERENCE_CHANNEL_GLOBAL,
   SHARED_MEASUREMENT_CONFIG_KEYS,
   resolveEffectiveReferenceChannel,
   splitMeasurementConfigPartial,
 } from './analyzer-pipeline.js';
-import { parseCalibrationFile } from '@foh/acoustics';
+import type {
+  InputSourceMode,
+  LiveMeasurementSlotConfig,
+  WorkerInboundMessage,
+} from './dsp-worker-protocol.js';
+import { SignalGenerator } from './signal-generator.js';
 import {
-  SignalGenerator,
-  SignalGeneratorConfig,
-} from './signal-generator.js';
-import {
-  formatSplHistoryCsv,
   SplHistoryCheckpoint,
   SplHistoryWindowSec,
+  formatSplHistoryCsv,
 } from './spl-history.js';
-import {
-  SIMULATOR_PRESETS,
-  SimulatorPresetId,
-  SimulatorRigConfig,
-  SyntheticAcousticRig,
-} from './synthetic-rig.js';
+import { SIMULATOR_PRESETS, SyntheticAcousticRig } from './synthetic-rig.js';
 
 export {
   REFERENCE_CHANNEL_GLOBAL,
@@ -66,52 +40,7 @@ export {
   resolveEffectiveReferenceChannel,
   splitMeasurementConfigPartial,
 };
-
-export type InputSourceMode = 'simulator' | 'hardware';
-
-export interface LiveMeasurementSlotConfig {
-  readonly id: string;
-  readonly name: string;
-  readonly color: string;
-  readonly visible: boolean;
-  readonly simulatorPreset: SimulatorPresetId;
-  readonly measurementChannel: number;
-  readonly referenceChannel: number; // -2 = Follow Global Ref, -1 = Internal Generator Loopback, >=0 = Physical In Ch
-  readonly config: MeasurementPipelineConfig;
-  readonly activeCalibrationId: string | null;
-}
-
-export type WorkerInboundMessage =
-  | { type: 'init'; sampleRate: number; ringBufferStorage?: RingBufferStorage }
-  | { type: 'set-input-mode'; mode: InputSourceMode }
-  | {
-      type: 'sync-live-slots';
-      slots: readonly LiveMeasurementSlotConfig[];
-      channelTapMap: Record<number, number>;
-      globalReferenceChannel?: number;
-    }
-  | {
-      type: 'set-simulator-preset';
-      slotId: string;
-      preset: SimulatorPresetId | SimulatorRigConfig;
-    }
-  | {
-      type: 'update-measurement-config';
-      slotId: string;
-      config: Partial<MeasurementPipelineConfig>;
-    }
-  | { type: 'update-generator-config'; config: Partial<SignalGeneratorConfig> }
-  | { type: 'load-calibration'; slotId: string; text: string; name: string }
-  | { type: 'clear-calibration'; slotId: string }
-  | { type: 'find-delay'; slotId: string }
-  | { type: 'apply-estimated-delay'; slotId: string }
-  | { type: 'reset-averaging'; slotId?: string }
-  | { type: 'reset-spl-history'; slotId?: string }
-  | { type: 'set-spl-history-window'; windowSec: SplHistoryWindowSec }
-  | { type: 'hydrate-spl-history'; checkpoints: readonly SplHistoryCheckpoint[] }
-  | { type: 'export-spl-csv' }
-  | { type: 'audio-chunk'; channels: Float32Array[] }
-  | { type: 'pause'; paused: boolean };
+export type { InputSourceMode, LiveMeasurementSlotConfig, WorkerInboundMessage };
 
 interface LiveSlotRuntime {
   slot: LiveMeasurementSlotConfig;
@@ -170,10 +99,8 @@ function getOrCreateSlotRuntime(slotId: string): LiveSlotRuntime {
   return rt;
 }
 
-// Initialize primary slot immediately
 getOrCreateSlotRuntime('live-measurement');
 
-// Scratch buffers for simulation & multi-channel ring buffer draining
 const simChunkSize = 2048;
 const simRefBuf = new Float32Array(simChunkSize);
 const simMeasBuf = new Float32Array(simChunkSize);
@@ -235,7 +162,6 @@ function tick(): void {
 
   try {
     if (inputMode === 'simulator') {
-      // Synthesize ~42.6 ms (2048 samples at 48 kHz) shared reference block per tick
       generator.fillBuffer(simRefBuf, simChunkSize);
       for (const rt of slots.values()) {
         rt.simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
@@ -271,7 +197,6 @@ function tick(): void {
       });
     }
 
-    // Every 250 ticks (~10 seconds at 25 Hz), emit batched SPL history checkpoints for crash recovery
     ticksSinceCheckpoint++;
     if (ticksSinceCheckpoint >= 250) {
       ticksSinceCheckpoint = 0;
@@ -298,7 +223,7 @@ function tick(): void {
   }
 }
 
-const intervalId = setInterval(tick, 40); // 25 FPS DSP transform rate
+const intervalId = setInterval(tick, 40);
 
 self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
   const msg = event.data;
@@ -603,5 +528,4 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
   }
 };
 
-// Exported for unit test teardown (clearInterval) and simulator preset lookup
 export { intervalId, SIMULATOR_PRESETS };

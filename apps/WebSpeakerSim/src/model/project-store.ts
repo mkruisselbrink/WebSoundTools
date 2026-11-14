@@ -1,26 +1,9 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
  * Reactive `ProjectStore` with transaction-coalesced Undo/Redo history,
- * selection state, colormap settings, and merged speaker library (`src/model/project-store.ts`).
+ * selection state, colormap settings, and merged speaker library.
  */
 
 import type { AtmosphericConditions } from '@foh/acoustics';
@@ -34,6 +17,14 @@ import { getBuiltinSpeakerMap } from '../library/builtin-speakers.js';
 import { getDemoPresetById } from '../library/demo-presets.js';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
+import {
+  DEFAULT_COLORMAP_CONFIG,
+  resolveEffectiveSplRange,
+  type ColormapConfig,
+  type ColormapPaletteId,
+  type ColormapRangeMode,
+  type IsolineStepDb,
+} from './colormap-config.js';
 import type {
   AnalysisBandSelection,
   AudienceSurface,
@@ -44,6 +35,15 @@ import type {
   VirtualMicInstance,
 } from './project-types.js';
 
+export {
+  DEFAULT_COLORMAP_CONFIG,
+  resolveEffectiveSplRange,
+  type ColormapConfig,
+  type ColormapPaletteId,
+  type ColormapRangeMode,
+  type IsolineStepDb,
+};
+
 export type SelectedEntity =
   | { readonly kind: 'surface'; readonly id: string }
   | { readonly kind: 'point-source'; readonly id: string }
@@ -51,75 +51,6 @@ export type SelectedEntity =
   | { readonly kind: 'dsp-group'; readonly id: string }
   | { readonly kind: 'virtual-mic'; readonly id: string }
   | { readonly kind: 'environment' };
-
-export type ColormapPaletteId = 'turbo' | 'inferno' | 'viridis';
-
-export type ColormapRangeMode = 'auto-6' | 'auto-12' | 'auto-21' | 'auto-36' | 'manual';
-
-export type IsolineStepDb = 0 | 1 | 2 | 3 | 6;
-
-export interface ColormapConfig {
-  readonly palette: ColormapPaletteId;
-  readonly rangeMode: ColormapRangeMode;
-  readonly stepped: boolean;
-  readonly minSplDb: number;
-  readonly maxSplDb: number;
-  readonly isolineStepDb: IsolineStepDb;
-  readonly showOutsideSurfaces: boolean;
-}
-
-export const DEFAULT_COLORMAP_CONFIG: ColormapConfig = {
-  palette: 'turbo',
-  rangeMode: 'auto-21',
-  stepped: false,
-  minSplDb: 84,
-  maxSplDb: 114,
-  isolineStepDb: 3,
-  showOutsideSurfaces: true,
-};
-
-/**
- * Resolves the effective `[minSplDb, maxSplDb]` display window from `ColormapConfig`
- * and the latest audience coverage statistics.
- */
-export function resolveEffectiveSplRange(
-  colormap: ColormapConfig,
-  stats?: {
-    readonly audienceSampleCount: number;
-    readonly meanAudienceSplDb: number;
-    readonly maxAudienceSplDb: number;
-  } | null
-): { readonly minSplDb: number; readonly maxSplDb: number } {
-  if (
-    colormap.rangeMode === 'manual' ||
-    !stats ||
-    stats.audienceSampleCount <= 0 ||
-    !Number.isFinite(stats.meanAudienceSplDb)
-  ) {
-    const lo = colormap.minSplDb;
-    const hi = Math.max(lo + 2, colormap.maxSplDb);
-    return { minSplDb: lo, maxSplDb: hi };
-  }
-
-  // Round anchor to 0.5 dB steps so coarse/fine refinement passes don't jitter colors
-  const mean = Math.round(stats.meanAudienceSplDb * 2) / 2;
-  const peak = Math.round(stats.maxAudienceSplDb * 2) / 2;
-
-  switch (colormap.rangeMode) {
-    case 'auto-6':
-      return { minSplDb: mean - 3, maxSplDb: mean + 3 };
-    case 'auto-12':
-      return { minSplDb: mean - 6, maxSplDb: mean + 6 };
-    case 'auto-21': {
-      const top = Math.max(mean + 3, peak + 1.5);
-      return { minSplDb: top - 21, maxSplDb: top };
-    }
-    case 'auto-36': {
-      const top = Math.max(mean + 3, peak + 1.5);
-      return { minSplDb: top - 36, maxSplDb: top };
-    }
-  }
-}
 
 export type StoreChangeKind = 'scene' | 'selection' | 'colormap' | 'speakers';
 

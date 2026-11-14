@@ -4,10 +4,11 @@
 
 import { BiquadSpec } from '@foh/dsp';
 import { ReactiveUndoStore } from '@foh/state';
+import { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import {
-  DetectedFeedbackTrack,
-  MAX_RING_LOG_ENTRIES,
-} from '../dsp/feedback-detector.js';
+  applyFeedbackNotchToEqList,
+  mergeFeedbackTracksIntoRingLog,
+} from './auto-eq-matcher.js';
 import {
   EqualizerSourceConfig,
   SourceDspPatch,
@@ -95,7 +96,6 @@ function updateInList<T extends { id: string }>(
 }
 
 export class SourceStore {
-  // Ephemeral 25 FPS telemetry kept strictly outside ReactiveUndoStore
   private liveSources: SourceData[] = [];
   private readonly liveVisibility = new Map<string, boolean>([
     ['live-measurement', true],
@@ -103,7 +103,6 @@ export class SourceStore {
   private feedbackRingLog: DetectedFeedbackTrack[] = [];
   private selectedSourceId = 'live-measurement';
 
-  // User-authored state backed by 60-deep Undo/Redo history
   private readonly authoredStore = new ReactiveUndoStore<AuthoredSourcesState>({
     storedSources: [],
     eqSources: [],
@@ -338,7 +337,10 @@ export class SourceStore {
       const prev = prevById.get(frame.id);
       const splHistory = frame.splHistory ?? prev?.splHistory;
       if (frame.feedbackTracks && frame.feedbackTracks.length > 0) {
-        this.recordFeedbackTracksInLog(frame.feedbackTracks);
+        this.feedbackRingLog = mergeFeedbackTracksIntoRingLog(
+          this.feedbackRingLog,
+          frame.feedbackTracks
+        );
       }
       if (frame.visible === vis && frame.splHistory === splHistory) {
         return frame;
@@ -352,34 +354,6 @@ export class SourceStore {
     this.notify();
   }
 
-  private recordFeedbackTracksInLog(tracks: readonly DetectedFeedbackTrack[]): void {
-    for (const t of tracks) {
-      const existingIdx = this.feedbackRingLog.findIndex(
-        (entry) =>
-          entry.slotId === t.slotId &&
-          (entry.id === t.id ||
-            Math.abs(entry.frequencyHz - t.frequencyHz) <= Math.max(15, t.frequencyHz * 0.025))
-      );
-
-      if (existingIdx >= 0) {
-        const prev = this.feedbackRingLog[existingIdx];
-        const updated: DetectedFeedbackTrack = {
-          ...t,
-          state: prev.state === 'feedback' || t.state === 'feedback' ? 'feedback' : t.state,
-          prominenceDb: Math.max(prev.prominenceDb, t.prominenceDb),
-          peakLevelDb: Math.max(prev.peakLevelDb, t.peakLevelDb),
-          estimatedQ: Math.max(prev.estimatedQ, t.estimatedQ),
-          durationMs: Math.max(prev.durationMs, t.durationMs),
-        };
-        const nextLog = [...this.feedbackRingLog];
-        nextLog.splice(existingIdx, 1);
-        this.feedbackRingLog = [updated, ...nextLog].slice(0, MAX_RING_LOG_ENTRIES);
-      } else {
-        this.feedbackRingLog = [t, ...this.feedbackRingLog].slice(0, MAX_RING_LOG_ENTRIES);
-      }
-    }
-  }
-
   getFeedbackRingLog(): readonly DetectedFeedbackTrack[] {
     return this.feedbackRingLog;
   }
@@ -391,104 +365,22 @@ export class SourceStore {
   }
 
   applyFeedbackNotchToEq(track: DetectedFeedbackTrack): string {
-    const freqHz = Math.max(20, Math.min(20000, Math.round(track.frequencyHz)));
-    const qVal = Math.min(24, Math.max(8, Math.round(track.estimatedQ)));
-    const initialCutDb =
-      track.state === 'feedback'
-        ? Math.max(-15, Math.min(-6, -Math.round(track.prominenceDb * 0.75)))
-        : Math.max(-9, Math.min(-3, -Math.round(track.prominenceDb * 0.5)));
-
-    const targetEq =
-      this.eqSources.find((eq) => eq.targetSourceId === track.slotId) ?? null;
-
-    if (!targetEq) {
-      const id = generateShortId('eq');
-      const bands = createDefaultEqBands();
-      bands[0] = {
-        type: 'peaking',
-        frequency: freqHz,
-        q: qVal,
-        gainDb: initialCutDb,
-        enabled: true,
-      };
-      const createdEq: EqualizerSourceConfig = normalizeEqSourceConfig({
-        id,
-        name: `Feedback Notch (${track.slotName})`,
-        color: '#10b981',
-        visible: true,
-        bands,
-        targetSourceId: track.slotId,
-        createdAt: new Date().toISOString(),
-      });
-      this.authoredStore.update((s) => ({
-        ...s,
-        eqSources: [...s.eqSources, createdEq],
-      }));
-      void this.persistence.saveEq?.(createdEq);
-      this.notify();
-      return id;
-    }
-
-    const existingBandIdx = targetEq.bands.findIndex(
-      (b) =>
-        b.enabled !== false &&
-        b.type === 'peaking' &&
-        (b.gainDb ?? 0) < 0 &&
-        Math.abs(b.frequency - freqHz) <= Math.max(10, freqHz * 0.025)
-    );
-
-    let bandIdxToUpdate = existingBandIdx;
-    let nextGainDb = initialCutDb;
-
-    if (existingBandIdx >= 0) {
-      const currentGain = targetEq.bands[existingBandIdx]?.gainDb ?? 0;
-      nextGainDb = Math.max(-18, currentGain - 3.0);
-    } else {
-      const unusedIdx = targetEq.bands.findIndex(
-        (b) => b.enabled === false || Math.abs(b.gainDb ?? 0) < 0.1
-      );
-      if (unusedIdx >= 0) {
-        bandIdxToUpdate = unusedIdx;
-      } else {
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let i = 0; i < targetEq.bands.length; i++) {
-          const dist = Math.abs(Math.log2(targetEq.bands[i].frequency / freqHz));
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestIdx = i;
-          }
-        }
-        bandIdxToUpdate = bestIdx;
-      }
-    }
-
-    this.authoredStore.update((s) => ({
-      ...s,
-      eqSources: updateInList(
+    let appliedId = '';
+    this.authoredStore.update((s) => {
+      const { eqId, updatedEq, nextEqSources } = applyFeedbackNotchToEqList(
         s.eqSources,
-        targetEq.id,
-        (eq) =>
-          syncEqConfigWithBands(
-            { ...eq, visible: true },
-            eq.bands.map((b, idx) =>
-              idx === bandIdxToUpdate
-                ? {
-                    ...b,
-                    type: 'peaking',
-                    frequency: freqHz,
-                    q: qVal,
-                    gainDb: nextGainDb,
-                    enabled: true,
-                  }
-                : b
-            )
-          ),
-        this.persistence.saveEq
-      ),
-    }));
+        track,
+        () => generateShortId('eq')
+      );
+      appliedId = eqId;
+      void this.persistence.saveEq?.(updatedEq);
+      return {
+        ...s,
+        eqSources: nextEqSources,
+      };
+    });
     this.notify();
-    return targetEq.id;
+    return appliedId;
   }
 
   setLiveFrame(live: SourceData): void {
