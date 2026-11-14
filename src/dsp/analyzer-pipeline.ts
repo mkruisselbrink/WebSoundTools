@@ -39,6 +39,11 @@ import {
   interpolateCalibrationCurve,
 } from './calibration.js';
 import { DeconvolutionAnalyzer, DelayEstimate } from './deconvolution.js';
+import {
+  DetectedFeedbackTrack,
+  FeedbackDetector,
+  FeedbackSensitivityMode,
+} from './feedback-detector.js';
 import { Radix2FFT } from './fft.js';
 import {
   OCTAVE_SMOOTHING_FRACTIONS,
@@ -46,6 +51,11 @@ import {
   smoothMagnitudeOctave,
   smoothPhaseOctave,
 } from './smoothing.js';
+import {
+  SplHistoryData,
+  SplHistoryTracker,
+  SplHistoryWindowSec,
+} from './spl-history.js';
 import {
   AveragingType,
   TransferEstimatorType,
@@ -81,6 +91,8 @@ export interface MeasurementPipelineConfig {
   inputFilter: InputPreFilterType;
   splOffsetDb: number;
   calibrationEnabled: boolean;
+  /** Per-slot acoustic feedback detector sensitivity profile */
+  feedbackMode?: FeedbackSensitivityMode;
 }
 
 export const DEFAULT_MEASUREMENT_CONFIG: MeasurementPipelineConfig = {
@@ -102,6 +114,7 @@ export const DEFAULT_MEASUREMENT_CONFIG: MeasurementPipelineConfig = {
   inputFilter: 'Z',
   splOffsetDb: 100.0,
   calibrationEnabled: false,
+  feedbackMode: 'foh-normal',
 };
 
 /** Sentinel value on `LiveMeasurementSlotConfig.referenceChannel` meaning "follow the Topbar Global Reference Channel". */
@@ -161,6 +174,10 @@ export class MeasurementPipeline {
   private deconv: DeconvolutionAnalyzer;
   private delayFinder: DeconvolutionAnalyzer;
   private readonly meters: BroadbandMeterBank;
+  private readonly splHistory: SplHistoryTracker;
+  private readonly feedbackDetector: FeedbackDetector;
+  private lastExportedSplEpochSeq: number = -1;
+  private cachedSplHistory: SplHistoryData | undefined;
 
   private readonly preFilterM: BiquadCascade;
   private readonly preFilterR: BiquadCascade;
@@ -205,6 +222,8 @@ export class MeasurementPipeline {
     this.preFilterM = new BiquadCascade();
     this.preFilterR = new BiquadCascade();
     this.meters = new BroadbandMeterBank(this.config.sampleRate, this.config.splOffsetDb);
+    this.splHistory = new SplHistoryTracker(this.config.sampleRate, this.config.splOffsetDb);
+    this.feedbackDetector = new FeedbackDetector(this.config.feedbackMode ?? 'foh-normal');
 
     const N = this.config.fftSize;
     const B = (N >>> 1) + 1;
@@ -285,6 +304,7 @@ export class MeasurementPipeline {
         this.deconv.setSampleRate(this.config.sampleRate);
         this.delayFinder.setSampleRate(this.config.sampleRate);
         this.meters.setSampleRate(this.config.sampleRate);
+        this.splHistory.setSampleRate(this.config.sampleRate);
         this.rebuildInputFilters();
         this.rebuildCalibrationArrays();
       }
@@ -303,6 +323,10 @@ export class MeasurementPipeline {
     }
     if (partial.splOffsetDb !== undefined) {
       this.meters.setSplOffsetDb(this.config.splOffsetDb);
+      this.splHistory.setSplOffsetDb(this.config.splOffsetDb);
+    }
+    if (partial.feedbackMode !== undefined) {
+      this.feedbackDetector.setMode(partial.feedbackMode);
     }
     if (partial.delayMs !== undefined && partial.delayMs !== prev.delayMs) {
       this.tf.reset();
@@ -354,6 +378,26 @@ export class MeasurementPipeline {
     this.tf.reset();
     this.deconv.reset();
     this.meters.reset();
+    this.feedbackDetector.reset();
+  }
+
+  resetSplHistory(): void {
+    this.splHistory.reset();
+    this.lastExportedSplEpochSeq = -1;
+    this.cachedSplHistory = undefined;
+  }
+
+  setSplHistoryWindowSec(windowSec: SplHistoryWindowSec): void {
+    this.splHistory.setActiveWindowSec(windowSec);
+    this.lastExportedSplEpochSeq = -1;
+  }
+
+  getSplHistoryTracker(): SplHistoryTracker {
+    return this.splHistory;
+  }
+
+  getFeedbackDetector(): FeedbackDetector {
+    return this.feedbackDetector;
   }
 
   /**
@@ -378,6 +422,8 @@ export class MeasurementPipeline {
       this.circR[this.writePtr] = filtR;
       this.writePtr = (this.writePtr + 1) & mask;
     }
+
+    this.splHistory.advanceSamples(length, this.meters);
   }
 
   /**
@@ -520,6 +566,28 @@ export class MeasurementPipeline {
       phaseImOut = this.outPhaseIm;
     }
 
+    const levelsSnapshot = this.meters.getSnapshot(this.splHistory.getRollingLeq());
+    const feedbackTracks: DetectedFeedbackTrack[] = this.feedbackDetector.processFrame({
+      slotId: this.config.id,
+      slotName: this.config.name,
+      slotColor: this.config.color,
+      sampleRate: this.config.sampleRate,
+      fftSize: N,
+      splOffsetDb: this.config.splOffsetDb,
+      dtMs: Math.round(dtSeconds * 1000),
+      module: this.tf.module,
+      refModule: this.tf.refModule,
+      referenceRmsDb: levelsSnapshot.referenceRmsDb,
+    });
+
+    const curEpochSeq = this.splHistory.getEpochSeq();
+    let exportedSplHistory: SplHistoryData | undefined;
+    if (curEpochSeq !== this.lastExportedSplEpochSeq) {
+      this.lastExportedSplEpochSeq = curEpochSeq;
+      this.cachedSplHistory = this.splHistory.exportWindow();
+      exportedSplHistory = this.cachedSplHistory;
+    }
+
     return {
       id: this.config.id,
       name: this.config.name,
@@ -550,8 +618,10 @@ export class MeasurementPipeline {
         impulse: this.deconv.impulse,
         stepResponse: this.deconv.stepResponse,
       },
-      levels: this.meters.getSnapshot(),
+      levels: levelsSnapshot,
       delayEstimate: this.latestDelayEstimate,
+      ...(exportedSplHistory ? { splHistory: exportedSplHistory } : {}),
+      feedbackTracks,
     };
   }
 }

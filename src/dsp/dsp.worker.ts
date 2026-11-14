@@ -49,6 +49,11 @@ import {
   SignalGeneratorConfig,
 } from './signal-generator.js';
 import {
+  formatSplHistoryCsv,
+  SplHistoryCheckpoint,
+  SplHistoryWindowSec,
+} from './spl-history.js';
+import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
   SimulatorRigConfig,
@@ -101,6 +106,10 @@ export type WorkerInboundMessage =
   | { type: 'find-delay'; slotId: string }
   | { type: 'apply-estimated-delay'; slotId: string }
   | { type: 'reset-averaging'; slotId?: string }
+  | { type: 'reset-spl-history'; slotId?: string }
+  | { type: 'set-spl-history-window'; windowSec: SplHistoryWindowSec }
+  | { type: 'hydrate-spl-history'; checkpoints: readonly SplHistoryCheckpoint[] }
+  | { type: 'export-spl-csv' }
   | { type: 'audio-chunk'; channels: Float32Array[] }
   | { type: 'pause'; paused: boolean };
 
@@ -209,6 +218,7 @@ function routeHardwareSamplesToSlots(
 }
 
 let lastTickTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+let ticksSinceCheckpoint = 0;
 
 function tick(): void {
   if (isPaused) {
@@ -256,6 +266,26 @@ function tick(): void {
         type: 'measurement-frames',
         frames,
       });
+    }
+
+    // Every 250 ticks (~10 seconds at 25 Hz), emit batched SPL history checkpoints for crash recovery
+    ticksSinceCheckpoint++;
+    if (ticksSinceCheckpoint >= 250) {
+      ticksSinceCheckpoint = 0;
+      const checkpoints: SplHistoryCheckpoint[] = [];
+      const nowMs = Date.now();
+      for (const rt of slots.values()) {
+        const tracker = rt.pipeline.getSplHistoryTracker();
+        if (tracker.getTierBCount() > 0) {
+          checkpoints.push(tracker.serializeCheckpoint(rt.slot.id, nowMs));
+        }
+      }
+      if (checkpoints.length > 0) {
+        self.postMessage({
+          type: 'spl-history-checkpoints',
+          checkpoints,
+        });
+      }
     }
   } catch (err) {
     self.postMessage({
@@ -467,6 +497,45 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           }
         }
         break;
+
+      case 'reset-spl-history':
+        if (msg.slotId) {
+          getOrCreateSlotRuntime(msg.slotId).pipeline.resetSplHistory();
+        } else {
+          for (const rt of slots.values()) {
+            rt.pipeline.resetSplHistory();
+          }
+        }
+        break;
+
+      case 'set-spl-history-window':
+        for (const rt of slots.values()) {
+          rt.pipeline.setSplHistoryWindowSec(msg.windowSec);
+        }
+        break;
+
+      case 'hydrate-spl-history':
+        for (const cp of msg.checkpoints) {
+          const rt = slots.get(cp.id);
+          if (rt) {
+            rt.pipeline.getSplHistoryTracker().hydrateCheckpoint(cp);
+          }
+        }
+        break;
+
+      case 'export-spl-csv': {
+        const slotTrackers = Array.from(slots.values()).map((rt) => ({
+          slotId: rt.slot.id,
+          slotName: rt.slot.name,
+          tracker: rt.pipeline.getSplHistoryTracker(),
+        }));
+        const csv = formatSplHistoryCsv(slotTrackers);
+        self.postMessage({
+          type: 'spl-csv-exported',
+          csv,
+        });
+        break;
+      }
 
       case 'audio-chunk':
         if (inputMode === 'hardware' && !isPaused && msg.channels.length > 0) {

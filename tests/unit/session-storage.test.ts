@@ -23,16 +23,19 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultEqBands } from '../../src/sources/eq-source.js';
 import {
   StoredCalibrationFile,
+  clearSplShowCheckpointsFromDb,
   deleteCalibrationFileFromDb,
   deleteEqSourceFromDb,
   deleteStoredTraceFromDb,
   deleteUnionSourceFromDb,
   loadAllCalibrationFilesFromDb,
   loadAllEqSourcesFromDb,
+  loadAllSplShowCheckpointsFromDb,
   loadAllStoredTracesFromDb,
   loadAllUnionSourcesFromDb,
   saveCalibrationFileToDb,
   saveEqSourceToDb,
+  saveSplShowCheckpointsToDb,
   saveStoredTraceToDb,
   saveUnionSourceToDb,
 } from '../../src/sources/session-storage.js';
@@ -106,11 +109,15 @@ describe('session-storage (IndexedDB v2)', () => {
     const createMockObjectStore = (storeName: string) => {
       const records = getStoreMap(storeName);
       return {
-        put: (val: { id: string }) => {
-          records.set(val.id, val);
+        put: (val: { id?: string; slotId?: string }) => {
+          const key = val.id ?? val.slotId ?? 'default';
+          records.set(key, val);
         },
         delete: (id: string) => {
           records.delete(id);
+        },
+        clear: () => {
+          records.clear();
         },
         getAll: () => {
           const req: { result: unknown[]; onsuccess?: () => void; onerror?: () => void } = {
@@ -215,5 +222,28 @@ describe('session-storage (IndexedDB v2)', () => {
     expect(loadedCals[0].name).toBe('UMIK-1.cal');
     await deleteCalibrationFileFromDb('cal-umik1');
     expect(await loadAllCalibrationFilesFromDb()).toHaveLength(0);
+
+    // 5. SPL Show Checkpoints (IndexedDB v3)
+    await saveSplShowCheckpointsToDb([
+      {
+        id: 'live-measurement',
+        savedAtMs: Date.now(),
+        sampleRate: 48000,
+        splOffsetDb: 100,
+        tierBCount: 2,
+        tierBHead: 2,
+        energyA: [1, 1.5],
+        energyC: [2, 2.5],
+        energyZ: [3, 3.5],
+        shortTermDbA: [90, 92],
+        shortTermDbC: [95, 97],
+        peakDb: [102, 104],
+      },
+    ]);
+    const loadedCheckpoints = await loadAllSplShowCheckpointsFromDb();
+    expect(loadedCheckpoints).toHaveLength(1);
+    expect(loadedCheckpoints[0].id).toBe('live-measurement');
+    await clearSplShowCheckpointsFromDb();
+    expect(await loadAllSplShowCheckpointsFromDb()).toHaveLength(0);
   });
 });

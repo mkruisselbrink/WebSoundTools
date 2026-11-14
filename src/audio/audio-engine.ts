@@ -44,6 +44,10 @@ import {
   SignalGeneratorConfig,
 } from '../dsp/signal-generator.js';
 import {
+  SplHistoryCheckpoint,
+  SplHistoryWindowSec,
+} from '../dsp/spl-history.js';
+import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
   SimulatorRigConfig,
@@ -70,6 +74,10 @@ export type SlotConfigUpdateCallback = (
   slotId: string,
   config: MeasurementPipelineConfig
 ) => void;
+export type SplCheckpointsCallback = (
+  checkpoints: readonly SplHistoryCheckpoint[]
+) => void;
+export type SplCsvExportCallback = (csv: string) => void;
 
 const SIMULATOR_PRESET_CYCLE: readonly SimulatorPresetId[] = [
   'pa-room-modes',
@@ -138,6 +146,8 @@ export class AudioEngine {
 
   private readonly liveFramesListeners = new Set<LiveFramesCallback>();
   private readonly configListeners = new Set<SlotConfigUpdateCallback>();
+  private readonly splCheckpointsListeners = new Set<SplCheckpointsCallback>();
+  private readonly splCsvExportListeners = new Set<SplCsvExportCallback>();
 
   constructor() {
     this.worker = new Worker(new URL('../dsp/dsp.worker.ts', import.meta.url), {
@@ -157,13 +167,32 @@ export class AudioEngine {
       if (msg.type === 'measurement-frames' && Array.isArray(msg.frames)) {
         const frames = msg.frames as SourceData[];
         for (const f of frames) {
-          this.latestFramesById.set(f.id, f);
+          const prev = this.latestFramesById.get(f.id);
+          const merged: SourceData =
+            f.splHistory === undefined && prev?.splHistory !== undefined
+              ? { ...f, splHistory: prev.splHistory }
+              : f;
+          this.latestFramesById.set(f.id, merged);
         }
         this.emitCurrentFrames();
       } else if (msg.type === 'measurement-frame' && msg.sourceData) {
         const sd = msg.sourceData as SourceData;
-        this.latestFramesById.set(sd.id, sd);
+        const prev = this.latestFramesById.get(sd.id);
+        const merged: SourceData =
+          sd.splHistory === undefined && prev?.splHistory !== undefined
+            ? { ...sd, splHistory: prev.splHistory }
+            : sd;
+        this.latestFramesById.set(sd.id, merged);
         this.emitCurrentFrames();
+      } else if (msg.type === 'spl-history-checkpoints' && Array.isArray(msg.checkpoints)) {
+        const cps = msg.checkpoints as SplHistoryCheckpoint[];
+        for (const listener of this.splCheckpointsListeners) {
+          listener(cps);
+        }
+      } else if (msg.type === 'spl-csv-exported' && typeof msg.csv === 'string') {
+        for (const listener of this.splCsvExportListeners) {
+          listener(msg.csv);
+        }
       } else if (msg.type === 'measurement-config-updated' && msg.config) {
         const slotId = (msg.slotId as string) || this.liveSlots[0].id;
         const updatedConfig = msg.config as MeasurementPipelineConfig;
@@ -257,6 +286,16 @@ export class AudioEngine {
   onMeasurementConfigChange(listener: SlotConfigUpdateCallback): () => void {
     this.configListeners.add(listener);
     return () => this.configListeners.delete(listener);
+  }
+
+  onSplHistoryCheckpoints(listener: SplCheckpointsCallback): () => void {
+    this.splCheckpointsListeners.add(listener);
+    return () => this.splCheckpointsListeners.delete(listener);
+  }
+
+  onSplCsvExported(listener: SplCsvExportCallback): () => void {
+    this.splCsvExportListeners.add(listener);
+    return () => this.splCsvExportListeners.delete(listener);
   }
 
   getInputMode(): InputSourceMode {
@@ -431,6 +470,34 @@ export class AudioEngine {
     this.sendToWorker({ type: 'reset-averaging', slotId });
   }
 
+  resetSplHistory(slotId?: string): void {
+    if (slotId) {
+      const existing = this.latestFramesById.get(slotId);
+      if (existing) {
+        this.latestFramesById.set(slotId, { ...existing, splHistory: undefined });
+      }
+    } else {
+      for (const [id, existing] of this.latestFramesById.entries()) {
+        this.latestFramesById.set(id, { ...existing, splHistory: undefined });
+      }
+    }
+    this.sendToWorker({ type: 'reset-spl-history', slotId });
+  }
+
+  setSplHistoryWindow(windowSec: SplHistoryWindowSec): void {
+    this.sendToWorker({ type: 'set-spl-history-window', windowSec });
+  }
+
+  hydrateSplHistory(checkpoints: readonly SplHistoryCheckpoint[]): void {
+    if (checkpoints.length > 0) {
+      this.sendToWorker({ type: 'hydrate-spl-history', checkpoints });
+    }
+  }
+
+  exportSplCsv(): void {
+    this.sendToWorker({ type: 'export-spl-csv' });
+  }
+
   listInputDevices(): Promise<AudioDeviceOption[]> {
     return this.hardwareRouter.listInputDevices();
   }
@@ -538,5 +605,7 @@ export class AudioEngine {
     this.worker.terminate();
     this.liveFramesListeners.clear();
     this.configListeners.clear();
+    this.splCheckpointsListeners.clear();
+    this.splCsvExportListeners.clear();
   }
 }

@@ -209,4 +209,49 @@ describe('SourceStore', () => {
     // Orphaned selectedSourceId is reset to live-measurement
     expect(reloadedStore.getSelectedSourceId()).toBe('live-measurement');
   });
+
+  it('deduplicates feedback ring log entries and inserts/deepens surgical Notch EQ cuts', () => {
+    const { adapter } = createMemoryPersistence();
+    const store = new SourceStore(adapter);
+    const frameWithFeedback = createMockLiveFrame('live-measurement', 'FOH Center', 1.0);
+    frameWithFeedback.feedbackTracks = [
+      {
+        id: 'live-measurement:2500',
+        slotId: 'live-measurement',
+        slotName: 'FOH Center',
+        slotColor: '#38bdf8',
+        state: 'feedback',
+        frequencyHz: 2480,
+        isoBandHz: 2500,
+        isoBandLabel: '2.5 kHz',
+        musicalNote: 'D#7 (-23c)',
+        prominenceDb: 16.5,
+        peakLevelDb: -5.0,
+        estimatedQ: 40,
+        durationMs: 400,
+        firstDetectedAt: new Date().toISOString(),
+        latchRemainingRatio: 1.0,
+      },
+    ];
+
+    store.setLiveFrames([frameWithFeedback]);
+    expect(store.getFeedbackRingLog()).toHaveLength(1);
+    expect(store.getFeedbackRingLog()[0].isoBandHz).toBe(2500);
+
+    // First click on Notch EQ creates a Virtual EQ targeting 'live-measurement' with a severity-scaled cut
+    const eqId = store.applyFeedbackNotchToEq(store.getFeedbackRingLog()[0]);
+    const eq1 = store.getEqSources().find((e) => e.id === eqId)!;
+    expect(eq1.targetSourceId).toBe('live-measurement');
+    expect(eq1.bands[0].frequency).toBe(2480);
+    expect(eq1.bands[0].q).toBe(24);
+    expect(eq1.bands[0].gainDb).toBe(-12.0);
+
+    // Second click on Notch EQ for the same frequency deepens the existing band by -3 dB -> -15 dB
+    store.applyFeedbackNotchToEq(store.getFeedbackRingLog()[0]);
+    const eq2 = store.getEqSources().find((e) => e.id === eqId)!;
+    expect(eq2.bands[0].gainDb).toBe(-15.0);
+
+    store.clearFeedbackRingLog();
+    expect(store.getFeedbackRingLog()).toHaveLength(0);
+  });
 });

@@ -28,6 +28,8 @@
  */
 
 import { DelayEstimate } from '../dsp/deconvolution.js';
+import { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
+import { SplHistoryData } from '../dsp/spl-history.js';
 import { BroadbandLevelsSnapshot } from '../dsp/weighting-meters.js';
 
 export type SourceKind = 'measurement' | 'stored' | 'union' | 'eq' | 'target';
@@ -71,6 +73,8 @@ export interface SourceData {
   timeData: TimeDomainData;
   levels?: BroadbandLevelsSnapshot;
   delayEstimate?: DelayEstimate;
+  splHistory?: SplHistoryData;
+  feedbackTracks?: readonly DetectedFeedbackTrack[];
 }
 
 export const DEFAULT_SOURCE_PALETTE: readonly string[] = [

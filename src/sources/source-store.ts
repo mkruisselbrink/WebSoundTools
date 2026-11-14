@@ -29,6 +29,10 @@
 
 import { BiquadSpec } from '../dsp/biquad.js';
 import {
+  DetectedFeedbackTrack,
+  MAX_RING_LOG_ENTRIES,
+} from '../dsp/feedback-detector.js';
+import {
   EqualizerSourceConfig,
   computeEqualizerSourceData,
   createDefaultEqBands,
@@ -110,6 +114,7 @@ export class SourceStore {
   private storedSources: SourceData[] = [];
   private eqSources: EqualizerSourceConfig[] = [];
   private unionSources: UnionSourceConfig[] = [];
+  private feedbackRingLog: DetectedFeedbackTrack[] = [];
   private selectedSourceId = 'live-measurement';
 
   private readonly persistence: SourcePersistenceAdapter;
@@ -255,12 +260,170 @@ export class SourceStore {
   }
 
   setLiveFrames(frames: readonly SourceData[]): void {
+    const prevById = new Map<string, SourceData>();
+    for (const prev of this.liveSources) {
+      prevById.set(prev.id, prev);
+    }
+
     this.liveSources = frames.map((frame) => {
       const vis = this.liveVisibility.get(frame.id) ?? frame.visible ?? true;
       this.liveVisibility.set(frame.id, vis);
-      return frame.visible === vis ? frame : { ...frame, visible: vis };
+      const prev = prevById.get(frame.id);
+      const splHistory = frame.splHistory ?? prev?.splHistory;
+      if (frame.feedbackTracks && frame.feedbackTracks.length > 0) {
+        this.recordFeedbackTracksInLog(frame.feedbackTracks);
+      }
+      if (frame.visible === vis && frame.splHistory === splHistory) {
+        return frame;
+      }
+      return {
+        ...frame,
+        visible: vis,
+        ...(splHistory ? { splHistory } : {}),
+      };
     });
     this.notify();
+  }
+
+  private recordFeedbackTracksInLog(tracks: readonly DetectedFeedbackTrack[]): void {
+    for (const t of tracks) {
+      const existingIdx = this.feedbackRingLog.findIndex(
+        (entry) =>
+          entry.slotId === t.slotId &&
+          (entry.id === t.id ||
+            Math.abs(entry.frequencyHz - t.frequencyHz) <= Math.max(15, t.frequencyHz * 0.025))
+      );
+
+      if (existingIdx >= 0) {
+        const prev = this.feedbackRingLog[existingIdx];
+        const updated: DetectedFeedbackTrack = {
+          ...t,
+          state: prev.state === 'feedback' || t.state === 'feedback' ? 'feedback' : t.state,
+          prominenceDb: Math.max(prev.prominenceDb, t.prominenceDb),
+          peakLevelDb: Math.max(prev.peakLevelDb, t.peakLevelDb),
+          estimatedQ: Math.max(prev.estimatedQ, t.estimatedQ),
+          durationMs: Math.max(prev.durationMs, t.durationMs),
+        };
+        const nextLog = [...this.feedbackRingLog];
+        nextLog.splice(existingIdx, 1);
+        this.feedbackRingLog = [updated, ...nextLog].slice(0, MAX_RING_LOG_ENTRIES);
+      } else {
+        this.feedbackRingLog = [t, ...this.feedbackRingLog].slice(0, MAX_RING_LOG_ENTRIES);
+      }
+    }
+  }
+
+  getFeedbackRingLog(): readonly DetectedFeedbackTrack[] {
+    return this.feedbackRingLog;
+  }
+
+  clearFeedbackRingLog(): void {
+    if (this.feedbackRingLog.length === 0) return;
+    this.feedbackRingLog = [];
+    this.notify();
+  }
+
+  /**
+   * Inserts or deepens a surgical peaking notch filter on a Virtual Parametric EQ
+   * targeting `track.slotId`. Returns the ID of the updated or created EQ source.
+   */
+  applyFeedbackNotchToEq(track: DetectedFeedbackTrack): string {
+    const freqHz = Math.max(20, Math.min(20000, Math.round(track.frequencyHz)));
+    const qVal = Math.min(24, Math.max(8, Math.round(track.estimatedQ)));
+    const initialCutDb =
+      track.state === 'feedback'
+        ? Math.max(-15, Math.min(-6, -Math.round(track.prominenceDb * 0.75)))
+        : Math.max(-9, Math.min(-3, -Math.round(track.prominenceDb * 0.5)));
+
+    let targetEq =
+      this.eqSources.find((eq) => eq.targetSourceId === track.slotId) ?? null;
+
+    if (!targetEq) {
+      const id = generateShortId('eq');
+      const bands = createDefaultEqBands();
+      bands[0] = {
+        type: 'peaking',
+        frequency: freqHz,
+        q: qVal,
+        gainDb: initialCutDb,
+        enabled: true,
+      };
+      const createdEq: EqualizerSourceConfig = {
+        id,
+        name: `Feedback Notch (${track.slotName})`,
+        color: '#10b981',
+        visible: true,
+        bands,
+        targetSourceId: track.slotId,
+        createdAt: new Date().toISOString(),
+      };
+      this.eqSources = [...this.eqSources, createdEq];
+      void this.persistence.saveEq?.(createdEq);
+      this.notify();
+      return id;
+    }
+
+    // Check if an enabled peaking band already exists within +/- 2.5% of track.frequencyHz
+    const existingBandIdx = targetEq.bands.findIndex(
+      (b) =>
+        b.enabled !== false &&
+        b.type === 'peaking' &&
+        (b.gainDb ?? 0) < 0 &&
+        Math.abs(b.frequency - freqHz) <= Math.max(10, freqHz * 0.025)
+    );
+
+    let bandIdxToUpdate = existingBandIdx;
+    let nextGainDb = initialCutDb;
+
+    if (existingBandIdx >= 0) {
+      // Repeated click: deepen existing notch by -3 dB (clamped at -18 dB)
+      const currentGain = targetEq.bands[existingBandIdx]?.gainDb ?? 0;
+      nextGainDb = Math.max(-18, currentGain - 3.0);
+    } else {
+      // Find first unused / flat band (gainDb === 0 or disabled)
+      const unusedIdx = targetEq.bands.findIndex(
+        (b) => b.enabled === false || Math.abs(b.gainDb ?? 0) < 0.1
+      );
+      if (unusedIdx >= 0) {
+        bandIdxToUpdate = unusedIdx;
+      } else {
+        // Otherwise pick the band closest in log-frequency
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < targetEq.bands.length; i++) {
+          const dist = Math.abs(Math.log2(targetEq.bands[i].frequency / freqHz));
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIdx = i;
+          }
+        }
+        bandIdxToUpdate = bestIdx;
+      }
+    }
+
+    this.eqSources = updateInList(
+      this.eqSources,
+      targetEq.id,
+      (eq) => ({
+        ...eq,
+        visible: true,
+        bands: eq.bands.map((b, idx) =>
+          idx === bandIdxToUpdate
+            ? {
+                ...b,
+                type: 'peaking',
+                frequency: freqHz,
+                q: qVal,
+                gainDb: nextGainDb,
+                enabled: true,
+              }
+            : b
+        ),
+      }),
+      this.persistence.saveEq
+    );
+    this.notify();
+    return targetEq.id;
   }
 
   setLiveFrame(live: SourceData): void {

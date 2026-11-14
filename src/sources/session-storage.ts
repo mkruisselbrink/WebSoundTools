@@ -29,6 +29,7 @@
  *  - `calibration-curves`: `StoredCalibrationFile` uploaded microphone calibration files
  */
 
+import { SplHistoryCheckpoint } from '../dsp/spl-history.js';
 import { EqualizerSourceConfig } from './eq-source.js';
 import {
   SerializedSourceData,
@@ -47,17 +48,19 @@ export interface StoredCalibrationFile {
 }
 
 const DB_NAME = 'web-sound-meter-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_TRACES = 'stored-traces';
 const STORE_EQ_SOURCES = 'eq-sources';
 const STORE_UNION_SOURCES = 'union-sources';
 const STORE_CALIBRATIONS = 'calibration-curves';
+const STORE_SPL_SHOW_LOGS = 'spl-show-logs';
 
 const ALL_STORES = [
   STORE_TRACES,
   STORE_EQ_SOURCES,
   STORE_UNION_SOURCES,
   STORE_CALIBRATIONS,
+  STORE_SPL_SHOW_LOGS,
 ] as const;
 
 let cachedDbPromise: Promise<IDBDatabase> | null = null;
@@ -200,3 +203,56 @@ export async function deleteCalibrationFileFromDb(id: string): Promise<void> {
 export async function loadAllCalibrationFilesFromDb(): Promise<StoredCalibrationFile[]> {
   return getAllRecords<StoredCalibrationFile>(STORE_CALIBRATIONS);
 }
+
+/**
+ * Persists one or more 1 Hz SPL show log checkpoints in a single batched IndexedDB transaction.
+ */
+export async function saveSplShowCheckpointsToDb(
+  checkpoints: readonly SplHistoryCheckpoint[]
+): Promise<void> {
+  if (checkpoints.length === 0) return;
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction(STORE_SPL_SHOW_LOGS, 'readwrite');
+    const store = tx.objectStore(STORE_SPL_SHOW_LOGS);
+    for (const cp of checkpoints) {
+      store.put(cp);
+    }
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Ignore in environments without IndexedDB
+  }
+}
+
+export async function loadAllSplShowCheckpointsFromDb(): Promise<SplHistoryCheckpoint[]> {
+  return getAllRecords<SplHistoryCheckpoint>(STORE_SPL_SHOW_LOGS);
+}
+
+export async function clearSplShowCheckpointsFromDb(): Promise<void> {
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction(STORE_SPL_SHOW_LOGS, 'readwrite');
+    const store = tx.objectStore(STORE_SPL_SHOW_LOGS);
+    if (typeof store.clear === 'function') {
+      store.clear();
+    } else {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const items = (req.result as Array<{ id: string }>) ?? [];
+        for (const item of items) {
+          store.delete(item.id);
+        }
+      };
+    }
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Ignore in environments without IndexedDB
+  }
+}
+
