@@ -37,6 +37,13 @@ export interface SourceDspConfig {
   readonly eqBands: readonly ParametricEqBand[];
 }
 
+export type SourceDspConfigPatch = Partial<
+  Omit<SourceDspConfig, 'highPass' | 'lowPass'>
+> & {
+  readonly highPass?: Partial<CrossoverFilterConfig>;
+  readonly lowPass?: Partial<CrossoverFilterConfig>;
+};
+
 export const DEFAULT_SOURCE_DSP_CONFIG: SourceDspConfig = {
   gainDb: 0,
   delayMs: 0,

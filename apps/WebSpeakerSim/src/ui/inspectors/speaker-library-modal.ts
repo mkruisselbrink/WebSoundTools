@@ -26,6 +26,7 @@
  *   3. Client-side `.gll`, `.clf`, `.frd`/`.csv`, and `.json` Loudspeaker File Importer
  */
 
+import '@foh/ui';
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import {
@@ -332,32 +333,25 @@ export class WssSpeakerLibraryModal extends LitElement {
     const allSpeakers = this.store.getAllSpeakers();
 
     return html`
-      <div
-        class="backdrop"
-        data-testid="speaker-library-modal"
-        @click=${(ev: MouseEvent) => {
-          if (ev.target === ev.currentTarget) this.close();
-        }}
+      <foh-modal
+        .open=${this.open}
+        modalTitle="Loudspeaker Library, Spec Builder & File Importer"
+        maxWidth="700px"
+        dialogTestId="speaker-library-modal"
+        closeButtonTestId="btn-close-library-modal"
+        @close-modal=${() => this.close()}
       >
-        <div class="dialog">
-          <div class="head">
-            <span class="head-title">Loudspeaker Library, Spec Builder & File Importer</span>
-            <button class="btn" data-testid="btn-close-library-modal" @click=${() => this.close()}>
-              Close
-            </button>
-          </div>
-
-          <div class="tabs">
-            <button
-              class="tab-btn"
-              data-testid="tab-catalog"
-              data-active=${String(this.activeTab === 'catalog')}
-              @click=${() => (this.activeTab = 'catalog')}
-            >
-              Catalog (${allSpeakers.length})
-            </button>
-            <button
-              class="tab-btn"
+        <div class="tabs" slot="subheader">
+          <button
+            class="tab-btn"
+            data-testid="tab-catalog"
+            data-active=${String(this.activeTab === 'catalog')}
+            @click=${() => (this.activeTab = 'catalog')}
+          >
+            Catalog (${allSpeakers.length})
+          </button>
+          <button
+            class="tab-btn"
               data-testid="tab-spec-builder"
               data-active=${String(this.activeTab === 'spec-builder')}
               @click=${() => (this.activeTab = 'spec-builder')}
@@ -621,9 +615,7 @@ export class WssSpeakerLibraryModal extends LitElement {
                   `}
 
             ${this.statusMessage ? html`<div class="status">${this.statusMessage}</div>` : ''}
-          </div>
-        </div>
-      </div>
+      </foh-modal>
     `;
   }
 }

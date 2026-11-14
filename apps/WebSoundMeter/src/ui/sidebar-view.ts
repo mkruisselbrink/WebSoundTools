@@ -2,6 +2,7 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { renderEntityTreeSection } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
 import { SIMULATOR_PRESETS, SimulatorPresetId } from '../dsp/synthetic-rig.js';
@@ -33,14 +34,15 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
           `
         : nothing}
 
-      <!-- Sources List Card -->
       <div class="section-card">
-        <div class="section-header">
-          <span>Sources (${props.allSources.length})</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${renderEntityTreeSection({
+          title: `Sources (${props.allSources.length})`,
+          listTestId: 'source-list',
+          headerActions: html`
             ${props.onAddLiveSource
               ? html`
                   <button
+                    class="foh-btn foh-btn-xs"
                     data-testid="btn-add-meas"
                     title="Add Simultaneous Live Measurement Source (M)"
                     @click=${props.onAddLiveSource}
@@ -50,6 +52,7 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
                 `
               : nothing}
             <button
+              class="foh-btn foh-btn-xs"
               data-testid="btn-add-eq"
               title="Add Virtual Parametric EQ & Crossover Source"
               @click=${props.onAddEqSource}
@@ -57,6 +60,7 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
               + EQ
             </button>
             <button
+              class="foh-btn foh-btn-xs"
               data-testid="btn-add-union"
               title="Add Math / Union Source"
               @click=${props.onAddUnionSource}
@@ -84,51 +88,33 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
                       }}
                     />
                     <span
-                      class="btn-like"
+                      class="foh-btn foh-btn-xs"
                       data-testid="btn-import-frd"
-                      style="padding:3px 6px;border-radius:4px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:11px;"
                     >
                       + .FRD
                     </span>
                   </label>
                 `
               : nothing}
-          </div>
-        </div>
-
-        <div class="source-list" data-testid="source-list">
-          ${props.allSources.map(
-            (src) => html`
-              <div
-                class="source-row ${props.selectedSourceId === src.id ? 'selected' : ''}"
-                data-testid="source-item-${src.id}"
-                @click=${() => props.onSelectSource(src.id)}
-              >
-                <div class="source-row-left">
-                  <input
-                    type="checkbox"
-                    aria-label="Toggle visibility for ${src.name}"
-                    .checked=${src.visible}
-                    @click=${(e: Event) => e.stopPropagation()}
-                    @change=${(e: Event) => {
-                      const vis = (e.target as HTMLInputElement).checked;
-                      props.onToggleSourceVisibility(src.id, vis);
-                    }}
-                  />
-                  <span
-                    class="source-color-dot"
-                    style="background:${src.color}"
-                  ></span>
-                  <span class="source-name">${src.name}</span>
-                </div>
-                <span class="source-badge">${src.kind}</span>
-              </div>
-            `
-          )}
-        </div>
+          `,
+          items: props.allSources.map((src) => ({
+            id: src.id,
+            title: src.name,
+            selected: props.selectedSourceId === src.id,
+            color: src.color,
+            badge: src.kind,
+            testId: `source-item-${src.id}`,
+            toggle: {
+              kind: 'checkbox',
+              active: src.visible,
+              ariaLabel: `Toggle visibility for ${src.name}`,
+              onToggle: (vis) => props.onToggleSourceVisibility(src.id, vis),
+            },
+            onSelect: () => props.onSelectSource(src.id),
+          })),
+        })}
       </div>
 
-      <!-- Context-Sensitive Inspector for Selected Source -->
       ${props.inspectorContent}
     </aside>
   `;

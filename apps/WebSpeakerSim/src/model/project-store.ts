@@ -24,7 +24,11 @@
  */
 
 import type { AtmosphericConditions } from '@foh/acoustics';
-import { DEFAULT_SOURCE_DSP_CONFIG, type SourceDspConfig } from '@foh/dsp';
+import {
+  DEFAULT_SOURCE_DSP_CONFIG,
+  type SourceDspConfig,
+  type SourceDspConfigPatch,
+} from '@foh/dsp';
 import { ReactiveUndoStore } from '@foh/state';
 import { getBuiltinSpeakerMap } from '../library/builtin-speakers.js';
 import { getDemoPresetById } from '../library/demo-presets.js';
@@ -344,7 +348,7 @@ export class ProjectStore {
 
   public updateDspGroup(
     groupId: string,
-    patch: Partial<Omit<DspGroup, 'id' | 'dsp'>> & { dsp?: Partial<SourceDspConfig> },
+    patch: Partial<Omit<DspGroup, 'id' | 'dsp'>> & { dsp?: SourceDspConfigPatch },
     txKey?: string
   ): void {
     this.updateScene(
@@ -355,7 +359,18 @@ export class ProjectStore {
             ? {
                 ...g,
                 ...patch,
-                dsp: patch.dsp ? { ...g.dsp, ...patch.dsp } : g.dsp,
+                dsp: patch.dsp
+                  ? {
+                      ...g.dsp,
+                      ...patch.dsp,
+                      highPass: patch.dsp.highPass
+                        ? { ...g.dsp.highPass, ...patch.dsp.highPass }
+                        : g.dsp.highPass,
+                      lowPass: patch.dsp.lowPass
+                        ? { ...g.dsp.lowPass, ...patch.dsp.lowPass }
+                        : g.dsp.lowPass,
+                    }
+                  : g.dsp,
               }
             : g
         ),

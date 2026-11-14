@@ -22,6 +22,7 @@
  * Root application shell `<web-speaker-sim-app>` (`src/ui/app-shell.ts`).
  */
 
+import '@foh/ui';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import '../charts/chart-panel.js';
@@ -436,94 +437,91 @@ export class WebSpeakerSimApp extends LitElement {
 
       ${this.projectsModalOpen ? this.renderProjectsModal() : ''}
       ${this.toastMessage
-        ? html`<div class="toast-banner" data-testid="toast-banner">${this.toastMessage}</div>`
+        ? html`<foh-toast
+            data-testid="toast-banner"
+            .message=${this.toastMessage}
+          ></foh-toast>`
         : ''}
     `;
   }
 
   private renderProjectsModal() {
     return html`
-      <div
-        class="modal-backdrop"
-        data-testid="projects-modal"
-        @click=${(ev: MouseEvent) => {
-          if (ev.target === ev.currentTarget) this.projectsModalOpen = false;
+      <foh-modal
+        .open=${this.projectsModalOpen}
+        modalTitle="Saved Browser Projects (IndexedDB)"
+        maxWidth="560px"
+        dialogTestId="projects-modal"
+        @close-modal=${() => {
+          this.projectsModalOpen = false;
         }}
       >
-        <div class="modal-card">
-          <div class="modal-head">
-            <span>Saved Browser Projects (IndexedDB)</span>
-            <button class="btn" @click=${() => (this.projectsModalOpen = false)}>Close</button>
-          </div>
-          <div class="modal-body">
-            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-              <button
-                class="btn btn-primary"
-                data-testid="btn-save-project-db"
-                @click=${() => void this.saveCurrentProjectToDb()}
-              >
-                Save Current Scene ("${this.store.scene.name}")
-              </button>
-              <button
-                class="btn btn-danger"
-                @click=${() => {
-                  clearWorkspaceSession();
-                  this.handleSelectPreset('club-cardioid-pa');
-                  this.projectsModalOpen = false;
-                }}
-              >
-                Reset Local Autosave
-              </button>
-            </div>
-
-            ${this.savedProjects.length === 0
-              ? html`<div style="color:var(--text-muted)">
-                  No projects saved in IndexedDB yet.
-                </div>`
-              : html`
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    ${this.savedProjects.map(
-                      (proj) => html`
-                        <div
-                          style="display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:#080d19;border:1px solid var(--border-subtle);border-radius:5px"
-                        >
-                          <div>
-                            <strong>${proj.name}</strong>
-                            <div style="font-size:10.5px;color:var(--text-muted)">
-                              Updated: ${proj.updatedAtIso.slice(0, 19).replace('T', ' ')}
-                            </div>
-                          </div>
-                          <div style="display:flex;gap:6px">
-                            <button
-                              class="btn btn-primary"
-                              data-testid="btn-load-proj-${proj.id}"
-                              @click=${() => {
-                                this.store.setColormap(proj.colormap);
-                                this.store.replaceProject(proj.scene, true);
-                                this.projectsModalOpen = false;
-                                this.showToast(`Loaded "${proj.name}".`);
-                              }}
-                            >
-                              Load
-                            </button>
-                            <button
-                              class="btn btn-danger"
-                              @click=${async () => {
-                                await this.repository.deleteProject(proj.id);
-                                this.savedProjects = await this.repository.listProjects();
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      `
-                    )}
-                  </div>
-                `}
-          </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button
+            class="btn btn-primary"
+            data-testid="btn-save-project-db"
+            @click=${() => void this.saveCurrentProjectToDb()}
+          >
+            Save Current Scene ("${this.store.scene.name}")
+          </button>
+          <button
+            class="btn btn-danger"
+            @click=${() => {
+              clearWorkspaceSession();
+              this.handleSelectPreset('club-cardioid-pa');
+              this.projectsModalOpen = false;
+            }}
+          >
+            Reset Local Autosave
+          </button>
         </div>
-      </div>
+
+        ${this.savedProjects.length === 0
+          ? html`<div style="color:var(--text-muted)">
+              No projects saved in IndexedDB yet.
+            </div>`
+          : html`
+              <div style="display:flex;flex-direction:column;gap:6px">
+                ${this.savedProjects.map(
+                  (proj) => html`
+                    <div
+                      style="display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:#080d19;border:1px solid var(--border-subtle);border-radius:5px"
+                    >
+                      <div>
+                        <strong>${proj.name}</strong>
+                        <div style="font-size:10.5px;color:var(--text-muted)">
+                          Updated: ${proj.updatedAtIso.slice(0, 19).replace('T', ' ')}
+                        </div>
+                      </div>
+                      <div style="display:flex;gap:6px">
+                        <button
+                          class="btn btn-primary"
+                          data-testid="btn-load-proj-${proj.id}"
+                          @click=${() => {
+                            this.store.setColormap(proj.colormap);
+                            this.store.replaceProject(proj.scene, true);
+                            this.projectsModalOpen = false;
+                            this.showToast(`Loaded "${proj.name}".`);
+                          }}
+                        >
+                          Load
+                        </button>
+                        <button
+                          class="btn btn-danger"
+                          @click=${async () => {
+                            await this.repository.deleteProject(proj.id);
+                            this.savedProjects = await this.repository.listProjects();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  `
+                )}
+              </div>
+            `}
+      </foh-modal>
     `;
   }
 }

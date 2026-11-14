@@ -185,6 +185,16 @@ export class WebSoundMeterApp extends LitElement {
         void this.handleTogglePause();
       },
       onAddLiveSource: () => this.handleAddLiveSource(),
+      onUndo: () => {
+        if (this.sourceStore.undo()) {
+          this.persistState('replace');
+        }
+      },
+      onRedo: () => {
+        if (this.sourceStore.redo()) {
+          this.persistState('replace');
+        }
+      },
     });
   };
 

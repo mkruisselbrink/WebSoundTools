@@ -1,28 +1,13 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * `<wss-viewport-panel>` Lit 3 Web Component (`src/viewport/viewport-panel.ts`)
- * stacking WebGL2 SPL Heatmap + HiDPI 2D CAD overlay for Plan and Section views.
+ * `<wss-viewport-panel>` Lit 3 Web Component stacking WebGL2 SPL Heatmap + HiDPI 2D CAD overlay
+ * for Plan and Section views.
  */
 
+import { DualCanvasController } from '@foh/canvas';
+import { fohTokensCss } from '@foh/ui';
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { resolveEffectiveSplRange, type ProjectStore } from '../model/project-store.js';
@@ -40,100 +25,103 @@ import { ViewportGestureController } from './viewport-interaction.js';
 
 @customElement('wss-viewport-panel')
 export class WssViewportPanel extends LitElement {
-  static styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      width: 100%;
-      height: 100%;
-      min-height: 140px;
-      background: #060911;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      overflow: hidden;
-      user-select: none;
-    }
+  static styles = [
+    fohTokensCss,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 140px;
+        background: var(--foh-bg-app);
+        border: 1px solid var(--foh-border-subtle);
+        border-radius: var(--foh-radius-md);
+        overflow: hidden;
+        user-select: none;
+      }
 
-    .vp-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 4px 10px;
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
-      font-size: 11px;
-      color: #cbd5e1;
-      z-index: 3;
-    }
+      .vp-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 10px;
+        background: var(--foh-bg-header);
+        border-bottom: 1px solid var(--foh-border-subtle);
+        font-size: 11px;
+        color: var(--foh-text-secondary);
+        z-index: 3;
+      }
 
-    .vp-title {
-      font-weight: 600;
-      color: #f8fafc;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+      .vp-title {
+        font-weight: 600;
+        color: var(--foh-text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-    .vp-controls {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+      .vp-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
 
-    .cursor-readout {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 10.5px;
-      color: #94a3b8;
-    }
+      .cursor-readout {
+        font-family: var(--foh-font-mono);
+        font-size: 10.5px;
+        color: var(--foh-text-muted);
+      }
 
-    .cursor-spl {
-      color: #38bdf8;
-      font-weight: 600;
-    }
+      .cursor-spl {
+        color: var(--foh-accent-bright);
+        font-weight: 600;
+      }
 
-    .vp-btn {
-      background: #1e293b;
-      color: #e2e8f0;
-      border: 1px solid #334155;
-      border-radius: 4px;
-      padding: 2px 7px;
-      font-size: 10.5px;
-      cursor: pointer;
-    }
+      .vp-btn {
+        background: #1e293b;
+        color: #e2e8f0;
+        border: 1px solid var(--foh-border-strong);
+        border-radius: var(--foh-radius-sm);
+        padding: 2px 7px;
+        font-size: 10.5px;
+        cursor: pointer;
+      }
 
-    .vp-btn:hover {
-      background: #334155;
-    }
+      .vp-btn:hover {
+        background: #334155;
+      }
 
-    .vp-btn[data-active='true'] {
-      background: #0284c7;
-      border-color: #38bdf8;
-      color: #ffffff;
-    }
+      .vp-btn[data-active='true'] {
+        background: var(--foh-accent);
+        border-color: var(--foh-accent-bright);
+        color: #ffffff;
+      }
 
-    .canvas-stage {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      cursor: crosshair;
-    }
+      .canvas-stage {
+        position: relative;
+        flex: 1;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: crosshair;
+      }
 
-    canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+      canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
 
-    .cad-canvas {
-      z-index: 2;
-    }
-  `;
+      .cad-canvas {
+        z-index: 2;
+      }
+    `,
+  ];
 
   @property({ type: String })
   public mode: ViewportMode = 'plan';
@@ -156,27 +144,39 @@ export class WssViewportPanel extends LitElement {
   @state()
   private rulerActive = false;
 
-  private glCanvas: HTMLCanvasElement | null = null;
-  private cadCanvas: HTMLCanvasElement | null = null;
   private glRenderer: GlHeatmapRenderer | null = null;
   private gestures: ViewportGestureController | null = null;
-  private resizeObserver: ResizeObserver | null = null;
   private subscribedStore: ProjectStore | null = null;
   private unsubscribeStore: (() => void) | null = null;
 
   private camera: ViewportCamera2D | null = null;
   private lastFittedSceneId: string | null = null;
-  private cssWidth = 0;
-  private cssHeight = 0;
-  private rafPending = false;
+
+  private readonly stageController = new DualCanvasController(this, {
+    maxDevicePixelRatio: 2,
+    onResize: () => {
+      if (!this.camera && this.store) {
+        this.fitView();
+        this.lastFittedSceneId = this.store.scene.id;
+      }
+    },
+    onPaint: () => this.paintNow(),
+    onContextRestored: () => {
+      const glCanvas = this.stageController.underlayCanvas;
+      if (glCanvas) {
+        this.glRenderer?.dispose();
+        this.glRenderer = new GlHeatmapRenderer(glCanvas);
+      }
+    },
+  });
 
   protected firstUpdated(): void {
-    this.glCanvas = this.renderRoot.querySelector('.gl-canvas');
-    this.cadCanvas = this.renderRoot.querySelector('.cad-canvas');
-    const stage = this.renderRoot.querySelector('.canvas-stage');
+    const glCanvas = this.renderRoot.querySelector('.gl-canvas') as HTMLCanvasElement | null;
+    const cadCanvas = this.renderRoot.querySelector('.cad-canvas') as HTMLCanvasElement | null;
+    const stage = this.renderRoot.querySelector('.canvas-stage') as HTMLElement | null;
 
-    if (this.glCanvas) {
-      this.glRenderer = new GlHeatmapRenderer(this.glCanvas);
+    if (glCanvas) {
+      this.glRenderer = new GlHeatmapRenderer(glCanvas);
     }
 
     if (this.store) {
@@ -185,19 +185,14 @@ export class WssViewportPanel extends LitElement {
         this.store,
         (nextCam) => {
           this.camera = nextCam;
-          this.requestRepaint();
+          this.stageController.requestRepaint();
         },
-        () => this.requestRepaint()
+        () => this.stageController.requestRepaint()
       );
     }
 
-    if (stage) {
-      this.resizeObserver = new ResizeObserver((entries) => {
-        const rect = entries[0]?.contentRect;
-        if (!rect) return;
-        this.syncCanvasSize(rect.width, rect.height);
-      });
-      this.resizeObserver.observe(stage);
+    if (stage && glCanvas && cadCanvas) {
+      this.stageController.attach(stage, glCanvas, cadCanvas);
     }
   }
 
@@ -208,7 +203,7 @@ export class WssViewportPanel extends LitElement {
       this.unsubscribeStore = null;
       this.subscribedStore = null;
     }
-    this.resizeObserver?.disconnect();
+    this.stageController.detach();
     this.glRenderer?.dispose();
   }
 
@@ -222,45 +217,24 @@ export class WssViewportPanel extends LitElement {
       if (this.subscribedStore) {
         this.unsubscribeStore = this.subscribedStore.subscribe(() => {
           this.requestUpdate();
-          this.requestRepaint();
+          this.stageController.requestRepaint();
         });
       }
     }
 
-    if (this.store && this.cssWidth > 0 && this.cssHeight > 0) {
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    if (this.store && cssWidth > 0 && cssHeight > 0) {
       if (!this.camera || this.lastFittedSceneId !== this.store.scene.id) {
         this.fitView();
         this.lastFittedSceneId = this.store.scene.id;
       }
     }
-    this.requestRepaint();
-  }
-
-  private syncCanvasSize(width: number, height: number): void {
-    this.cssWidth = Math.max(1, Math.floor(width));
-    this.cssHeight = Math.max(1, Math.floor(height));
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
-    const devW = Math.max(1, Math.round(this.cssWidth * dpr));
-    const devH = Math.max(1, Math.round(this.cssHeight * dpr));
-
-    if (this.glCanvas && (this.glCanvas.width !== devW || this.glCanvas.height !== devH)) {
-      this.glCanvas.width = devW;
-      this.glCanvas.height = devH;
-    }
-    if (this.cadCanvas && (this.cadCanvas.width !== devW || this.cadCanvas.height !== devH)) {
-      this.cadCanvas.width = devW;
-      this.cadCanvas.height = devH;
-    }
-
-    if (!this.camera && this.store) {
-      this.fitView();
-      this.lastFittedSceneId = this.store.scene.id;
-    }
-    this.requestRepaint();
+    this.stageController.requestRepaint();
   }
 
   public fitView(): void {
-    if (!this.store || this.cssWidth <= 0 || this.cssHeight <= 0) return;
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    if (!this.store || cssWidth <= 0 || cssHeight <= 0) return;
     if (this.mode === 'plan') {
       const b = this.store.scene.planBounds;
       this.camera = fitCameraToWorldBox(
@@ -268,8 +242,8 @@ export class WssViewportPanel extends LitElement {
         b.xMax,
         b.yMin,
         b.yMax,
-        this.cssWidth,
-        this.cssHeight
+        cssWidth,
+        cssHeight
       );
     } else {
       const b = this.store.scene.sectionBounds;
@@ -278,11 +252,11 @@ export class WssViewportPanel extends LitElement {
         b.xMax,
         b.zMin,
         b.zMax,
-        this.cssWidth,
-        this.cssHeight
+        cssWidth,
+        cssHeight
       );
     }
-    this.requestRepaint();
+    this.stageController.requestRepaint();
   }
 
   private toggleRuler(): void {
@@ -293,15 +267,6 @@ export class WssViewportPanel extends LitElement {
         this.gestures.clearRuler();
       }
     }
-  }
-
-  private requestRepaint(): void {
-    if (this.rafPending) return;
-    this.rafPending = true;
-    requestAnimationFrame(() => {
-      this.rafPending = false;
-      this.paintNow();
-    });
   }
 
   private getActiveHeatmapInput(): HeatmapGridInput | null {
@@ -335,26 +300,29 @@ export class WssViewportPanel extends LitElement {
   }
 
   private paintNow(): void {
-    if (!this.store || !this.camera || this.cssWidth <= 0 || this.cssHeight <= 0) return;
+    const { cssWidth, cssHeight, dpr } = this.stageController.dimensions;
+    if (!this.store || !this.camera || cssWidth <= 0 || cssHeight <= 0) return;
 
     const gridInput = this.getActiveHeatmapInput();
     const effectiveRange = resolveEffectiveSplRange(
       this.store.colormap,
       this.snapshot?.planGrid?.stats
     );
-    this.glRenderer?.render(
-      gridInput,
-      this.camera,
-      this.store.colormap,
-      effectiveRange,
-      this.cssWidth,
-      this.cssHeight
-    );
+    if (!this.stageController.isContextLost) {
+      this.glRenderer?.render(
+        gridInput,
+        this.camera,
+        this.store.colormap,
+        effectiveRange,
+        cssWidth,
+        cssHeight
+      );
+    }
 
-    if (this.cadCanvas) {
-      const ctx = this.cadCanvas.getContext('2d');
+    const cadCanvas = this.stageController.overlayCanvas;
+    if (cadCanvas) {
+      const ctx = cadCanvas.getContext('2d');
       if (ctx) {
-        const dpr = this.cadCanvas.width / this.cssWidth;
         ctx.save();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         paintViewportCadOverlay(ctx, {
@@ -364,8 +332,8 @@ export class WssViewportPanel extends LitElement {
           selected: this.store.selectedEntity,
           virtualMicResponses: this.snapshot?.virtualMics ?? [],
           camera: this.camera,
-          cssWidth: this.cssWidth,
-          cssHeight: this.cssHeight,
+          cssWidth,
+          cssHeight,
           ruler: this.gestures?.rulerOverlay ?? null,
           colormap: this.store.colormap,
           effectiveSplRange: effectiveRange,
@@ -376,23 +344,27 @@ export class WssViewportPanel extends LitElement {
   }
 
   private handlePointerDown(ev: PointerEvent): void {
-    if (!this.camera || !this.gestures || !this.cadCanvas) return;
-    const rect = this.cadCanvas.getBoundingClientRect();
+    const cadCanvas = this.stageController.overlayCanvas;
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    if (!this.camera || !this.gestures || !cadCanvas) return;
+    const rect = cadCanvas.getBoundingClientRect();
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
-    this.cadCanvas.setPointerCapture(ev.pointerId);
-    this.gestures.onPointerDown(ev, this.camera, this.cssWidth, this.cssHeight, px, py);
+    cadCanvas.setPointerCapture(ev.pointerId);
+    this.gestures.onPointerDown(ev, this.camera, cssWidth, cssHeight, px, py);
   }
 
   private handlePointerMove(ev: PointerEvent): void {
-    if (!this.camera || !this.cadCanvas) return;
-    const rect = this.cadCanvas.getBoundingClientRect();
+    const cadCanvas = this.stageController.overlayCanvas;
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    if (!this.camera || !cadCanvas) return;
+    const rect = cadCanvas.getBoundingClientRect();
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
 
-    this.gestures?.onPointerMove(this.camera, this.cssWidth, this.cssHeight, px, py);
+    this.gestures?.onPointerMove(this.camera, cssWidth, cssHeight, px, py);
 
-    const wp = screenToWorld(this.camera, this.cssWidth, this.cssHeight, px, py);
+    const wp = screenToWorld(this.camera, cssWidth, cssHeight, px, py);
     const vLabel = this.mode === 'plan' ? 'Y' : 'Z';
     this.hoverText = `X ${wp.u.toFixed(1)}m  ${vLabel} ${wp.v.toFixed(1)}m`;
 
@@ -414,28 +386,31 @@ export class WssViewportPanel extends LitElement {
   }
 
   private handlePointerUp(ev: PointerEvent): void {
-    if (this.cadCanvas?.hasPointerCapture(ev.pointerId)) {
-      this.cadCanvas.releasePointerCapture(ev.pointerId);
+    const cadCanvas = this.stageController.overlayCanvas;
+    if (cadCanvas?.hasPointerCapture(ev.pointerId)) {
+      cadCanvas.releasePointerCapture(ev.pointerId);
     }
     this.gestures?.onPointerUp();
   }
 
   private handleWheel(ev: WheelEvent): void {
     ev.preventDefault();
-    if (!this.camera || !this.cadCanvas) return;
-    const rect = this.cadCanvas.getBoundingClientRect();
+    const cadCanvas = this.stageController.overlayCanvas;
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    if (!this.camera || !cadCanvas) return;
+    const rect = cadCanvas.getBoundingClientRect();
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
     const factor = Math.exp(-ev.deltaY * 0.0015);
     this.camera = zoomCameraAtScreenPoint(
       this.camera,
-      this.cssWidth,
-      this.cssHeight,
+      cssWidth,
+      cssHeight,
       px,
       py,
       factor
     );
-    this.requestRepaint();
+    this.stageController.requestRepaint();
   }
 
   render() {
@@ -492,4 +467,3 @@ declare global {
     'wss-viewport-panel': WssViewportPanel;
   }
 }
-

@@ -1,29 +1,18 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * WebGL2 Hardware-Accelerated SPL Heatmap & Isoline Renderer (`src/viewport/gl-heatmap-renderer.ts`)
- * supporting multiple perceptual palettes (`turbo`, `inferno`, `viridis`), stepped isobar fills,
- * anti-aliased `1/2/3/6 dB` contour lines, and automatic 2D Canvas fallback.
+ * WebGL2 SPL Heatmap & Isoline Renderer supporting perceptual palettes (`turbo`, `inferno`, `viridis`),
+ * stepped isobar fills, anti-aliased `1/2/3/6 dB` contour lines, and 2D Canvas fallback.
  */
 
+import {
+  buildRgbaLutBytes,
+  createClampedTexture2D,
+  createGlProgram,
+  evaluateColorStopsRgb,
+  type ColorStopRgb,
+} from '@foh/canvas';
 import type { ColormapConfig, ColormapPaletteId } from '../model/project-store.js';
 import { screenToWorld, type ViewportCamera2D } from './viewport-coords.js';
 
@@ -38,14 +27,7 @@ export interface HeatmapGridInput {
   readonly surfaceMask?: Uint8Array;
 }
 
-interface ColorStop {
-  readonly t: number;
-  readonly r: number;
-  readonly g: number;
-  readonly b: number;
-}
-
-const PALETTE_STOPS: Readonly<Record<ColormapPaletteId, readonly ColorStop[]>> = {
+const PALETTE_STOPS: Readonly<Record<ColormapPaletteId, readonly ColorStopRgb[]>> = {
   // High-discrimination multi-hue spectrum (ideal for spotting 1-2 dB differences)
   turbo: [
     { t: 0.0, r: 24, g: 28, b: 84 },      // Deep indigo
@@ -84,21 +66,7 @@ export function evaluateSplLutRgb(
   palette: ColormapPaletteId = 'turbo'
 ): [number, number, number] {
   const stops = PALETTE_STOPS[palette] ?? PALETTE_STOPS.turbo;
-  const clamped = Math.max(0, Math.min(1, t));
-  for (let i = 0; i < stops.length - 1; i++) {
-    const a = stops[i];
-    const b = stops[i + 1];
-    if (clamped <= b.t) {
-      const f = (clamped - a.t) / Math.max(1e-6, b.t - a.t);
-      return [
-        Math.round(a.r + (b.r - a.r) * f),
-        Math.round(a.g + (b.g - a.g) * f),
-        Math.round(a.b + (b.b - a.b) * f),
-      ];
-    }
-  }
-  const last = stops[stops.length - 1];
-  return [last.r, last.g, last.b];
+  return evaluateColorStopsRgb(stops, t);
 }
 
 const VERTEX_SHADER_SRC = `#version 300 es
@@ -276,59 +244,26 @@ export class GlHeatmapRenderer {
 
   private uploadLutPalette(gl: WebGL2RenderingContext, palette: ColormapPaletteId): void {
     if (!this.lutTex || this.uploadedPalette === palette) return;
-    const lutBytes = new Uint8Array(256 * 4);
-    for (let i = 0; i < 256; i++) {
-      const [r, g, b] = evaluateSplLutRgb(i / 255, palette);
-      lutBytes[i * 4] = r;
-      lutBytes[i * 4 + 1] = g;
-      lutBytes[i * 4 + 2] = b;
-      lutBytes[i * 4 + 3] = 255;
-    }
+    const stops = PALETTE_STOPS[palette] ?? PALETTE_STOPS.turbo;
+    const lutBytes = buildRgbaLutBytes(stops, 256);
     gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lutBytes);
     this.uploadedPalette = palette;
   }
 
   private initGl(gl: WebGL2RenderingContext): void {
-    const vs = this.compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SRC);
-    const fs = this.compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SRC);
-    if (!vs || !fs) return;
-
-    const prog = gl.createProgram();
+    const prog = createGlProgram(gl, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC);
     if (!prog) return;
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      gl.deleteProgram(prog);
-      return;
-    }
 
     this.gl = gl;
     this.program = prog;
     this.vao = gl.createVertexArray();
 
-    this.lutTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.lutTex = createClampedTexture2D(gl, gl.LINEAR);
     this.uploadLutPalette(gl, 'turbo');
 
-    this.splTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.splTex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    this.maskTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.splTex = createClampedTexture2D(gl, gl.NEAREST);
+    this.maskTex = createClampedTexture2D(gl, gl.NEAREST);
 
     gl.useProgram(prog);
     gl.uniform1i(gl.getUniformLocation(prog, 'u_splTex'), 0);
@@ -344,22 +279,6 @@ export class GlHeatmapRenderer {
       hasMask: gl.getUniformLocation(prog, 'u_hasMask'),
       stepped: gl.getUniformLocation(prog, 'u_stepped'),
     };
-  }
-
-  private compileShader(
-    gl: WebGL2RenderingContext,
-    type: number,
-    src: string
-  ): WebGLShader | null {
-    const sh = gl.createShader(type);
-    if (!sh) return null;
-    gl.shaderSource(sh, src);
-    gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      gl.deleteShader(sh);
-      return null;
-    }
-    return sh;
   }
 
   public render(

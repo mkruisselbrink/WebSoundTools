@@ -28,10 +28,9 @@ import { computeSpeedOfSoundMpS } from '@foh/acoustics';
 import {
   compileDspChain,
   evaluateCompiledDspAtFrequency,
-  type BiquadFilterType,
-  type CrossoverTopology,
   type ParametricEqBand,
 } from '@foh/dsp';
+import { numVal, renderDspChainEditor } from '@foh/ui';
 import { html, type TemplateResult } from 'lit';
 import type {
   ColormapPaletteId,
@@ -65,37 +64,12 @@ export interface AlignmentUiState {
   readonly onNotify: (msg: string) => void;
 }
 
-const CROSSOVER_OPTIONS: readonly { readonly value: CrossoverTopology; readonly label: string }[] =
-  [
-    { value: 'off', label: 'Bypass (Off)' },
-    { value: 'linkwitz-riley-24', label: 'LR24 (24 dB/oct)' },
-    { value: 'linkwitz-riley-48', label: 'LR48 (48 dB/oct)' },
-    { value: 'linkwitz-riley-12', label: 'LR12 (12 dB/oct)' },
-    { value: 'butterworth-12', label: 'BW12 (12 dB/oct)' },
-    { value: 'butterworth-18', label: 'BW18 (18 dB/oct)' },
-    { value: 'butterworth-24', label: 'BW24 (24 dB/oct)' },
-    { value: 'butterworth-48', label: 'BW48 (48 dB/oct)' },
-  ];
-
-const EQ_TYPES: readonly { readonly value: BiquadFilterType; readonly label: string }[] = [
-  { value: 'peaking', label: 'Bell / Peaking' },
-  { value: 'lowshelf', label: 'Low Shelf' },
-  { value: 'highshelf', label: 'High Shelf' },
-  { value: 'notch', label: 'Notch' },
-  { value: 'allpass', label: '2nd-Order All-Pass' },
-];
-
 const SUB_ARRAY_MODES: readonly { readonly value: SubArrayMode; readonly label: string }[] = [
   { value: 'broadside', label: 'Broadside Line' },
   { value: 'cardioid-csa', label: 'Cardioid Stack (CSA)' },
   { value: 'end-fire', label: 'End-Fire Gradient' },
   { value: 'delay-arc', label: 'Electronic Delay Arc' },
 ];
-
-function numVal(ev: Event, fallback: number): number {
-  const n = Number((ev.target as HTMLInputElement).value);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 export function renderEntityInspector(
   store: ProjectStore,
@@ -720,7 +694,12 @@ function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): TemplateRe
     store.updateDspGroup(grp.id, { dsp: { eqBands: [...dsp.eqBands, nextBand] } });
   };
 
-  const patchEqBand = (bandId: string, patch: Partial<ParametricEqBand>, txKey?: string) => {
+  const patchEqBand = (
+    _bandIndex: number,
+    bandId: string,
+    patch: Partial<ParametricEqBand>,
+    txKey?: string
+  ) => {
     store.updateDspGroup(
       grp.id,
       {
@@ -746,7 +725,7 @@ function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): TemplateRe
       </div>
 
       <div class="form-section">
-        <div class="form-section-title">Gain, Delay & Polarity</div>
+        <div class="form-section-title">Group Identity</div>
         <div class="field-row">
           <span class="field-label">Group Name</span>
           <input
@@ -756,276 +735,30 @@ function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): TemplateRe
               store.updateDspGroup(grp.id, { name: (ev.target as HTMLInputElement).value })}
           />
         </div>
-
-        <div class="xy-grid" style="margin-top:6px">
-          <label class="mini-field">
-            <span>Gain (dB)</span>
-            <input
-              type="number"
-              step="0.5"
-              data-testid="grp-gain-db"
-              .value=${String(dsp.gainDb)}
-              @input=${(ev: Event) =>
-                store.updateDspGroup(
-                  grp.id,
-                  { dsp: { gainDb: numVal(ev, dsp.gainDb) } },
-                  `grp-gain-${grp.id}`
-                )}
-            />
-          </label>
-          <label class="mini-field">
-            <span>Delay (ms)</span>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              data-testid="grp-delay-ms"
-              .value=${String(Number(dsp.delayMs.toFixed(2)))}
-              @input=${(ev: Event) =>
-                store.updateDspGroup(
-                  grp.id,
-                  { dsp: { delayMs: Math.max(0, numVal(ev, dsp.delayMs)) } },
-                  `grp-dly-${grp.id}`
-                )}
-            />
-          </label>
-        </div>
-
-        <div class="check-row">
-          <label class="check-label">
-            <input
-              type="checkbox"
-              data-testid="grp-polarity-checkbox"
-              .checked=${dsp.invertPolarity}
-              @change=${(ev: Event) =>
-                store.updateDspGroup(grp.id, {
-                  dsp: { invertPolarity: (ev.target as HTMLInputElement).checked },
-                })}
-            />
-            Invert Polarity (Ø 180°)
-          </label>
-          <label class="check-label">
-            <input
-              type="checkbox"
-              .checked=${dsp.muted}
-              @change=${(ev: Event) =>
-                store.updateDspGroup(grp.id, {
-                  dsp: { muted: (ev.target as HTMLInputElement).checked },
-                })}
-            />
-            Mute Group
-          </label>
-        </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">High-Pass & Low-Pass Crossovers</div>
-        <div class="xy-grid" style="margin-bottom:6px">
-          <label class="mini-field">
-            <span>HPF Slope</span>
-            <select
-              data-testid="grp-hpf-topology"
-              .value=${dsp.highPass.topology}
-              @change=${(ev: Event) =>
-                store.updateDspGroup(grp.id, {
-                  dsp: {
-                    highPass: {
-                      ...dsp.highPass,
-                      topology: (ev.target as HTMLSelectElement).value as CrossoverTopology,
-                    },
-                  },
-                })}
-            >
-              ${CROSSOVER_OPTIONS.map(
-                (o) => html`
-                  <option value=${o.value} ?selected=${o.value === dsp.highPass.topology}>
-                    ${o.label}
-                  </option>
-                `
-              )}
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>HPF Freq (Hz)</span>
-            <input
-              type="number"
-              min="20"
-              max="20000"
-              step="5"
-              .value=${String(dsp.highPass.frequencyHz)}
-              @input=${(ev: Event) =>
-                store.updateDspGroup(
-                  grp.id,
-                  {
-                    dsp: {
-                      highPass: {
-                        ...dsp.highPass,
-                        frequencyHz: Math.max(20, numVal(ev, dsp.highPass.frequencyHz)),
-                      },
-                    },
-                  },
-                  `grp-hpf-${grp.id}`
-                )}
-            />
-          </label>
-        </div>
-
-        <div class="xy-grid">
-          <label class="mini-field">
-            <span>LPF Slope</span>
-            <select
-              data-testid="grp-lpf-topology"
-              .value=${dsp.lowPass.topology}
-              @change=${(ev: Event) =>
-                store.updateDspGroup(grp.id, {
-                  dsp: {
-                    lowPass: {
-                      ...dsp.lowPass,
-                      topology: (ev.target as HTMLSelectElement).value as CrossoverTopology,
-                    },
-                  },
-                })}
-            >
-              ${CROSSOVER_OPTIONS.map(
-                (o) => html`
-                  <option value=${o.value} ?selected=${o.value === dsp.lowPass.topology}>
-                    ${o.label}
-                  </option>
-                `
-              )}
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>LPF Freq (Hz)</span>
-            <input
-              type="number"
-              min="30"
-              max="20000"
-              step="5"
-              .value=${String(dsp.lowPass.frequencyHz)}
-              @input=${(ev: Event) =>
-                store.updateDspGroup(
-                  grp.id,
-                  {
-                    dsp: {
-                      lowPass: {
-                        ...dsp.lowPass,
-                        frequencyHz: Math.max(30, numVal(ev, dsp.lowPass.frequencyHz)),
-                      },
-                    },
-                  },
-                  `grp-lpf-${grp.id}`
-                )}
-            />
-          </label>
-        </div>
-      </div>
-
-      <div class="form-section">
-        <div class="form-section-title">
-          <span>Parametric EQ (${dsp.eqBands.length}/8)</span>
-          <button
-            class="btn btn-xs"
-            data-testid="btn-add-eq-band"
-            ?disabled=${dsp.eqBands.length >= 8}
-            @click=${addEqBand}
-          >
-            + Add Band
-          </button>
-        </div>
-
-        ${dsp.eqBands.map(
-          (band, idx) => html`
-            <div class="eq-card" data-testid="eq-band-${idx}">
-              <div class="eq-card-top">
-                <label class="check-label">
-                  <input
-                    type="checkbox"
-                    .checked=${band.enabled}
-                    @change=${(ev: Event) =>
-                      patchEqBand(band.id, { enabled: (ev.target as HTMLInputElement).checked })}
-                  />
-                  #${idx + 1}
-                </label>
-                <select
-                  .value=${band.type}
-                  @change=${(ev: Event) =>
-                    patchEqBand(band.id, {
-                      type: (ev.target as HTMLSelectElement).value as BiquadFilterType,
-                    })}
-                >
-                  ${EQ_TYPES.map(
-                    (t) => html`
-                      <option value=${t.value} ?selected=${t.value === band.type}>
-                        ${t.label}
-                      </option>
-                    `
-                  )}
-                </select>
-                <button
-                  class="btn btn-xs btn-danger"
-                  @click=${() =>
-                    store.updateDspGroup(grp.id, {
-                      dsp: { eqBands: dsp.eqBands.filter((b) => b.id !== band.id) },
-                    })}
-                >
-                  ×
-                </button>
-              </div>
-              <div class="xyz-grid">
-                <label class="mini-field">
-                  <span>Freq (Hz)</span>
-                  <input
-                    type="number"
-                    min="20"
-                    max="20000"
-                    step="10"
-                    .value=${String(band.frequencyHz)}
-                    @input=${(ev: Event) =>
-                      patchEqBand(
-                        band.id,
-                        { frequencyHz: Math.max(20, numVal(ev, band.frequencyHz)) },
-                        `eq-f-${band.id}`
-                      )}
-                  />
-                </label>
-                <label class="mini-field">
-                  <span>Gain (dB)</span>
-                  <input
-                    type="number"
-                    min="-18"
-                    max="15"
-                    step="0.5"
-                    .value=${String(band.gainDb)}
-                    @input=${(ev: Event) =>
-                      patchEqBand(
-                        band.id,
-                        { gainDb: numVal(ev, band.gainDb) },
-                        `eq-g-${band.id}`
-                      )}
-                  />
-                </label>
-                <label class="mini-field">
-                  <span>Q</span>
-                  <input
-                    type="number"
-                    min="0.2"
-                    max="20"
-                    step="0.1"
-                    .value=${String(band.q)}
-                    @input=${(ev: Event) =>
-                      patchEqBand(
-                        band.id,
-                        { q: Math.max(0.1, numVal(ev, band.q)) },
-                        `eq-q-${band.id}`
-                      )}
-                  />
-                </label>
-              </div>
-            </div>
-          `
-        )}
-      </div>
+      ${renderDspChainEditor({
+        entityId: grp.id,
+        dsp,
+        maxEqBands: 8,
+        muteLabel: 'Mute Group',
+        testIds: {
+          gainDb: 'grp-gain-db',
+          delayMs: 'grp-delay-ms',
+          invertPolarity: 'grp-polarity-checkbox',
+          hpfTopology: 'grp-hpf-topology',
+          lpfTopology: 'grp-lpf-topology',
+          addEqBand: 'btn-add-eq-band',
+          eqBandCardPrefix: 'eq-band-',
+        },
+        onPatchDsp: (patch, txKey) => store.updateDspGroup(grp.id, { dsp: patch }, txKey),
+        onPatchEqBand: patchEqBand,
+        onAddEqBand: addEqBand,
+        onRemoveEqBand: (_idx, bandId) =>
+          store.updateDspGroup(grp.id, {
+            dsp: { eqBands: dsp.eqBands.filter((b) => b.id !== bandId) },
+          }),
+      })}
     </div>
   `;
 }

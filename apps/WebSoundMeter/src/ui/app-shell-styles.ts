@@ -1,38 +1,26 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
+import { fohControlsCss, fohPanelsCss, fohTokensCss } from '@foh/ui';
 import { css } from 'lit';
 
-export const appShellStyles = css`
-  :host {
-    display: flex;
-    flex-direction: column;
-    width: 100vw;
-    height: 100vh;
-    background: #060911;
-    color: #f8fafc;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
+export const appShellStyles = [
+  fohTokensCss,
+  fohControlsCss,
+  fohPanelsCss,
+  css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      background: var(--foh-bg-app);
+      color: var(--foh-text-primary);
+      font-family: var(--foh-font-sans);
+      overflow: hidden;
+      box-sizing: border-box;
+    }
 
   * {
     box-sizing: border-box;
@@ -606,5 +594,6 @@ export const appShellStyles = css`
     border-color: #38bdf8;
     color: #ffffff;
   }
-`;
+  `,
+];
 

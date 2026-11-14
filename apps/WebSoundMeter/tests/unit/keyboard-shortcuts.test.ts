@@ -99,6 +99,30 @@ describe('keyboard-shortcuts', () => {
       )
     ).toBe(true);
     expect(onAddLiveSource).toHaveBeenCalledTimes(1);
+
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    expect(
+      dispatchAppKeydown(
+        { key: 'z', metaKey: true, target: { tagName: 'DIV' }, preventDefault },
+        { onCaptureTrace, onFindAndApplyDelay, onUndo, onRedo }
+      )
+    ).toBe(true);
+    expect(onUndo).toHaveBeenCalledTimes(1);
+
+    expect(
+      dispatchAppKeydown(
+        {
+          key: 'z',
+          metaKey: true,
+          shiftKey: true,
+          target: { tagName: 'DIV' },
+          preventDefault,
+        },
+        { onCaptureTrace, onFindAndApplyDelay, onUndo, onRedo }
+      )
+    ).toBe(true);
+    expect(onRedo).toHaveBeenCalledTimes(1);
   });
 });
 

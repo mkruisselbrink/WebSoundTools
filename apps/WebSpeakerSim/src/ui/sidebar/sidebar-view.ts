@@ -1,27 +1,12 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Scene hierarchy sidebar (`src/ui/sidebar/sidebar-view.ts`).
+ * Scene hierarchy sidebar rendering Point Sources, Subwoofer Arrays, DSP Groups,
+ * Audience/Stage Surfaces, Virtual Microphones, and Venue Environment.
  */
 
+import { renderEntityTreeSection } from '@foh/ui';
 import { html, type TemplateResult } from 'lit';
 import type { ProjectStore, SelectedEntity } from '../../model/project-store.js';
 
@@ -39,232 +24,170 @@ export function renderSceneSidebar(store: ProjectStore): TemplateResult {
 
   return html`
     <div class="scene-sidebar" data-testid="scene-sidebar">
-      <!-- Point Sources -->
-      <div class="tree-section">
-        <div class="tree-header">
-          <span>Point Sources (${scene.pointSources.length})</span>
+      ${renderEntityTreeSection({
+        title: `Point Sources (${scene.pointSources.length})`,
+        headerActions: html`
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-add-point-source"
             title="Add Point Source (P)"
             @click=${() => store.addPointSource()}
           >
             + Top
           </button>
-        </div>
-        <div class="tree-list">
-          ${scene.pointSources.map(
-            (ps) => html`
-              <div
-                class="tree-row"
-                data-testid="tree-ps-${ps.id}"
-                data-selected=${String(isSel(sel, 'point-source', ps.id))}
-                @click=${() => store.setSelection({ kind: 'point-source', id: ps.id })}
-              >
-                <div class="tree-row-main">
-                  <span class="swatch" style="background:${groupColor(ps.dspGroupId)}"></span>
-                  <span class="tree-row-title">${ps.name}</span>
-                  ${ps.mirrorLeftRight ? html`<span class="tree-badge">L/R</span>` : ''}
-                </div>
-                <button
-                  class="btn btn-xs ${ps.muted ? 'btn-danger' : ''}"
-                  @click=${(ev: Event) => {
-                    ev.stopPropagation();
-                    store.updatePointSource(ps.id, { muted: !ps.muted });
-                  }}
-                >
-                  ${ps.muted ? 'Muted' : 'On'}
-                </button>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+        `,
+        items: scene.pointSources.map((ps) => ({
+          id: ps.id,
+          title: ps.name,
+          selected: isSel(sel, 'point-source', ps.id),
+          color: groupColor(ps.dspGroupId),
+          badge: ps.mirrorLeftRight ? 'L/R' : undefined,
+          testId: `tree-ps-${ps.id}`,
+          toggle: {
+            kind: 'button',
+            active: !ps.muted,
+            activeLabel: 'On',
+            inactiveLabel: 'Muted',
+            dangerWhenInactive: true,
+            onToggle: (nextActive) => store.updatePointSource(ps.id, { muted: !nextActive }),
+          },
+          onSelect: () => store.setSelection({ kind: 'point-source', id: ps.id }),
+        })),
+      })}
 
-      <!-- Subwoofer Arrays -->
-      <div class="tree-section">
-        <div class="tree-header">
-          <span>Subwoofer Arrays (${scene.subArrays.length})</span>
+      ${renderEntityTreeSection({
+        title: `Subwoofer Arrays (${scene.subArrays.length})`,
+        headerActions: html`
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-add-sub-array"
             title="Add Subwoofer Array (S)"
             @click=${() => store.addSubArray()}
           >
             + Sub
           </button>
-        </div>
-        <div class="tree-list">
-          ${scene.subArrays.map(
-            (sa) => html`
-              <div
-                class="tree-row"
-                data-testid="tree-sa-${sa.id}"
-                data-selected=${String(isSel(sel, 'sub-array', sa.id))}
-                @click=${() => store.setSelection({ kind: 'sub-array', id: sa.id })}
-              >
-                <div class="tree-row-main">
-                  <span class="swatch" style="background:${groupColor(sa.dspGroupId)}"></span>
-                  <span class="tree-row-title">${sa.name}</span>
-                  <span class="tree-badge">${sa.boxCount}× ${sa.mode}</span>
-                </div>
-                <button
-                  class="btn btn-xs ${sa.muted ? 'btn-danger' : ''}"
-                  @click=${(ev: Event) => {
-                    ev.stopPropagation();
-                    store.updateSubArray(sa.id, { muted: !sa.muted });
-                  }}
-                >
-                  ${sa.muted ? 'Muted' : 'On'}
-                </button>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+        `,
+        items: scene.subArrays.map((sa) => ({
+          id: sa.id,
+          title: sa.name,
+          selected: isSel(sel, 'sub-array', sa.id),
+          color: groupColor(sa.dspGroupId),
+          badge: `${sa.boxCount}× ${sa.mode}`,
+          testId: `tree-sa-${sa.id}`,
+          toggle: {
+            kind: 'button',
+            active: !sa.muted,
+            activeLabel: 'On',
+            inactiveLabel: 'Muted',
+            dangerWhenInactive: true,
+            onToggle: (nextActive) => store.updateSubArray(sa.id, { muted: !nextActive }),
+          },
+          onSelect: () => store.setSelection({ kind: 'sub-array', id: sa.id }),
+        })),
+      })}
 
-      <!-- DSP Groups -->
-      <div class="tree-section">
-        <div class="tree-header">
-          <span>DSP Groups (${scene.dspGroups.length})</span>
+      ${renderEntityTreeSection({
+        title: `DSP Groups (${scene.dspGroups.length})`,
+        headerActions: html`
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-add-dsp-group"
             @click=${() => store.addDspGroup()}
           >
             + Group
           </button>
-        </div>
-        <div class="tree-list">
-          ${scene.dspGroups.map(
-            (grp) => html`
-              <div
-                class="tree-row"
-                data-testid="tree-grp-${grp.id}"
-                data-selected=${String(isSel(sel, 'dsp-group', grp.id))}
-                @click=${() => store.setSelection({ kind: 'dsp-group', id: grp.id })}
-              >
-                <div class="tree-row-main">
-                  <span class="swatch" style="background:${grp.color}"></span>
-                  <span class="tree-row-title">${grp.name}</span>
-                  <span class="tree-badge">${grp.dsp.delayMs.toFixed(1)} ms</span>
-                </div>
-                <button
-                  class="btn btn-xs ${grp.dsp.muted ? 'btn-danger' : ''}"
-                  @click=${(ev: Event) => {
-                    ev.stopPropagation();
-                    store.updateDspGroup(grp.id, { dsp: { muted: !grp.dsp.muted } });
-                  }}
-                >
-                  ${grp.dsp.muted ? 'Muted' : 'On'}
-                </button>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+        `,
+        items: scene.dspGroups.map((grp) => ({
+          id: grp.id,
+          title: grp.name,
+          selected: isSel(sel, 'dsp-group', grp.id),
+          color: grp.color,
+          badge: `${grp.dsp.delayMs.toFixed(1)} ms`,
+          testId: `tree-grp-${grp.id}`,
+          toggle: {
+            kind: 'button',
+            active: !grp.dsp.muted,
+            activeLabel: 'On',
+            inactiveLabel: 'Muted',
+            dangerWhenInactive: true,
+            onToggle: (nextActive) =>
+              store.updateDspGroup(grp.id, { dsp: { muted: !nextActive } }),
+          },
+          onSelect: () => store.setSelection({ kind: 'dsp-group', id: grp.id }),
+        })),
+      })}
 
-      <!-- Audience & Stage Surfaces -->
-      <div class="tree-section">
-        <div class="tree-header">
-          <span>Audience & Stage Zones (${scene.surfaces.length})</span>
+      ${renderEntityTreeSection({
+        title: `Audience & Stage Zones (${scene.surfaces.length})`,
+        headerActions: html`
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-add-surface"
             @click=${() => store.addSurface()}
           >
             + Zone
           </button>
-        </div>
-        <div class="tree-list">
-          ${scene.surfaces.map(
-            (sf) => html`
-              <div
-                class="tree-row"
-                data-testid="tree-surf-${sf.id}"
-                data-selected=${String(isSel(sel, 'surface', sf.id))}
-                @click=${() => store.setSelection({ kind: 'surface', id: sf.id })}
-              >
-                <div class="tree-row-main">
-                  <span
-                    class="swatch"
-                    style="background:${sf.role === 'stage' ? '#f59e0b' : '#22c55e'}"
-                  ></span>
-                  <span class="tree-row-title">${sf.name}</span>
-                  <span class="tree-badge">${sf.role}</span>
-                </div>
-                <button
-                  class="btn btn-xs"
-                  @click=${(ev: Event) => {
-                    ev.stopPropagation();
-                    store.updateSurface(sf.id, { enabled: !sf.enabled });
-                  }}
-                >
-                  ${sf.enabled ? 'On' : 'Off'}
-                </button>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+        `,
+        items: scene.surfaces.map((sf) => ({
+          id: sf.id,
+          title: sf.name,
+          selected: isSel(sel, 'surface', sf.id),
+          color: sf.role === 'stage' ? '#f59e0b' : '#22c55e',
+          badge: sf.role,
+          testId: `tree-surf-${sf.id}`,
+          toggle: {
+            kind: 'button',
+            active: sf.enabled,
+            activeLabel: 'On',
+            inactiveLabel: 'Off',
+            onToggle: (nextActive) => store.updateSurface(sf.id, { enabled: nextActive }),
+          },
+          onSelect: () => store.setSelection({ kind: 'surface', id: sf.id }),
+        })),
+      })}
 
-      <!-- Virtual Microphones -->
-      <div class="tree-section">
-        <div class="tree-header">
-          <span>Virtual Mics (${scene.virtualMics.length})</span>
+      ${renderEntityTreeSection({
+        title: `Virtual Mics (${scene.virtualMics.length})`,
+        headerActions: html`
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-add-virtual-mic"
             title="Add Virtual Measurement Mic (M)"
             @click=${() => store.addVirtualMic()}
           >
             + Mic
           </button>
-        </div>
-        <div class="tree-list">
-          ${scene.virtualMics.map(
-            (mic) => html`
-              <div
-                class="tree-row"
-                data-testid="tree-mic-${mic.id}"
-                data-selected=${String(isSel(sel, 'virtual-mic', mic.id))}
-                @click=${() => store.setSelection({ kind: 'virtual-mic', id: mic.id })}
-              >
-                <div class="tree-row-main">
-                  <span class="swatch" style="background:${mic.color}"></span>
-                  <span class="tree-row-title">${mic.name}</span>
-                </div>
-                <button
-                  class="btn btn-xs"
-                  @click=${(ev: Event) => {
-                    ev.stopPropagation();
-                    store.updateVirtualMic(mic.id, { enabled: !mic.enabled });
-                  }}
-                >
-                  ${mic.enabled ? 'On' : 'Off'}
-                </button>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+        `,
+        items: scene.virtualMics.map((mic) => ({
+          id: mic.id,
+          title: mic.name,
+          selected: isSel(sel, 'virtual-mic', mic.id),
+          color: mic.color,
+          testId: `tree-mic-${mic.id}`,
+          toggle: {
+            kind: 'button',
+            active: mic.enabled,
+            activeLabel: 'On',
+            inactiveLabel: 'Off',
+            onToggle: (nextActive) => store.updateVirtualMic(mic.id, { enabled: nextActive }),
+          },
+          onSelect: () => store.setSelection({ kind: 'virtual-mic', id: mic.id }),
+        })),
+      })}
 
-      <!-- Environment -->
-      <div class="tree-section">
-        <div
-          class="tree-row"
-          data-testid="tree-environment"
-          data-selected=${String(isSel(sel, 'environment'))}
-          @click=${() => store.setSelection({ kind: 'environment' })}
-        >
-          <div class="tree-row-main">
-            <span class="swatch" style="background:#94a3b8"></span>
-            <span class="tree-row-title">Atmosphere, Colormap & Venue Bounds</span>
-          </div>
-          <span class="tree-badge">${scene.atmosphere.temperatureCelsius}°C</span>
-        </div>
-      </div>
+      ${renderEntityTreeSection({
+        items: [
+          {
+            id: 'environment',
+            title: 'Atmosphere, Colormap & Venue Bounds',
+            selected: isSel(sel, 'environment'),
+            color: '#94a3b8',
+            badge: `${scene.atmosphere.temperatureCelsius}°C`,
+            testId: 'tree-environment',
+            onSelect: () => store.setSelection({ kind: 'environment' }),
+          },
+        ],
+      })}
     </div>
   `;
 }
-

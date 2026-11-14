@@ -1,60 +1,47 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Shared dark FOH design tokens and layout styles for `<web-speaker-sim-app>`
- * (`src/ui/app-shell-styles.ts`).
+ * Application shell layout styles composing `@foh/ui` design tokens, controls, and panels.
  */
 
+import { fohControlsCss, fohPanelsCss, fohTokensCss } from '@foh/ui';
 import { css } from 'lit';
 
-export const appShellStyles = css`
-  :host {
-    --bg-app: #060911;
-    --bg-panel: #0b1120;
-    --bg-header: #0f172a;
-    --bg-elevated: #162033;
-    --bg-input: #090d16;
-    --border-subtle: #1e293b;
-    --border-strong: #334155;
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --accent: #0284c7;
-    --accent-bright: #38bdf8;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+export const appShellStyles = [
+  fohTokensCss,
+  fohControlsCss,
+  fohPanelsCss,
+  css`
+    :host {
+      --bg-app: var(--foh-bg-app);
+      --bg-panel: var(--foh-bg-panel);
+      --bg-header: var(--foh-bg-header);
+      --bg-elevated: var(--foh-bg-elevated);
+      --bg-input: var(--foh-bg-input);
+      --border-subtle: var(--foh-border-subtle);
+      --border-strong: var(--foh-border-strong);
+      --text-primary: var(--foh-text-primary);
+      --text-secondary: var(--foh-text-secondary);
+      --text-muted: var(--foh-text-muted);
+      --accent: var(--foh-accent);
+      --accent-bright: var(--foh-accent-bright);
+      --success: var(--foh-success);
+      --warning: var(--foh-warning);
+      --danger: var(--foh-danger);
+      --font-mono: var(--foh-font-mono);
 
-    display: flex;
-    flex-direction: column;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    background: var(--bg-app);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px;
-    box-sizing: border-box;
-  }
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--foh-bg-app);
+      color: var(--foh-text-primary);
+      font-family: var(--foh-font-sans);
+      font-size: 12px;
+      box-sizing: border-box;
+    }
 
   *,
   *::before,
@@ -573,5 +560,6 @@ export const appShellStyles = css`
     z-index: 90;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
-`;
+  `,
+];
 
