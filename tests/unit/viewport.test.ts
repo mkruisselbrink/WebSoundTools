@@ -4,7 +4,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ProjectStore } from '../../src/model/project-store.js';
+import {
+  DEFAULT_COLORMAP_CONFIG,
+  ProjectStore,
+  resolveEffectiveSplRange,
+} from '../../src/model/project-store.js';
 import { getAimHandleWorldPoint } from '../../src/viewport/canvas-cad-painter.js';
 import { evaluateSplLutRgb } from '../../src/viewport/gl-heatmap-renderer.js';
 import {
@@ -36,9 +40,58 @@ describe('viewport coordinates, LUT, and hit-testing', () => {
     expect(mid).toBeCloseTo(90, 5);
     expect(sampleScalarGridBilinear(grid, 2, 2, 0, 10, 0, 10, -1, 5)).toBeNull();
 
-    const low = evaluateSplLutRgb(0);
-    const high = evaluateSplLutRgb(1);
+    const low = evaluateSplLutRgb(0, 'turbo');
+    const midLut = evaluateSplLutRgb(0.5, 'turbo');
+    const high = evaluateSplLutRgb(1, 'turbo');
     expect(high[0]).toBeGreaterThan(low[0]);
+    expect(midLut[1]).toBeGreaterThan(low[1]);
+
+    const infLow = evaluateSplLutRgb(0, 'inferno');
+    const infHigh = evaluateSplLutRgb(1, 'inferno');
+    expect(infHigh[0] + infHigh[1] + infHigh[2]).toBeGreaterThan(
+      infLow[0] + infLow[1] + infLow[2]
+    );
+
+    const virLow = evaluateSplLutRgb(0, 'viridis');
+    const virHigh = evaluateSplLutRgb(1, 'viridis');
+    expect(virHigh[1]).toBeGreaterThan(virLow[1]);
+  });
+
+  it('resolves tight, standard, wide, and manual SPL colormap windows accurately', () => {
+    const stats = {
+      audienceSampleCount: 400,
+      meanAudienceSplDb: 104.2,
+      maxAudienceSplDb: 108.4,
+    };
+
+    const tight6 = resolveEffectiveSplRange(
+      { ...DEFAULT_COLORMAP_CONFIG, rangeMode: 'auto-6' },
+      stats
+    );
+    expect(tight6.maxSplDb - tight6.minSplDb).toBe(6);
+    expect(tight6.minSplDb).toBeCloseTo(101, 1);
+    expect(tight6.maxSplDb).toBeCloseTo(107, 1);
+
+    const fine12 = resolveEffectiveSplRange(
+      { ...DEFAULT_COLORMAP_CONFIG, rangeMode: 'auto-12' },
+      stats
+    );
+    expect(fine12.maxSplDb - fine12.minSplDb).toBe(12);
+
+    const std21 = resolveEffectiveSplRange(
+      { ...DEFAULT_COLORMAP_CONFIG, rangeMode: 'auto-21' },
+      stats
+    );
+    expect(std21.maxSplDb - std21.minSplDb).toBe(21);
+    expect(std21.maxSplDb).toBeGreaterThanOrEqual(109.5);
+
+    // Editing minSplDb directly without rangeMode switches store colormap to manual
+    const store = new ProjectStore();
+    expect(store.colormap.rangeMode).toBe('auto-21');
+    store.setColormap({ minSplDb: 90, maxSplDb: 108 });
+    expect(store.colormap.rangeMode).toBe('manual');
+    const manual = resolveEffectiveSplRange(store.colormap, stats);
+    expect(manual).toEqual({ minSplDb: 90, maxSplDb: 108 });
   });
 
   it('hit-tests aim handles, point sources, sub arrays, and virtual mics accurately', () => {

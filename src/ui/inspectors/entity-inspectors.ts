@@ -25,7 +25,12 @@
  */
 
 import { html, type TemplateResult } from 'lit';
-import type { ProjectStore } from '../../model/project-store.js';
+import type {
+  ColormapPaletteId,
+  ColormapRangeMode,
+  IsolineStepDb,
+  ProjectStore,
+} from '../../model/project-store.js';
 import type {
   AudienceSurface,
   DspGroup,
@@ -1564,10 +1569,72 @@ function renderEnvironmentInspector(store: ProjectStore): TemplateResult {
       </div>
 
       <div class="form-section">
-        <div class="form-section-title">SPL Colormap Scale</div>
-        <div class="xy-grid">
+        <div class="form-section-title">SPL Colormap & Contours</div>
+        <div class="field-row">
+          <span class="field-label">Range Mode</span>
+          <select
+            .value=${cmap.rangeMode}
+            @change=${(ev: Event) =>
+              store.setColormap({
+                rangeMode: (ev.target as HTMLSelectElement).value as ColormapRangeMode,
+              })}
+          >
+            <option value="auto-6" ?selected=${cmap.rangeMode === 'auto-6'}>
+              Auto ±3 dB (Tight Coverage)
+            </option>
+            <option value="auto-12" ?selected=${cmap.rangeMode === 'auto-12'}>
+              Auto ±6 dB (Fine Coverage)
+            </option>
+            <option value="auto-21" ?selected=${cmap.rangeMode === 'auto-21'}>
+              Auto 21 dB (Standard)
+            </option>
+            <option value="auto-36" ?selected=${cmap.rangeMode === 'auto-36'}>
+              Auto 36 dB (Wide / Sub Rejection)
+            </option>
+            <option value="manual" ?selected=${cmap.rangeMode === 'manual'}>
+              Manual Min / Max
+            </option>
+          </select>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Palette</span>
+          <select
+            .value=${cmap.palette}
+            @change=${(ev: Event) =>
+              store.setColormap({
+                palette: (ev.target as HTMLSelectElement).value as ColormapPaletteId,
+              })}
+          >
+            <option value="turbo" ?selected=${cmap.palette === 'turbo'}>
+              Rainbow (High-Contrast)
+            </option>
+            <option value="inferno" ?selected=${cmap.palette === 'inferno'}>
+              Thermal (Inferno)
+            </option>
+            <option value="viridis" ?selected=${cmap.palette === 'viridis'}>
+              Viridis (Colorblind-Safe)
+            </option>
+          </select>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Contours</span>
+          <select
+            .value=${String(cmap.isolineStepDb)}
+            @change=${(ev: Event) =>
+              store.setColormap({
+                isolineStepDb: Number((ev.target as HTMLSelectElement).value) as IsolineStepDb,
+              })}
+          >
+            <option value="1" ?selected=${cmap.isolineStepDb === 1}>1 dB (Ultra-Fine)</option>
+            <option value="2" ?selected=${cmap.isolineStepDb === 2}>2 dB (Fine)</option>
+            <option value="3" ?selected=${cmap.isolineStepDb === 3}>3 dB (Standard)</option>
+            <option value="6" ?selected=${cmap.isolineStepDb === 6}>6 dB (Coarse)</option>
+            <option value="0" ?selected=${cmap.isolineStepDb === 0}>Off</option>
+          </select>
+        </div>
+        <div class="xy-grid" style="margin-top:6px">
           <label class="mini-field">
-            <span>Min SPL (dB)</span>
+            <span>Manual Min (dB)</span>
             <input
               type="number"
               step="3"
@@ -1576,13 +1643,26 @@ function renderEnvironmentInspector(store: ProjectStore): TemplateResult {
             />
           </label>
           <label class="mini-field">
-            <span>Max SPL (dB)</span>
+            <span>Manual Max (dB)</span>
             <input
               type="number"
               step="3"
               .value=${String(cmap.maxSplDb)}
               @input=${(ev: Event) => store.setColormap({ maxSplDb: numVal(ev, cmap.maxSplDb) })}
             />
+          </label>
+        </div>
+        <div class="check-row">
+          <label class="check-label">
+            <input
+              type="checkbox"
+              .checked=${cmap.stepped}
+              @change=${(ev: Event) =>
+                store.setColormap({
+                  stepped: (ev.target as HTMLInputElement).checked,
+                })}
+            />
+            Stepped Isobar Color Bands
           </label>
         </div>
         <div class="check-row">

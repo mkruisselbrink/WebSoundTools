@@ -371,6 +371,7 @@ export class WebSpeakerSimApp extends LitElement {
                     mode="plan"
                     .store=${this.store}
                     .snapshot=${this.snapshot}
+                    .revision=${this.storeRevision}
                   ></wss-viewport-panel>
                 `
               : ''}
@@ -381,6 +382,7 @@ export class WebSpeakerSimApp extends LitElement {
                     mode="section"
                     .store=${this.store}
                     .snapshot=${this.snapshot}
+                    .revision=${this.storeRevision}
                   ></wss-viewport-panel>
                 `
               : ''}
@@ -392,6 +394,7 @@ export class WebSpeakerSimApp extends LitElement {
                   <wss-chart-panel
                     .store=${this.store}
                     .snapshot=${this.snapshot}
+                    .revision=${this.storeRevision}
                   ></wss-chart-panel>
                 </div>
               `

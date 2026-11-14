@@ -24,7 +24,12 @@
 
 import { html, type TemplateResult } from 'lit';
 import { DEMO_VENUE_PRESETS } from '../../library/demo-presets.js';
-import type { ProjectStore } from '../../model/project-store.js';
+import type {
+  ColormapPaletteId,
+  ColormapRangeMode,
+  IsolineStepDb,
+  ProjectStore,
+} from '../../model/project-store.js';
 import type { AnalysisBandSelection } from '../../model/project-types.js';
 import type { ViewportLayoutMode } from '../../model/url-state.js';
 import type { SimulationSnapshot } from '../../physics/sim-controller.js';
@@ -228,20 +233,96 @@ export function renderTopbar(
           )}
         </select>
 
+        <label class="tb-label" for="colormap-range-select">Scale:</label>
+        <select
+          id="colormap-range-select"
+          data-testid="colormap-range-select"
+          title="SPL color window — choose Auto ±3 dB or ±6 dB to highlight small coverage differences"
+          .value=${cmap.rangeMode}
+          @change=${(ev: Event) => {
+            const rangeMode = (ev.target as HTMLSelectElement).value as ColormapRangeMode;
+            store.setColormap({ rangeMode });
+          }}
+        >
+          <option value="auto-6" ?selected=${cmap.rangeMode === 'auto-6'}>Auto ±3 dB</option>
+          <option value="auto-12" ?selected=${cmap.rangeMode === 'auto-12'}>Auto ±6 dB</option>
+          <option value="auto-21" ?selected=${cmap.rangeMode === 'auto-21'}>Auto 21 dB</option>
+          <option value="auto-36" ?selected=${cmap.rangeMode === 'auto-36'}>Auto 36 dB</option>
+          <option value="manual" ?selected=${cmap.rangeMode === 'manual'}>Manual</option>
+        </select>
+
+        ${cmap.rangeMode === 'manual'
+          ? html`
+              <input
+                type="number"
+                step="3"
+                style="width:52px"
+                data-testid="topbar-min-spl"
+                title="Manual Min SPL (dB)"
+                .value=${String(cmap.minSplDb)}
+                @input=${(ev: Event) => {
+                  const v = Number((ev.target as HTMLInputElement).value);
+                  if (Number.isFinite(v)) store.setColormap({ minSplDb: v, rangeMode: 'manual' });
+                }}
+              />
+              <input
+                type="number"
+                step="3"
+                style="width:52px"
+                data-testid="topbar-max-spl"
+                title="Manual Max SPL (dB)"
+                .value=${String(cmap.maxSplDb)}
+                @input=${(ev: Event) => {
+                  const v = Number((ev.target as HTMLInputElement).value);
+                  if (Number.isFinite(v)) store.setColormap({ maxSplDb: v, rangeMode: 'manual' });
+                }}
+              />
+            `
+          : ''}
+
+        <label class="tb-label" for="colormap-palette-select">Palette:</label>
+        <select
+          id="colormap-palette-select"
+          data-testid="colormap-palette-select"
+          title="Heatmap color palette"
+          .value=${cmap.palette}
+          @change=${(ev: Event) => {
+            const palette = (ev.target as HTMLSelectElement).value as ColormapPaletteId;
+            store.setColormap({ palette });
+          }}
+        >
+          <option value="turbo" ?selected=${cmap.palette === 'turbo'}>Rainbow</option>
+          <option value="inferno" ?selected=${cmap.palette === 'inferno'}>Thermal</option>
+          <option value="viridis" ?selected=${cmap.palette === 'viridis'}>Viridis</option>
+        </select>
+
         <label class="tb-label" for="isoline-select">Contours:</label>
         <select
           id="isoline-select"
           data-testid="isoline-select"
+          title="Equal-SPL contour line spacing"
           .value=${String(cmap.isolineStepDb)}
           @change=${(ev: Event) => {
-            const step = Number((ev.target as HTMLSelectElement).value) as 0 | 3 | 6;
+            const step = Number((ev.target as HTMLSelectElement).value) as IsolineStepDb;
             store.setColormap({ isolineStepDb: step });
           }}
         >
+          <option value="1" ?selected=${cmap.isolineStepDb === 1}>1 dB</option>
+          <option value="2" ?selected=${cmap.isolineStepDb === 2}>2 dB</option>
           <option value="3" ?selected=${cmap.isolineStepDb === 3}>3 dB</option>
           <option value="6" ?selected=${cmap.isolineStepDb === 6}>6 dB</option>
           <option value="0" ?selected=${cmap.isolineStepDb === 0}>Off</option>
         </select>
+
+        <button
+          class="btn"
+          data-testid="btn-colormap-stepped"
+          data-active=${String(cmap.stepped)}
+          title="Toggle discrete dB isobar color bands vs. smooth gradient"
+          @click=${() => store.setColormap({ stepped: !cmap.stepped })}
+        >
+          Stepped
+        </button>
 
         <button
           class="btn"

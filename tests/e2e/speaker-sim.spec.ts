@@ -173,5 +173,57 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     await expect(page.getByTestId('catalog-speaker-list')).toContainText('Imported 90x40 Horn');
     await expect(page.getByTestId('catalog-speaker-list')).toContainText('HDL-Series');
   });
+
+  test('immediately repaints Plan & Section heatmaps when Contours, Scale, Palette, or Stepped change', async ({
+    page,
+  }) => {
+    await page.goto('/?preset=club-cardioid-pa');
+    await expect(page.getByTestId('coverage-metrics')).toBeVisible();
+
+    const readGlCanvasDataUrl = () =>
+      page.evaluate(() => {
+        const app = document.querySelector('web-speaker-sim-app');
+        const vp = app?.shadowRoot?.querySelector('[data-testid="viewport-plan"]');
+        const canvas = vp?.shadowRoot?.querySelector('canvas.gl-canvas') as HTMLCanvasElement | null;
+        return canvas ? canvas.toDataURL() : '';
+      });
+
+    // Wait a frame for initial WebGL render
+    await page.waitForTimeout(100);
+    const initialSnap = await readGlCanvasDataUrl();
+    expect(initialSnap.length).toBeGreaterThan(200);
+
+    // 1. Toggle Contours from 3 dB -> Off -> 1 dB and verify pixels change each time
+    await page.getByTestId('isoline-select').selectOption('0');
+    await page.waitForTimeout(80);
+    const contoursOffSnap = await readGlCanvasDataUrl();
+    expect(contoursOffSnap).not.toBe(initialSnap);
+
+    await page.getByTestId('isoline-select').selectOption('1');
+    await page.waitForTimeout(80);
+    const contours1dBSnap = await readGlCanvasDataUrl();
+    expect(contours1dBSnap).not.toBe(contoursOffSnap);
+
+    // 2. Switch Scale to Auto ±3 dB (tight contrast)
+    await page.getByTestId('colormap-range-select').selectOption('auto-6');
+    await page.waitForTimeout(80);
+    const tightScaleSnap = await readGlCanvasDataUrl();
+    expect(tightScaleSnap).not.toBe(contours1dBSnap);
+
+    // 3. Switch Palette to Thermal (inferno) and toggle Stepped bands
+    await page.getByTestId('colormap-palette-select').selectOption('inferno');
+    await page.waitForTimeout(80);
+    const infernoSnap = await readGlCanvasDataUrl();
+    expect(infernoSnap).not.toBe(tightScaleSnap);
+
+    await page.getByTestId('btn-colormap-stepped').click();
+    await page.waitForTimeout(80);
+    const steppedSnap = await readGlCanvasDataUrl();
+    expect(steppedSnap).not.toBe(infernoSnap);
+
+    // 4. Verify Magnitude Span selector in <wss-chart-panel>
+    await page.getByTestId('chart-mag-span-select').selectOption('auto-30');
+    await expect(page.getByTestId('chart-mag-span-select')).toHaveValue('auto-30');
+  });
 });
 

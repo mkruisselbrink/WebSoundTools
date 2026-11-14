@@ -25,7 +25,7 @@
 
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { ProjectStore } from '../model/project-store.js';
+import { resolveEffectiveSplRange, type ProjectStore } from '../model/project-store.js';
 import type { SimulationSnapshot } from '../physics/sim-controller.js';
 import { paintViewportCadOverlay, type ViewportMode } from './canvas-cad-painter.js';
 import { GlHeatmapRenderer, type HeatmapGridInput } from './gl-heatmap-renderer.js';
@@ -144,6 +144,9 @@ export class WssViewportPanel extends LitElement {
   @property({ attribute: false })
   public snapshot: SimulationSnapshot | null = null;
 
+  @property({ type: Number })
+  public revision = 0;
+
   @state()
   private hoverText = '';
 
@@ -158,6 +161,8 @@ export class WssViewportPanel extends LitElement {
   private glRenderer: GlHeatmapRenderer | null = null;
   private gestures: ViewportGestureController | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private subscribedStore: ProjectStore | null = null;
+  private unsubscribeStore: (() => void) | null = null;
 
   private camera: ViewportCamera2D | null = null;
   private lastFittedSceneId: string | null = null;
@@ -198,11 +203,30 @@ export class WssViewportPanel extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (this.unsubscribeStore) {
+      this.unsubscribeStore();
+      this.unsubscribeStore = null;
+      this.subscribedStore = null;
+    }
     this.resizeObserver?.disconnect();
     this.glRenderer?.dispose();
   }
 
   protected updated(): void {
+    if (this.store !== this.subscribedStore) {
+      if (this.unsubscribeStore) {
+        this.unsubscribeStore();
+        this.unsubscribeStore = null;
+      }
+      this.subscribedStore = this.store ?? null;
+      if (this.subscribedStore) {
+        this.unsubscribeStore = this.subscribedStore.subscribe(() => {
+          this.requestUpdate();
+          this.requestRepaint();
+        });
+      }
+    }
+
     if (this.store && this.cssWidth > 0 && this.cssHeight > 0) {
       if (!this.camera || this.lastFittedSceneId !== this.store.scene.id) {
         this.fitView();
@@ -314,10 +338,15 @@ export class WssViewportPanel extends LitElement {
     if (!this.store || !this.camera || this.cssWidth <= 0 || this.cssHeight <= 0) return;
 
     const gridInput = this.getActiveHeatmapInput();
+    const effectiveRange = resolveEffectiveSplRange(
+      this.store.colormap,
+      this.snapshot?.planGrid?.stats
+    );
     this.glRenderer?.render(
       gridInput,
       this.camera,
       this.store.colormap,
+      effectiveRange,
       this.cssWidth,
       this.cssHeight
     );
@@ -338,6 +367,8 @@ export class WssViewportPanel extends LitElement {
           cssWidth: this.cssWidth,
           cssHeight: this.cssHeight,
           ruler: this.gestures?.rulerOverlay ?? null,
+          colormap: this.store.colormap,
+          effectiveSplRange: effectiveRange,
         });
         ctx.restore();
       }

@@ -24,12 +24,13 @@
  */
 
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
-import type { SelectedEntity } from '../model/project-store.js';
+import type { ColormapConfig, SelectedEntity } from '../model/project-store.js';
 import type { ProjectScene } from '../model/project-types.js';
 import { computeSpeedOfSoundMpS } from '../physics/atmosphere.js';
 import { expandSubwooferArray } from '../physics/sub-array-designer.js';
 import { DEG_TO_RAD, DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 import type { VirtualMicResponse } from '../physics/virtual-mic-solver.js';
+import { evaluateSplLutRgb } from './gl-heatmap-renderer.js';
 import {
   chooseMetricGridStepM,
   screenToWorld,
@@ -55,6 +56,8 @@ export interface CadPaintOptions {
   readonly cssWidth: number;
   readonly cssHeight: number;
   readonly ruler: RulerOverlayState | null;
+  readonly colormap?: ColormapConfig;
+  readonly effectiveSplRange?: { readonly minSplDb: number; readonly maxSplDb: number };
 }
 
 const AIM_HANDLE_LENGTH_M = 3.2;
@@ -212,7 +215,6 @@ export function paintViewportCadOverlay(
 
     ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
     ctx.fillStyle = '#fde68a';
-    ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     const modeTag =
       sa.mode === 'cardioid-csa'
@@ -222,11 +224,15 @@ export function paintViewportCadOverlay(
           : sa.mode === 'delay-arc'
             ? 'ARC'
             : 'BS';
-    ctx.fillText(
-      `${sa.name} [${sa.boxCount}× ${modeTag}]${sa.muted ? ' (M)' : ''}`,
-      originScr.px + 9,
-      originScr.py - 6
-    );
+    const saLabel = `${sa.name} [${sa.boxCount}× ${modeTag}]${sa.muted ? ' (M)' : ''}`;
+    const saTw = ctx.measureText(saLabel).width;
+    const saPlaceLeft = originScr.px + 9 + saTw > cssWidth - 6;
+    ctx.textAlign = saPlaceLeft ? 'right' : 'left';
+    const saLx = saPlaceLeft
+      ? Math.max(saTw + 6, originScr.px - 9)
+      : Math.max(6, originScr.px + 9);
+    const saLy = Math.max(14, Math.min(cssHeight - 8, originScr.py - 6));
+    ctx.fillText(saLabel, saLx, saLy);
     ctx.restore();
   }
 
@@ -315,24 +321,32 @@ export function paintViewportCadOverlay(
         : mic.name;
     ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
     const bw = ctx.measureText(badge).width + 10;
+    const bh = 19;
+    const bx = p.px + 9 + bw <= cssWidth - 6 ? p.px + 9 : Math.max(6, p.px - 9 - bw);
+    const by = Math.max(6, Math.min(cssHeight - bh - 6, p.py - 10));
     ctx.fillStyle = 'rgba(6, 9, 17, 0.88)';
     ctx.strokeStyle = mic.color;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(p.px + 9, p.py - 10, bw, 19, 4);
+    ctx.roundRect(bx, by, bw, bh, 4);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = '#f8fafc';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(badge, p.px + 14, p.py - 0.5);
+    ctx.fillText(badge, bx + 5, by + bh * 0.5);
     ctx.restore();
   }
 
   // 7. Interactive Ruler Overlay
   if (opts.ruler) {
     drawRulerOverlay(ctx, opts.ruler, camera, cssWidth, cssHeight, c);
+  }
+
+  // 8. On-Viewport SPL Colorbar Legend
+  if (opts.colormap && opts.effectiveSplRange) {
+    drawColormapLegendBar(ctx, opts.colormap, opts.effectiveSplRange, cssWidth, cssHeight);
   }
 }
 
@@ -595,12 +609,106 @@ function drawSinglePointSourceGlyph(
   ctx.stroke();
   ctx.restore();
 
-  // Label
+  // Label (clamped inside viewport bounds)
   ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
   ctx.fillStyle = '#f8fafc';
-  ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(`${params.label}${params.muted ? ' (M)' : ''}`, p.px + 10, p.py - 6);
+  const psLabel = `${params.label}${params.muted ? ' (M)' : ''}`;
+  const psTw = ctx.measureText(psLabel).width;
+  const placeLeft = p.px + 10 + psTw > cssWidth - 6;
+  ctx.textAlign = placeLeft ? 'right' : 'left';
+  const lx = placeLeft ? Math.max(psTw + 6, p.px - 10) : Math.max(6, p.px + 10);
+  const ly = Math.max(14, Math.min(cssHeight - 8, p.py - 6));
+  ctx.fillText(psLabel, lx, ly);
+
+  ctx.restore();
+}
+
+function drawColormapLegendBar(
+  ctx: CanvasRenderingContext2D,
+  colormap: ColormapConfig,
+  effectiveRange: { readonly minSplDb: number; readonly maxSplDb: number },
+  cssWidth: number,
+  cssHeight: number
+): void {
+  if (cssWidth < 220 || cssHeight < 95) return;
+
+  const pillW = 172;
+  const pillH = 34;
+  const x = cssWidth - pillW - 10;
+  const y = cssHeight - pillH - 18;
+  const barX = x + 9;
+  const barY = y + 6;
+  const barW = pillW - 18;
+  const barH = 9;
+
+  const minDb = effectiveRange.minSplDb;
+  const maxDb = Math.max(minDb + 0.5, effectiveRange.maxSplDb);
+  const spanDb = maxDb - minDb;
+  const iso = colormap.isolineStepDb;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(6, 9, 17, 0.88)';
+  ctx.strokeStyle = 'rgba(51, 65, 85, 0.92)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x, y, pillW, pillH, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  const slices = 76;
+  const sliceW = barW / slices;
+  for (let i = 0; i < slices; i++) {
+    const f = (i + 0.5) / slices;
+    let spl = minDb + f * spanDb;
+    if (colormap.stepped) {
+      const bStep = iso > 0 ? iso : 1.5;
+      spl = Math.floor(spl / bStep) * bStep + 0.5 * bStep;
+    }
+    const normT = Math.max(0, Math.min(1, (spl - minDb) / spanDb));
+    const [r, g, b] = evaluateSplLutRgb(normT, colormap.palette);
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fillRect(barX + i * sliceW, barY, Math.ceil(sliceW + 0.5), barH);
+  }
+
+  // Draw subtle contour tick marks inside the legend bar when contours are active
+  if (iso > 0 && spanDb / iso <= 40) {
+    const firstIso = Math.ceil((minDb + 1e-4) / iso) * iso;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = 1;
+    for (let db = firstIso; db < maxDb - 1e-4; db += iso) {
+      const tx = barX + ((db - minDb) / spanDb) * barW;
+      ctx.beginPath();
+      ctx.moveTo(tx, barY);
+      ctx.lineTo(tx, barY + barH);
+      ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(barX, barY, barW, barH);
+
+  const midDb = 0.5 * (minDb + maxDb);
+  const fmtDb = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  ctx.font = '9.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.textBaseline = 'bottom';
+
+  ctx.textAlign = 'left';
+  ctx.fillText(`${fmtDb(minDb)}`, barX, y + pillH - 4);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText(
+    iso > 0 ? `${fmtDb(midDb)} (${iso}dB)` : `${fmtDb(midDb)}`,
+    barX + barW * 0.5,
+    y + pillH - 4
+  );
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillText(`${fmtDb(maxDb)} dB`, barX + barW, y + pillH - 4);
 
   ctx.restore();
 }

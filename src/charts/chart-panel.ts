@@ -31,9 +31,11 @@ import { getChartPlotBox, paintChartCanvas } from './canvas-chart-painter.js';
 import { GlTraceRenderer } from './gl-trace-renderer.js';
 import {
   SIM_PLOT_METADATA,
+  computeAdaptivePlotBounds,
   normXToValue,
   valueToNormX,
   valueToNormY,
+  type MagnitudeSpanMode,
   type SimPlotType,
 } from './plot-types.js';
 
@@ -100,6 +102,22 @@ export class WssChartPanel extends LitElement {
       font-weight: 600;
     }
 
+    .span-select {
+      background: #090d16;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10.5px;
+      margin-left: 4px;
+    }
+
+    .span-label {
+      color: #94a3b8;
+      font-size: 10px;
+      margin-left: 6px;
+    }
+
     .legend-bar {
       display: flex;
       align-items: center;
@@ -149,8 +167,14 @@ export class WssChartPanel extends LitElement {
   @property({ attribute: false })
   public snapshot: SimulationSnapshot | null = null;
 
+  @property({ type: Number })
+  public revision = 0;
+
   @state()
   public plotType: SimPlotType = 'magnitude';
+
+  @state()
+  private magSpanMode: MagnitudeSpanMode = 'auto-60';
 
   @state()
   private cursorReadout = '';
@@ -159,6 +183,8 @@ export class WssChartPanel extends LitElement {
   private overlayCanvas: HTMLCanvasElement | null = null;
   private glRenderer: GlTraceRenderer | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private subscribedStore: ProjectStore | null = null;
+  private unsubscribeStore: (() => void) | null = null;
 
   private cssWidth = 0;
   private cssHeight = 0;
@@ -186,11 +212,29 @@ export class WssChartPanel extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (this.unsubscribeStore) {
+      this.unsubscribeStore();
+      this.unsubscribeStore = null;
+      this.subscribedStore = null;
+    }
     this.resizeObserver?.disconnect();
     this.glRenderer?.dispose();
   }
 
   protected updated(): void {
+    if (this.store !== this.subscribedStore) {
+      if (this.unsubscribeStore) {
+        this.unsubscribeStore();
+        this.unsubscribeStore = null;
+      }
+      this.subscribedStore = this.store ?? null;
+      if (this.subscribedStore) {
+        this.unsubscribeStore = this.subscribedStore.subscribe(() => {
+          this.requestUpdate();
+          this.requestRepaint();
+        });
+      }
+    }
     this.requestRepaint();
   }
 
@@ -227,14 +271,15 @@ export class WssChartPanel extends LitElement {
   private paintNow(): void {
     if (!this.store || this.cssWidth <= 0 || this.cssHeight <= 0) return;
 
-    const meta = SIM_PLOT_METADATA[this.plotType];
     const box = getChartPlotBox(this.cssWidth, this.cssHeight);
-    const xMin = meta.defaultXMin;
-    const xMax = meta.defaultXMax;
-    const yMin = meta.defaultYMin;
-    const yMax = meta.defaultYMax;
-
     const responses = this.snapshot?.virtualMics ?? [];
+    const bounds = computeAdaptivePlotBounds(
+      this.plotType,
+      responses,
+      this.snapshot?.planGrid ?? null,
+      this.magSpanMode
+    );
+    const { xMin, xMax, yMin, yMax, yStep } = bounds;
     const mics = this.store.scene.virtualMics;
     const useGlTraces =
       Boolean(this.glRenderer?.isAvailable) &&
@@ -310,6 +355,7 @@ export class WssChartPanel extends LitElement {
           xMax,
           yMin,
           yMax,
+          yStep,
           mics,
           responses,
           planGrid: this.snapshot?.planGrid ?? null,
@@ -335,8 +381,15 @@ export class WssChartPanel extends LitElement {
       return;
     }
 
+    const responses = this.snapshot?.virtualMics ?? [];
+    const bounds = computeAdaptivePlotBounds(
+      this.plotType,
+      responses,
+      this.snapshot?.planGrid ?? null,
+      this.magSpanMode
+    );
     const normX = (px - box.left) / box.width;
-    const xVal = normXToValue(normX, meta.defaultXMin, meta.defaultXMax, meta.xLog);
+    const xVal = normXToValue(normX, bounds.xMin, bounds.xMax, meta.xLog);
 
     if (meta.xLog) {
       const fStr = xVal >= 1000 ? `${(xVal / 1000).toFixed(2)} kHz` : `${xVal.toFixed(1)} Hz`;
@@ -397,6 +450,30 @@ export class WssChartPanel extends LitElement {
               </button>
             `
           )}
+          ${this.plotType === 'magnitude'
+            ? html`
+                <span class="span-label">Span:</span>
+                <select
+                  class="span-select"
+                  data-testid="chart-mag-span-select"
+                  title="Vertical dB span for Magnitude plot"
+                  .value=${this.magSpanMode}
+                  @change=${(ev: Event) => {
+                    this.magSpanMode = (ev.target as HTMLSelectElement).value as MagnitudeSpanMode;
+                  }}
+                >
+                  <option value="auto-30" ?selected=${this.magSpanMode === 'auto-30'}>
+                    30 dB (Zoom)
+                  </option>
+                  <option value="auto-60" ?selected=${this.magSpanMode === 'auto-60'}>
+                    60 dB (Std)
+                  </option>
+                  <option value="auto-80" ?selected=${this.magSpanMode === 'auto-80'}>
+                    80 dB (Wide)
+                  </option>
+                </select>
+              `
+            : ''}
         </div>
         <div class="legend-bar">
           ${this.cursorReadout ? html`<span>${this.cursorReadout}</span>` : ''}

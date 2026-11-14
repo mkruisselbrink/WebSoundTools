@@ -20,10 +20,11 @@
 
 /**
  * WebGL2 Hardware-Accelerated SPL Heatmap & Isoline Renderer (`src/viewport/gl-heatmap-renderer.ts`)
- * with automatic 2D Canvas fallback when WebGL2 is unavailable.
+ * supporting multiple perceptual palettes (`turbo`, `inferno`, `viridis`), stepped isobar fills,
+ * anti-aliased `1/2/3/6 dB` contour lines, and automatic 2D Canvas fallback.
  */
 
-import type { ColormapConfig } from '../model/project-store.js';
+import type { ColormapConfig, ColormapPaletteId } from '../model/project-store.js';
 import { screenToWorld, type ViewportCamera2D } from './viewport-coords.js';
 
 export interface HeatmapGridInput {
@@ -44,24 +45,49 @@ interface ColorStop {
   readonly b: number;
 }
 
-/** High-contrast acoustic SPL false-color gradient stops (t in [0, 1]). */
-const SPL_COLOR_STOPS: readonly ColorStop[] = [
-  { t: 0.0, r: 10, g: 20, b: 48 },     // Deep midnight navy
-  { t: 0.18, r: 14, g: 116, b: 144 },  // Teal blue
-  { t: 0.36, r: 6, g: 182, b: 212 },   // Cyan
-  { t: 0.52, r: 16, g: 185, b: 129 },  // Emerald green
-  { t: 0.68, r: 234, g: 179, b: 8 },   // Golden yellow
-  { t: 0.84, r: 249, g: 115, b: 22 },  // Bright orange
-  { t: 0.95, r: 239, g: 68, b: 68 },   // Crimson red
-  { t: 1.0, r: 236, g: 72, b: 153 },   // Peak magenta
-];
+const PALETTE_STOPS: Readonly<Record<ColormapPaletteId, readonly ColorStop[]>> = {
+  // High-discrimination multi-hue spectrum (ideal for spotting 1-2 dB differences)
+  turbo: [
+    { t: 0.0, r: 24, g: 28, b: 84 },      // Deep indigo
+    { t: 0.16, r: 30, g: 96, b: 214 },    // Cobalt blue
+    { t: 0.34, r: 12, g: 188, b: 216 },   // Bright cyan
+    { t: 0.52, r: 42, g: 208, b: 112 },   // Emerald green
+    { t: 0.68, r: 218, g: 218, b: 36 },   // Chartreuse / yellow
+    { t: 0.84, r: 250, g: 126, b: 24 },   // Vivid orange
+    { t: 0.95, r: 226, g: 38, b: 42 },    // Crimson red
+    { t: 1.0, r: 158, g: 14, b: 66 },     // Deep ruby peak
+  ],
+  // Perceptually uniform monotonic luminance (louder is strictly brighter)
+  inferno: [
+    { t: 0.0, r: 12, g: 8, b: 38 },       // Near-black violet
+    { t: 0.2, r: 66, g: 14, b: 104 },     // Deep plum
+    { t: 0.4, r: 138, g: 34, b: 106 },    // Magenta-crimson
+    { t: 0.6, r: 204, g: 68, b: 58 },     // Fiery red-orange
+    { t: 0.8, r: 246, g: 142, b: 24 },    // Amber-gold
+    { t: 0.94, r: 252, g: 218, b: 86 },   // Bright yellow
+    { t: 1.0, r: 252, g: 252, b: 186 },   // White-hot peak
+  ],
+  // Colorblind-safe scientific perceptual scale
+  viridis: [
+    { t: 0.0, r: 44, g: 12, b: 78 },      // Deep purple
+    { t: 0.22, r: 59, g: 82, b: 139 },    // Slate blue
+    { t: 0.45, r: 33, g: 145, b: 140 },   // Teal
+    { t: 0.68, r: 68, g: 191, b: 112 },   // Leaf green
+    { t: 0.86, r: 168, g: 219, b: 56 },   // Lime
+    { t: 1.0, r: 253, g: 231, b: 37 },    // Sunlit yellow
+  ],
+};
 
-/** Evaluates RGB [0..255] for normalized SPL t in [0, 1]. */
-export function evaluateSplLutRgb(t: number): [number, number, number] {
+/** Evaluates RGB [0..255] for normalized SPL t in [0, 1] on the chosen palette. */
+export function evaluateSplLutRgb(
+  t: number,
+  palette: ColormapPaletteId = 'turbo'
+): [number, number, number] {
+  const stops = PALETTE_STOPS[palette] ?? PALETTE_STOPS.turbo;
   const clamped = Math.max(0, Math.min(1, t));
-  for (let i = 0; i < SPL_COLOR_STOPS.length - 1; i++) {
-    const a = SPL_COLOR_STOPS[i];
-    const b = SPL_COLOR_STOPS[i + 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i];
+    const b = stops[i + 1];
     if (clamped <= b.t) {
       const f = (clamped - a.t) / Math.max(1e-6, b.t - a.t);
       return [
@@ -71,7 +97,7 @@ export function evaluateSplLutRgb(t: number): [number, number, number] {
       ];
     }
   }
-  const last = SPL_COLOR_STOPS[SPL_COLOR_STOPS.length - 1];
+  const last = stops[stops.length - 1];
   return [last.r, last.g, last.b];
 }
 
@@ -106,6 +132,7 @@ uniform vec4 u_gridBounds;    // uMin, uMax, vMin, vMax
 uniform vec2 u_gridDims;      // cols, rows
 uniform vec4 u_colorCfg;      // minSplDb, maxSplDb, isolineStepDb, showOutsideSurfaces
 uniform float u_hasMask;
+uniform float u_stepped;
 
 float sampleSplBilinear(vec2 uv) {
   vec2 maxIdx = u_gridDims - vec2(1.0);
@@ -130,7 +157,6 @@ float sampleSplBilinear(vec2 uv) {
 }
 
 void main() {
-  // Convert NDC [-1, 1] to CSS screen coordinates (px right, py down)
   vec2 screenPx = vec2(
     (v_ndc.x * 0.5 + 0.5) * u_viewportPx.x,
     (0.5 - v_ndc.y * 0.5) * u_viewportPx.y
@@ -163,32 +189,44 @@ void main() {
     ivec2 mCoord = ivec2(clamp(round(gridUv * (u_gridDims - vec2(1.0))), vec2(0.0), u_gridDims - vec2(1.0)));
     float rawMask = texelFetch(u_maskTex, mCoord, 0).r * 255.0;
     if (rawMask < 0.5) {
-      maskVal = u_colorCfg.w > 0.5 ? 0.52 : 0.08;
+      maskVal = u_colorCfg.w > 0.5 ? 0.48 : 0.07;
     } else if (rawMask > 1.5) {
-      maskVal = 0.78; // Stage surface
+      maskVal = 0.80; // Stage surface
     } else {
-      maskVal = 0.94; // Audience surface
+      maskVal = 0.95; // Audience surface
     }
   } else {
-    maskVal = 0.88;
+    maskVal = 0.90;
   }
 
-  float normT = clamp((spl - u_colorCfg.x) / max(1.0, u_colorCfg.y - u_colorCfg.x), 0.0, 1.0);
+  float isoStep = u_colorCfg.z;
+  float colorSpl = spl;
+  if (u_stepped > 0.5) {
+    float bandStep = isoStep > 0.5 ? isoStep : 1.5;
+    colorSpl = floor(spl / bandStep) * bandStep + 0.5 * bandStep;
+  }
+
+  float normT = clamp((colorSpl - u_colorCfg.x) / max(0.5, u_colorCfg.y - u_colorCfg.x), 0.0, 1.0);
   vec3 lutRgb = texture(u_lutTex, vec2(normT, 0.5)).rgb;
 
-  // Anti-aliased isoline contours via fwidth
-  float isoStep = u_colorCfg.z;
+  // High-contrast anti-aliased isoline contours via screen-space derivatives (fwidth)
   float contourMix = 0.0;
   if (isoStep > 0.5) {
     float scaled = spl / isoStep;
     float distToLine = abs(fract(scaled + 0.5) - 0.5);
-    float fw = max(1e-4, fwidth(scaled));
-    contourMix = 1.0 - smoothstep(0.0, fw * 1.35, distToLine);
+    float fw = clamp(fwidth(scaled), 1e-4, 0.45);
+    contourMix = 1.0 - smoothstep(0.0, fw * 1.45, distToLine);
   }
 
   vec3 bg = vec3(0.024, 0.035, 0.067);
   vec3 baseColor = mix(bg, lutRgb, maskVal);
-  vec3 finalRgb = mix(baseColor, vec3(0.04, 0.06, 0.10), contourMix * 0.55 * maskVal);
+
+  // Adaptive dark/light contour ink so lines stay crisp on both dark indigo and bright yellow
+  float luma = dot(baseColor, vec3(0.299, 0.587, 0.114));
+  vec3 inkColor = luma > 0.34 ? vec3(0.03, 0.05, 0.09) : vec3(0.86, 0.91, 0.97);
+  float inkStrength = luma > 0.34 ? 0.78 : 0.62;
+
+  vec3 finalRgb = mix(baseColor, inkColor, contourMix * inkStrength * clamp(maskVal * 1.2, 0.0, 1.0));
   outColor = vec4(finalRgb, 1.0);
 }
 `;
@@ -201,6 +239,7 @@ export class GlHeatmapRenderer {
   private splTex: WebGLTexture | null = null;
   private maskTex: WebGLTexture | null = null;
   private lutTex: WebGLTexture | null = null;
+  private uploadedPalette: ColormapPaletteId | null = null;
 
   private uniforms: {
     viewportPx: WebGLUniformLocation | null;
@@ -209,6 +248,7 @@ export class GlHeatmapRenderer {
     gridDims: WebGLUniformLocation | null;
     colorCfg: WebGLUniformLocation | null;
     hasMask: WebGLUniformLocation | null;
+    stepped: WebGLUniformLocation | null;
   } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -234,6 +274,21 @@ export class GlHeatmapRenderer {
     }
   }
 
+  private uploadLutPalette(gl: WebGL2RenderingContext, palette: ColormapPaletteId): void {
+    if (!this.lutTex || this.uploadedPalette === palette) return;
+    const lutBytes = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      const [r, g, b] = evaluateSplLutRgb(i / 255, palette);
+      lutBytes[i * 4] = r;
+      lutBytes[i * 4 + 1] = g;
+      lutBytes[i * 4 + 2] = b;
+      lutBytes[i * 4 + 3] = 255;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lutBytes);
+    this.uploadedPalette = palette;
+  }
+
   private initGl(gl: WebGL2RenderingContext): void {
     const vs = this.compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SRC);
     const fs = this.compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SRC);
@@ -253,22 +308,13 @@ export class GlHeatmapRenderer {
     this.program = prog;
     this.vao = gl.createVertexArray();
 
-    // Build 256x1 RGBA8 LUT texture
-    const lutBytes = new Uint8Array(256 * 4);
-    for (let i = 0; i < 256; i++) {
-      const [r, g, b] = evaluateSplLutRgb(i / 255);
-      lutBytes[i * 4] = r;
-      lutBytes[i * 4 + 1] = g;
-      lutBytes[i * 4 + 2] = b;
-      lutBytes[i * 4 + 3] = 255;
-    }
     this.lutTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lutBytes);
+    this.uploadLutPalette(gl, 'turbo');
 
     this.splTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.splTex);
@@ -296,6 +342,7 @@ export class GlHeatmapRenderer {
       gridDims: gl.getUniformLocation(prog, 'u_gridDims'),
       colorCfg: gl.getUniformLocation(prog, 'u_colorCfg'),
       hasMask: gl.getUniformLocation(prog, 'u_hasMask'),
+      stepped: gl.getUniformLocation(prog, 'u_stepped'),
     };
   }
 
@@ -319,10 +366,15 @@ export class GlHeatmapRenderer {
     grid: HeatmapGridInput | null,
     camera: ViewportCamera2D,
     colormap: ColormapConfig,
+    effectiveRange: { readonly minSplDb: number; readonly maxSplDb: number },
     cssWidth: number,
     cssHeight: number
   ): void {
     if (cssWidth <= 0 || cssHeight <= 0) return;
+
+    const minDb = effectiveRange.minSplDb;
+    const maxDb = Math.max(minDb + 0.5, effectiveRange.maxSplDb);
+    const palette = colormap.palette ?? 'turbo';
 
     const gl = this.gl;
     if (gl && this.program && this.uniforms) {
@@ -337,6 +389,8 @@ export class GlHeatmapRenderer {
       gl.useProgram(this.program);
       gl.bindVertexArray(this.vao);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+      this.uploadLutPalette(gl, palette);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.splTex);
@@ -395,18 +449,19 @@ export class GlHeatmapRenderer {
       gl.uniform2f(this.uniforms.gridDims, grid.cols, grid.rows);
       gl.uniform4f(
         this.uniforms.colorCfg,
-        colormap.minSplDb,
-        colormap.maxSplDb,
+        minDb,
+        maxDb,
         colormap.isolineStepDb,
         colormap.showOutsideSurfaces ? 1.0 : 0.0
       );
       gl.uniform1f(this.uniforms.hasMask, grid.surfaceMask ? 1.0 : 0.0);
+      gl.uniform1f(this.uniforms.stepped, colormap.stepped ? 1.0 : 0.0);
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       return;
     }
 
-    // 2D Canvas fallback
+    // 2D Canvas fallback (including stepped bands & contour lines)
     const ctx = this.fallbackCtx;
     if (!ctx) return;
     ctx.fillStyle = '#060911';
@@ -419,6 +474,7 @@ export class GlHeatmapRenderer {
     const dprY = h / cssHeight;
     const img = ctx.createImageData(w, h);
     const data = img.data;
+    const iso = colormap.isolineStepDb;
 
     for (let py = 0; py < h; py += 2) {
       const cssY = py / dprY;
@@ -433,22 +489,41 @@ export class GlHeatmapRenderer {
         ) {
           continue;
         }
-        const gx = Math.round(
-          ((world.u - grid.uMin) / (grid.uMax - grid.uMin)) * (grid.cols - 1)
+        const gx = Math.min(
+          grid.cols - 1,
+          Math.max(0, Math.round(((world.u - grid.uMin) / (grid.uMax - grid.uMin)) * (grid.cols - 1)))
         );
-        const gy = Math.round(
-          ((world.v - grid.vMin) / (grid.vMax - grid.vMin)) * (grid.rows - 1)
+        const gy = Math.min(
+          grid.rows - 1,
+          Math.max(0, Math.round(((world.v - grid.vMin) / (grid.vMax - grid.vMin)) * (grid.rows - 1)))
         );
         const spl = grid.splDb[gy * grid.cols + gx];
-        const t = (spl - colormap.minSplDb) / Math.max(1, colormap.maxSplDb - colormap.minSplDb);
-        const [r, g, b] = evaluateSplLutRgb(t);
+        let colorSpl = spl;
+        if (colormap.stepped) {
+          const bStep = iso > 0 ? iso : 1.5;
+          colorSpl = Math.floor(spl / bStep) * bStep + 0.5 * bStep;
+        }
+        const t = (colorSpl - minDb) / (maxDb - minDb);
+        let [r, g, b] = evaluateSplLutRgb(t, palette);
+
+        if (iso > 0 && gx + 1 < grid.cols && gy + 1 < grid.rows) {
+          const bCur = Math.floor(spl / iso);
+          const bRight = Math.floor(grid.splDb[gy * grid.cols + (gx + 1)] / iso);
+          const bUp = Math.floor(grid.splDb[(gy + 1) * grid.cols + gx] / iso);
+          if (bCur !== bRight || bCur !== bUp) {
+            r = Math.round(r * 0.25);
+            g = Math.round(g * 0.25);
+            b = Math.round(b * 0.3);
+          }
+        }
+
         for (let dy = 0; dy < 2 && py + dy < h; dy++) {
           for (let dx = 0; dx < 2 && px + dx < w; dx++) {
             const idx = ((py + dy) * w + (px + dx)) * 4;
             data[idx] = r;
             data[idx + 1] = g;
             data[idx + 2] = b;
-            data[idx + 3] = 220;
+            data[idx + 3] = 225;
           }
         }
       }
@@ -467,4 +542,3 @@ export class GlHeatmapRenderer {
     this.gl = null;
   }
 }
-

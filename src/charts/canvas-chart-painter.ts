@@ -51,6 +51,7 @@ export interface ChartPaintParams {
   readonly xMax: number;
   readonly yMin: number;
   readonly yMax: number;
+  readonly yStep?: number;
   readonly mics: readonly VirtualMicInstance[];
   readonly responses: readonly VirtualMicResponse[];
   readonly planGrid: PlanGridResult | null;
@@ -59,9 +60,9 @@ export interface ChartPaintParams {
 }
 
 export function getChartPlotBox(cssWidth: number, cssHeight: number): ChartPlotBox {
-  const left = 46;
-  const rightPad = 14;
-  const top = 10;
+  const left = 48;
+  const rightPad = 18;
+  const top = 12;
   const bottomPad = 22;
   return {
     left,
@@ -92,7 +93,7 @@ export function paintChartCanvas(
   ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
 
   // Horizontal Y grid lines
-  const yStep = meta.yStep;
+  const yStep = params.yStep ?? meta.yStep;
   const firstY = Math.ceil(yMin / yStep) * yStep;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
