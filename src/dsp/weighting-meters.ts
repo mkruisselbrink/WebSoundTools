@@ -29,6 +29,24 @@ import { BiquadCascade, BiquadCoefficients } from './biquad.js';
 export type WeightingCurve = 'Z' | 'A' | 'C';
 export type MeterIntegrationTime = 'Fast' | 'Slow' | 'Impulse' | 'Leq';
 
+export interface RollingLeqSnapshot {
+  readonly leq1m: Record<WeightingCurve, number>;
+  readonly leq5m: Record<WeightingCurve, number>;
+  readonly leq15m: Record<WeightingCurve, number>;
+  readonly leq60m: Record<WeightingCurve, number>;
+  readonly cMinusALeq1mDb: number;
+}
+
+export interface EpochCurveEnergy {
+  readonly meanSq: number;
+  readonly fastSq: number;
+  readonly slowSq: number;
+  readonly maxPeakSq: number;
+  readonly sampleCount: number;
+}
+
+export type EpochEnergySnapshot = Record<WeightingCurve, EpochCurveEnergy>;
+
 export interface BroadbandLevelsSnapshot {
   readonly levelsDb: Record<WeightingCurve, Record<MeterIntegrationTime, number>>;
   readonly peaksDb: Record<WeightingCurve, number>;
@@ -36,6 +54,8 @@ export interface BroadbandLevelsSnapshot {
   readonly referencePeakDb: number;
   /** Offset added to dBFS to display calibrated dB SPL (default 100 dB or user-calibrated) */
   readonly splOffsetDb: number;
+  /** Sliding-window equivalent continuous sound levels (1m, 5m, 15m, 60m) and LCeq-LAeq balance */
+  readonly rollingLeq?: RollingLeqSnapshot;
 }
 
 /**
@@ -171,6 +191,10 @@ class SingleCurveMeter {
   private leqSampleCount: number = 0;
   private peakSq: number = 0;
 
+  private epochSumSq: number = 0;
+  private epochSampleCount: number = 0;
+  private epochMaxPeakSq: number = 0;
+
   private alphaFast: number = 0;
   private alphaSlow: number = 0;
   private alphaImpulseRise: number = 0;
@@ -203,6 +227,9 @@ class SingleCurveMeter {
     this.leqSumSq = 0;
     this.leqSampleCount = 0;
     this.peakSq = 0;
+    this.epochSumSq = 0;
+    this.epochSampleCount = 0;
+    this.epochMaxPeakSq = 0;
   }
 
   processSample(x: number): void {
@@ -221,6 +248,27 @@ class SingleCurveMeter {
     if (ySq > this.peakSq) {
       this.peakSq = ySq;
     }
+
+    this.epochSumSq += ySq;
+    this.epochSampleCount++;
+    if (ySq > this.epochMaxPeakSq) {
+      this.epochMaxPeakSq = ySq;
+    }
+  }
+
+  consumeEpochEnergy(): EpochCurveEnergy {
+    const meanSq = this.epochSampleCount > 0 ? this.epochSumSq / this.epochSampleCount : 0;
+    const result: EpochCurveEnergy = {
+      meanSq,
+      fastSq: this.fastRmsSq,
+      slowSq: this.slowRmsSq,
+      maxPeakSq: this.epochMaxPeakSq,
+      sampleCount: this.epochSampleCount,
+    };
+    this.epochSumSq = 0;
+    this.epochSampleCount = 0;
+    this.epochMaxPeakSq = 0;
+    return result;
   }
 
   getLevelsDb(splOffsetDb: number): Record<MeterIntegrationTime, number> {
@@ -297,7 +345,15 @@ export class BroadbandMeterBank {
     }
   }
 
-  getSnapshot(): BroadbandLevelsSnapshot {
+  consumeEpochEnergy(): EpochEnergySnapshot {
+    return {
+      Z: this.meterZ.consumeEpochEnergy(),
+      A: this.meterA.consumeEpochEnergy(),
+      C: this.meterC.consumeEpochEnergy(),
+    };
+  }
+
+  getSnapshot(rollingLeq?: RollingLeqSnapshot): BroadbandLevelsSnapshot {
     const offset = this.splOffsetDb;
     const refLevels = this.meterRef.getLevelsDb(0);
     return {
@@ -314,6 +370,7 @@ export class BroadbandMeterBank {
       referenceRmsDb: refLevels.Fast,
       referencePeakDb: this.meterRef.getPeakDb(0),
       splOffsetDb: offset,
+      ...(rollingLeq ? { rollingLeq } : {}),
     };
   }
 }
