@@ -23,10 +23,10 @@
  * Plan View (X-Y) and Side Section View (X-Z).
  */
 
+import { computeSpeedOfSoundMpS } from '@foh/acoustics';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
 import type { ColormapConfig, SelectedEntity } from '../model/project-store.js';
 import type { ProjectScene } from '../model/project-types.js';
-import { computeSpeedOfSoundMpS } from '../physics/atmosphere.js';
 import { expandSubwooferArray } from '../physics/sub-array-designer.js';
 import { DEG_TO_RAD, DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 import type { VirtualMicResponse } from '../physics/virtual-mic-solver.js';

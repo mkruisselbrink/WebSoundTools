@@ -1,8 +1,8 @@
 // Copyright (C) 2026 WebSpeakerSim Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { FrequencyWeighting } from '@foh/acoustics';
 import { formatQueryString, parseSearchParams, syncBrowserQueryString } from '@foh/state';
-import type { FrequencyWeighting } from '../physics/atmosphere.js';
 import type { AnalysisBandSelection } from './project-types.js';
 
 export type ViewportLayoutMode = 'split' | 'plan' | 'section';

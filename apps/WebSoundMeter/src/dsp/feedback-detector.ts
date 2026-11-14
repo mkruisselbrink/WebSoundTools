@@ -30,20 +30,25 @@
  *  5. Dual-Channel M/R Reference Discriminator (with Single-Channel Fallback Mode)
  */
 
-import { smoothMagnitudeOctave } from './smoothing.js';
+import {
+  ISO_31_BAND_FREQUENCIES_HZ,
+  findNearestIso31Band,
+  formatIsoBandLabel,
+  frequencyToMusicalNote,
+} from '@foh/acoustics';
+import { smoothMagnitudeOctave } from '@foh/dsp';
+
+export {
+  ISO_31_BAND_FREQUENCIES_HZ,
+  findNearestIso31Band,
+  formatIsoBandLabel,
+  frequencyToMusicalNote,
+};
 
 export const MAX_ACTIVE_TRACKS_PER_SLOT = 6;
 export const MAX_VISIBLE_CALLOUT_FLAGS = 8;
 export const MAX_RING_LOG_ENTRIES = 50;
 export const DEFAULT_LATCH_DURATION_MS = 5000;
-
-export const ISO_31_BAND_FREQUENCIES_HZ: readonly number[] = [
-  20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630,
-  800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500,
-  16000, 20000,
-];
-
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
 export type FeedbackSensitivityMode =
   | 'off'
@@ -120,59 +125,6 @@ export interface DetectedFeedbackTrack {
   readonly durationMs: number;
   readonly firstDetectedAt: string;
   readonly latchRemainingRatio: number;
-}
-
-/**
- * Formats an ISO 31-band center frequency as a compact engineer-friendly label (e.g. "2.5 kHz", "630 Hz").
- */
-export function formatIsoBandLabel(isoHz: number): string {
-  if (isoHz >= 1000) {
-    const k = isoHz / 1000;
-    return Number.isInteger(k) ? `${k} kHz` : `${Number(k.toFixed(2))} kHz`;
-  }
-  return `${isoHz} Hz`;
-}
-
-/**
- * Maps any frequency `freqHz` to its nearest standard 31-band ISO 1/3-octave center frequency.
- */
-export function findNearestIso31Band(freqHz: number): {
-  isoBandHz: number;
-  isoBandLabel: string;
-} {
-  const clamped = Math.max(20, Math.min(20000, freqHz));
-  let bestHz = ISO_31_BAND_FREQUENCIES_HZ[0];
-  let bestDist = Math.abs(Math.log2(clamped / bestHz));
-
-  for (let i = 1; i < ISO_31_BAND_FREQUENCIES_HZ.length; i++) {
-    const candidate = ISO_31_BAND_FREQUENCIES_HZ[i];
-    const dist = Math.abs(Math.log2(clamped / candidate));
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestHz = candidate;
-    }
-  }
-  return {
-    isoBandHz: bestHz,
-    isoBandLabel: formatIsoBandLabel(bestHz),
-  };
-}
-
-/**
- * Converts a frequency in Hz (`A4 = 440 Hz`) to its musical note and cents deviation (e.g. `A4 (+0c)`, `D#7 (-8c)`).
- */
-export function frequencyToMusicalNote(freqHz: number): string {
-  if (!(freqHz > 0)) {
-    return '—';
-  }
-  const exactMidi = 69 + 12 * Math.log2(freqHz / 440.0);
-  const roundedMidi = Math.round(exactMidi);
-  const cents = Math.round((exactMidi - roundedMidi) * 100);
-  const noteIndex = ((roundedMidi % 12) + 12) % 12;
-  const octave = Math.floor(roundedMidi / 12) - 1;
-  const noteName = NOTE_NAMES[noteIndex];
-  const sign = cents >= 0 ? '+' : '';
-  return `${noteName}${octave} (${sign}${cents}c)`;
 }
 
 /**

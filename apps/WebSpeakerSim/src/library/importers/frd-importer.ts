@@ -23,91 +23,15 @@
  * (`src/library/importers/frd-importer.ts`).
  */
 
+import {
+  FrdCurve,
+  interpolateFrdCurveLogFreq,
+  parseFrdCurveText,
+} from '@foh/acoustics';
 import { synthesizeParametricBalloon, type DirectivityBalloon } from '../../physics/directivity-balloon.js';
-import { DEG_TO_RAD } from '../../physics/transform3d.js';
 import type { SpeakerCategory, SpeakerDefinition } from '../speaker-schema.js';
 
-export interface FrdCurve {
-  readonly frequenciesHz: Float32Array;
-  readonly magnitudeDb: Float32Array;
-  readonly phaseRad: Float32Array;
-}
-
-/**
- * Parses a standard 2-column (`FreqHz MagDb`) or 3-column (`FreqHz MagDb PhaseDeg`) `.frd` / `.csv` text.
- */
-export function parseFrdCurveText(text: string): FrdCurve {
-  const rows: Array<{ f: number; mag: number; phRad: number }> = [];
-  const lines = text.split(/\r?\n/);
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line || line.startsWith('*') || line.startsWith('#') || line.startsWith(';')) continue;
-    const cols = line
-      .split(/[\s,;]+/)
-      .map(Number)
-      .filter((n) => Number.isFinite(n));
-    if (cols.length >= 2 && cols[0] > 0) {
-      const phaseDeg = cols.length >= 3 ? cols[2] : 0;
-      rows.push({
-        f: cols[0],
-        mag: cols[1],
-        phRad: phaseDeg * DEG_TO_RAD,
-      });
-    }
-  }
-
-  if (rows.length < 2) {
-    throw new Error('Invalid .frd/.csv response file: fewer than 2 valid frequency rows.');
-  }
-
-  rows.sort((a, b) => a.f - b.f);
-
-  const n = rows.length;
-  const frequenciesHz = new Float32Array(n);
-  const magnitudeDb = new Float32Array(n);
-  const phaseRad = new Float32Array(n);
-
-  for (let i = 0; i < n; i++) {
-    frequenciesHz[i] = rows[i].f;
-    magnitudeDb[i] = rows[i].mag;
-    phaseRad[i] = rows[i].phRad;
-  }
-
-  return { frequenciesHz, magnitudeDb, phaseRad };
-}
-
-function interpolateCurveLogFreq(
-  curve: FrdCurve,
-  targetFreqHz: number
-): { magDb: number; phaseRad: number } {
-  const f = curve.frequenciesHz;
-  const n = f.length;
-  if (targetFreqHz <= f[0]) {
-    return { magDb: curve.magnitudeDb[0], phaseRad: curve.phaseRad[0] };
-  }
-  if (targetFreqHz >= f[n - 1]) {
-    return { magDb: curve.magnitudeDb[n - 1], phaseRad: curve.phaseRad[n - 1] };
-  }
-
-  let lo = 0;
-  let hi = n - 1;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >>> 1;
-    if (f[mid] <= targetFreqHz) lo = mid;
-    else hi = mid;
-  }
-  const span = Math.log(f[hi] / f[lo]);
-  const t = span > 1e-9 ? Math.log(targetFreqHz / f[lo]) / span : 0;
-  const magDb = curve.magnitudeDb[lo] + (curve.magnitudeDb[hi] - curve.magnitudeDb[lo]) * t;
-
-  let dPh = curve.phaseRad[hi] - curve.phaseRad[lo];
-  while (dPh > Math.PI) dPh -= 2 * Math.PI;
-  while (dPh < -Math.PI) dPh += 2 * Math.PI;
-  const phaseRad = curve.phaseRad[lo] + dPh * t;
-
-  return { magDb, phaseRad };
-}
+export { type FrdCurve, parseFrdCurveText };
 
 export interface FrdImportOptions {
   readonly name: string;
@@ -148,7 +72,7 @@ export function buildSpeakerFromFrdText(
   let maxDb = Number.NEGATIVE_INFINITY;
 
   for (let k = 0; k < F; k++) {
-    const pt = interpolateCurveLogFreq(curve, baseBalloon.frequenciesHz[k]);
+    const pt = interpolateFrdCurveLogFreq(curve, baseBalloon.frequenciesHz[k]);
     onAxisMagDb[k] = pt.magDb;
     onAxisPhaseRad[k] = pt.phaseRad;
     if (pt.magDb > maxDb) maxDb = pt.magDb;

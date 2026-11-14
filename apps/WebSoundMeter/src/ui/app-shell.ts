@@ -40,7 +40,7 @@ import {
 import '../charts/chart-panel.js';
 import { PlotType } from '../charts/plot-types.js';
 import { MeasurementPipelineConfig } from '../dsp/analyzer-pipeline.js';
-import { parseCalibrationFile } from '../dsp/calibration.js';
+import { parseCalibrationFile } from '@foh/acoustics';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
 import {
   DEFAULT_GENERATOR_CONFIG,
@@ -65,7 +65,7 @@ import {
   saveCalibrationFileToDb,
   saveSplShowCheckpointsToDb,
 } from '../sources/session-storage.js';
-import { SourceData } from '../sources/source-data.js';
+import { SourceData, exportSourceDataToFrd } from '../sources/source-data.js';
 import { SourceStore, isLiveSourceId } from '../sources/source-store.js';
 import {
   loadWorkspaceSession,
@@ -683,6 +683,15 @@ export class WebSoundMeterApp extends LitElement {
           this.persistState('replace');
         },
         onUpdateStored: (id, partial) => this.sourceStore.updateStoredSource(id, partial),
+        onExportFrd: (src) => {
+          const frdText = exportSourceDataToFrd(src);
+          const slug =
+            src.name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '') || 'trace';
+          this.downloadTextFile(frdText, `${slug}.frd`, 'text/plain;charset=utf-8');
+        },
       });
     }
 
@@ -694,6 +703,8 @@ export class WebSoundMeterApp extends LitElement {
           this.sourceStore.setEqTargetSource(eqId, targetSourceId),
         onUpdateEqBand: (eqId, bandIdx, partial) =>
           this.sourceStore.updateEqBand(eqId, bandIdx, partial),
+        onUpdateEqDsp: (eqId, patch, txKey) =>
+          this.sourceStore.updateEqDsp(eqId, patch, txKey),
         onDelete: (eqId) => {
           this.sourceStore.deleteEqSource(eqId);
           this.persistState('replace');
@@ -881,6 +892,16 @@ export class WebSoundMeterApp extends LitElement {
               onAddUnionSource: () => {
                 this.sourceStore.addUnionSource();
                 this.persistState('replace');
+              },
+              onImportFrdFile: (file: File) => {
+                void file.text().then((text) => {
+                  try {
+                    this.sourceStore.importFrdStoredSource(text, file.name);
+                    this.persistState('replace');
+                  } catch {
+                    // Ignore malformed .frd uploads
+                  }
+                });
               },
               onSelectSource: (id) => {
                 this.sourceStore.setSelectedSourceId(id);

@@ -23,6 +23,18 @@
  * and Side Section receptor grids (`src/physics/summation-solver.ts`).
  */
 
+import {
+  ISO_THIRD_OCTAVE_BANDS_HZ,
+  computeAirAbsorptionTable,
+  computeFrequencyWeightingDb,
+  computeSpeedOfSoundMpS,
+} from '@foh/acoustics';
+import {
+  DEFAULT_SOURCE_DSP_CONFIG,
+  compileDspChain,
+  evaluateCompiledDspAtFrequency,
+  type CompiledDspChain,
+} from '@foh/dsp';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
 import {
   evaluateSurfaceListenerZ,
@@ -33,18 +45,6 @@ import {
   type SectionBounds2D,
   type ViewportBounds2D,
 } from '../model/project-types.js';
-import {
-  ISO_THIRD_OCTAVE_BANDS_HZ,
-  computeAirAbsorptionTable,
-  computeFrequencyWeightingDb,
-  computeSpeedOfSoundMpS,
-} from './atmosphere.js';
-import {
-  DEFAULT_SOURCE_DSP_CONFIG,
-  compileDspChain,
-  evaluateCompiledDspAtFrequency,
-  type CompiledDspChain,
-} from './biquad.js';
 import { sampleDirectivityBalloon, type DirectivityBalloon } from './directivity-balloon.js';
 import { expandSubwooferArray } from './sub-array-designer.js';
 import {

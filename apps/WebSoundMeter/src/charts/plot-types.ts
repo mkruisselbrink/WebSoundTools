@@ -27,6 +27,7 @@
  * coherence alpha mapping, and cursor readouts are 100% unit-testable in Node/Vitest.
  */
 
+import { computeBinGroupDelayMs } from '@foh/dsp';
 import { SourceData, getEffectiveBinResponse } from '../sources/source-data.js';
 
 export type PlotType =
@@ -395,15 +396,16 @@ export function buildTraceVertices(
     } else if (plotType === 'phase') {
       yVal = (Math.atan2(bin.phaseIm, bin.phaseRe) * 180.0) / Math.PI;
     } else if (plotType === 'group-delay') {
-      // Group delay: -d(phi)/d(omega) in ms between bin i-1 and bin i
       const prevBin = getEffectiveBinResponse(source, i - 1);
       const df = f - prevBin.frequency;
       if (df > 0) {
-        // Phase difference via complex conjugate product: bin * conj(prevBin)
-        const dRe = bin.phaseRe * prevBin.phaseRe + bin.phaseIm * prevBin.phaseIm;
-        const dIm = bin.phaseIm * prevBin.phaseRe - bin.phaseRe * prevBin.phaseIm;
-        const dPhi = Math.atan2(dIm, dRe);
-        yVal = (-1000.0 * dPhi) / (2.0 * Math.PI * df);
+        yVal = computeBinGroupDelayMs(
+          df,
+          bin.phaseRe,
+          bin.phaseIm,
+          prevBin.phaseRe,
+          prevBin.phaseIm
+        );
       }
     }
 

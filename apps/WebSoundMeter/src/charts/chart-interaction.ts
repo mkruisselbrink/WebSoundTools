@@ -23,7 +23,7 @@
  * Pure chart coordinate math, Y-axis zoom calculations, and interactive EQ handle hit-testing.
  */
 
-import { BiquadSpec } from '../dsp/biquad.js';
+import { BiquadSpec } from '@foh/dsp';
 import { normXToValue, valueToNormX, valueToNormY } from './plot-types.js';
 
 export interface ChartAxisBounds {

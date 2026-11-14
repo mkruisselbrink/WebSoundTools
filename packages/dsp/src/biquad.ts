@@ -1,32 +1,11 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundTools Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Robert Bristow-Johnson (RBJ) Audio EQ Cookbook Biquad Filter implementation
- * plus exact analytical complex frequency response evaluation H(e^{jw}).
- *
- * Used for:
- *  1. Input pre-filtering & IEC 61672 A/C weighting cascades
- *  2. Virtual Parametric EQ (`EqualizerSource`) and Crossover (`FilterSource`) modeling
- *  3. Deterministic Synthetic Acoustic Rig (`synthetic-rig.ts`) for unit testing
+ * Unified Robert Bristow-Johnson (RBJ) Audio EQ Cookbook biquad filters,
+ * 1st-order bilinear sections, analytical complex frequency response evaluation H(e^{jw}),
+ * and stateful Transposed Direct Form II time-domain processors.
  */
 
 export type BiquadFilterType =
@@ -50,32 +29,47 @@ export interface BiquadCoefficients {
 export interface BiquadSpec {
   readonly type: BiquadFilterType;
   readonly frequency: number; // Hz
-  readonly q?: number;        // Quality factor (default 0.70710678)
-  readonly gainDb?: number;   // dB (for peaking, lowshelf, highshelf)
+  readonly q?: number; // Quality factor (default SQRT1_2)
+  readonly gainDb?: number; // dB (for peaking, lowshelf, highshelf)
   readonly enabled?: boolean;
 }
 
+export interface ComplexSample {
+  readonly re: number;
+  readonly im: number;
+}
+
+export interface ComplexResponse {
+  readonly re: number;
+  readonly im: number;
+  readonly magnitude: number;
+  readonly phaseRad: number;
+}
+
 /**
- * Computes normalized Direct Form I / II biquad coefficients (a0 = 1)
- * using Robert Bristow-Johnson's Audio EQ Cookbook formulas.
+ * High internal DSP reference sample rate (192 kHz) prevents bilinear-transform
+ * Nyquist frequency cramping near 16–20 kHz when modeling virtual DSP chains.
  */
-export function computeBiquadCoefficients(
-  spec: BiquadSpec,
-  sampleRate: number
+export const DSP_REFERENCE_SAMPLE_RATE_HZ = 192000;
+
+/**
+ * Designs normalized 2nd-order digital biquad coefficients (a0 = 1) using RBJ Audio EQ Cookbook equations.
+ * Defaults to `DSP_REFERENCE_SAMPLE_RATE_HZ` (192 kHz) for cramp-free analytical evaluation.
+ */
+export function designBiquad(
+  type: BiquadFilterType,
+  frequencyHz: number,
+  q: number = Math.SQRT1_2,
+  gainDb: number = 0,
+  sampleRateHz: number = DSP_REFERENCE_SAMPLE_RATE_HZ
 ): BiquadCoefficients {
-  if (spec.enabled === false) {
-    return { b0: 1, b1: 0, b2: 0, a1: 0, a2: 0 };
-  }
-
-  const f0 = Math.max(1.0, Math.min(spec.frequency, sampleRate * 0.499));
-  const Q = Math.max(0.02, spec.q ?? Math.SQRT1_2);
-  const dBgain = spec.gainDb ?? 0;
-
-  const A = Math.pow(10.0, dBgain / 40.0);
-  const w0 = (2.0 * Math.PI * f0) / sampleRate;
+  const f0 = Math.max(1.0, Math.min(frequencyHz, sampleRateHz * 0.499));
+  const safeQ = Math.max(0.02, Math.min(60.0, q));
+  const A = Math.pow(10.0, gainDb / 40.0);
+  const w0 = (2.0 * Math.PI * f0) / sampleRateHz;
   const cosw0 = Math.cos(w0);
   const sinw0 = Math.sin(w0);
-  const alpha = sinw0 / (2.0 * Q);
+  const alpha = sinw0 / (2.0 * safeQ);
 
   let b0 = 1;
   let b1 = 0;
@@ -84,7 +78,7 @@ export function computeBiquadCoefficients(
   let a1 = 0;
   let a2 = 0;
 
-  switch (spec.type) {
+  switch (type) {
     case 'lowpass':
       b0 = (1.0 - cosw0) * 0.5;
       b1 = 1.0 - cosw0;
@@ -172,25 +166,71 @@ export function computeBiquadCoefficients(
 }
 
 /**
- * Evaluates the exact complex frequency response H(e^{jw}) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
- * of a single biquad filter at `frequencyHz` for `sampleRate`.
+ * Computes normalized biquad coefficients from a `BiquadSpec` at an explicit `sampleRate`.
+ */
+export function computeBiquadCoefficients(
+  spec: BiquadSpec,
+  sampleRate: number = DSP_REFERENCE_SAMPLE_RATE_HZ
+): BiquadCoefficients {
+  if (spec.enabled === false) {
+    return { b0: 1, b1: 0, b2: 0, a1: 0, a2: 0 };
+  }
+  return designBiquad(
+    spec.type,
+    spec.frequency,
+    spec.q ?? Math.SQRT1_2,
+    spec.gainDb ?? 0,
+    sampleRate
+  );
+}
+
+/**
+ * Designs a 1st-order (6 dB/oct) bilinear-prewarped low-pass or high-pass section (b2 = a2 = 0).
+ */
+export function designFirstOrderSection(
+  passType: 'lowpass' | 'highpass',
+  frequencyHz: number,
+  sampleRateHz: number = DSP_REFERENCE_SAMPLE_RATE_HZ
+): BiquadCoefficients {
+  const clampedFreq = Math.max(1.0, Math.min(sampleRateHz * 0.495, frequencyHz));
+  const k = Math.tan((Math.PI * clampedFreq) / sampleRateHz);
+  const invDen = 1 / (1 + k);
+
+  if (passType === 'lowpass') {
+    return {
+      b0: k * invDen,
+      b1: k * invDen,
+      b2: 0,
+      a1: (k - 1) * invDen,
+      a2: 0,
+    };
+  }
+  return {
+    b0: invDen,
+    b1: -invDen,
+    b2: 0,
+    a1: (k - 1) * invDen,
+    a2: 0,
+  };
+}
+
+/**
+ * Evaluates the exact complex frequency response H(e^{jw}) of a single biquad filter.
  */
 export function evaluateBiquadComplexResponse(
   coeffs: BiquadCoefficients,
   frequencyHz: number,
-  sampleRate: number
-): { re: number; im: number; magnitude: number; phaseRad: number } {
+  sampleRate: number = DSP_REFERENCE_SAMPLE_RATE_HZ
+): ComplexResponse {
   const w = (2.0 * Math.PI * frequencyHz) / sampleRate;
   const cos1 = Math.cos(w);
   const sin1 = Math.sin(w);
   const cos2 = Math.cos(2.0 * w);
   const sin2 = Math.sin(2.0 * w);
 
-  // Numerator B(e^{-jw}) = b0 + b1*(cos(w) - i*sin(w)) + b2*(cos(2w) - i*sin(2w))
   const numRe = coeffs.b0 + coeffs.b1 * cos1 + coeffs.b2 * cos2;
   const numIm = -(coeffs.b1 * sin1 + coeffs.b2 * sin2);
 
-  // Denominator A(e^{-jw}) = 1 + a1*(cos(w) - i*sin(w)) + a2*(cos(2w) - i*sin(2w))
   const denRe = 1.0 + coeffs.a1 * cos1 + coeffs.a2 * cos2;
   const denIm = -(coeffs.a1 * sin1 + coeffs.a2 * sin2);
 
@@ -204,29 +244,60 @@ export function evaluateBiquadComplexResponse(
 }
 
 /**
- * Evaluates a cascade of multiple BiquadCoefficients at `frequencyHz`.
+ * Evaluates the complex transfer function H(e^{jw}) of a biquad cascade as `{ re, im }`.
+ */
+export function evaluateBiquadCascade(
+  sections: readonly BiquadCoefficients[],
+  frequencyHz: number,
+  sampleRateHz: number = DSP_REFERENCE_SAMPLE_RATE_HZ
+): ComplexSample {
+  if (sections.length === 0) {
+    return { re: 1, im: 0 };
+  }
+
+  const w = (2.0 * Math.PI * frequencyHz) / sampleRateHz;
+  const cos1 = Math.cos(w);
+  const sin1 = Math.sin(w);
+  const cos2 = Math.cos(2.0 * w);
+  const sin2 = Math.sin(2.0 * w);
+
+  let accRe = 1.0;
+  let accIm = 0.0;
+
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    const numRe = s.b0 + s.b1 * cos1 + s.b2 * cos2;
+    const numIm = -(s.b1 * sin1 + s.b2 * sin2);
+    const denRe = 1.0 + s.a1 * cos1 + s.a2 * cos2;
+    const denIm = -(s.a1 * sin1 + s.a2 * sin2);
+
+    const denMag2 = Math.max(1e-30, denRe * denRe + denIm * denIm);
+    const hRe = (numRe * denRe + numIm * denIm) / denMag2;
+    const hIm = (numIm * denRe - numRe * denIm) / denMag2;
+
+    const nextRe = accRe * hRe - accIm * hIm;
+    const nextIm = accRe * hIm + accIm * hRe;
+    accRe = nextRe;
+    accIm = nextIm;
+  }
+
+  return { re: accRe, im: accIm };
+}
+
+/**
+ * Evaluates a cascade of multiple BiquadCoefficients with `{ re, im, magnitude, phaseRad }`.
  */
 export function evaluateBiquadCascadeResponse(
   cascade: readonly BiquadCoefficients[],
   frequencyHz: number,
-  sampleRate: number
-): { re: number; im: number; magnitude: number; phaseRad: number } {
-  let totalRe = 1.0;
-  let totalIm = 0.0;
-
-  for (let i = 0; i < cascade.length; i++) {
-    const { re, im } = evaluateBiquadComplexResponse(cascade[i], frequencyHz, sampleRate);
-    const nextRe = totalRe * re - totalIm * im;
-    const nextIm = totalRe * im + totalIm * re;
-    totalRe = nextRe;
-    totalIm = nextIm;
-  }
-
+  sampleRate: number = DSP_REFERENCE_SAMPLE_RATE_HZ
+): ComplexResponse {
+  const { re, im } = evaluateBiquadCascade(cascade, frequencyHz, sampleRate);
   return {
-    re: totalRe,
-    im: totalIm,
-    magnitude: Math.hypot(totalRe, totalIm),
-    phaseRad: Math.atan2(totalIm, totalRe),
+    re,
+    im,
+    magnitude: Math.hypot(re, im),
+    phaseRad: Math.atan2(im, re),
   };
 }
 
@@ -234,13 +305,13 @@ export function evaluateBiquadCascadeResponse(
  * Stateful time-domain Transposed Direct Form II Biquad Filter processor.
  */
 export class BiquadFilter {
-  private b0: number = 1;
-  private b1: number = 0;
-  private b2: number = 0;
-  private a1: number = 0;
-  private a2: number = 0;
-  private z1: number = 0;
-  private z2: number = 0;
+  private b0 = 1;
+  private b1 = 0;
+  private b2 = 0;
+  private a1 = 0;
+  private a2 = 0;
+  private z1 = 0;
+  private z2 = 0;
 
   constructor(coeffs?: BiquadCoefficients) {
     if (coeffs) {
@@ -292,7 +363,7 @@ export class BiquadFilter {
 }
 
 /**
- * Stateful cascade of multiple BiquadFilter stages (e.g., 4th-order Linkwitz-Riley, A-weighting, or multi-band EQ).
+ * Stateful cascade of multiple `BiquadFilter` stages.
  */
 export class BiquadCascade {
   private readonly stages: BiquadFilter[];
@@ -345,4 +416,3 @@ export class BiquadCascade {
     }
   }
 }
-

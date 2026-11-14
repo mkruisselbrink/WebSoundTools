@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { evaluateBiquadCascadeResponse } from '../../src/dsp/biquad.js';
+import { evaluateBiquadCascadeResponse } from '@foh/dsp';
 import {
   BroadbandMeterBank,
   createWeightingBiquadCoeffs,

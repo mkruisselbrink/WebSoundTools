@@ -31,7 +31,7 @@ import {
 import { computeEqualizerSourceData, createDefaultEqBands } from '../../src/sources/eq-source.js';
 import { computeUnionSourceData } from '../../src/sources/union-source.js';
 import { buildTraceVertices, computeCursorReadout } from '../../src/charts/plot-types.js';
-import { parseCalibrationFile } from '../../src/dsp/calibration.js';
+import { parseCalibrationFile } from '@foh/acoustics';
 
 describe('End-to-End Demo Simulator & PA Tuning Workflows', () => {
   it('verifies all 5 built-in simulator presets produce valid acoustic measurements', () => {

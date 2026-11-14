@@ -33,24 +33,27 @@
  *  - Fractional-Octave Smoothing & Microphone Calibration (.cal)
  */
 
-import { BiquadCascade, computeBiquadCoefficients } from './biquad.js';
 import {
   CalibrationCurve,
+  createWeightingBiquadCoeffs,
   interpolateCalibrationCurve,
-} from './calibration.js';
+} from '@foh/acoustics';
+import {
+  BiquadCascade,
+  OCTAVE_SMOOTHING_FRACTIONS,
+  OctaveSmoothingType,
+  Radix2FFT,
+  WindowFunctionType,
+  computeBiquadCoefficients,
+  smoothMagnitudeOctave,
+  smoothPhaseOctave,
+} from '@foh/dsp';
 import { DeconvolutionAnalyzer, DelayEstimate } from './deconvolution.js';
 import {
   DetectedFeedbackTrack,
   FeedbackDetector,
   FeedbackSensitivityMode,
 } from './feedback-detector.js';
-import { Radix2FFT } from './fft.js';
-import {
-  OCTAVE_SMOOTHING_FRACTIONS,
-  OctaveSmoothingType,
-  smoothMagnitudeOctave,
-  smoothPhaseOctave,
-} from './smoothing.js';
 import {
   SplHistoryData,
   SplHistoryTracker,
@@ -61,11 +64,7 @@ import {
   TransferEstimatorType,
   TransferFunctionAnalyzer,
 } from './transfer-function.js';
-import {
-  BroadbandMeterBank,
-  createWeightingBiquadCoeffs,
-} from './weighting-meters.js';
-import { WindowFunctionType } from './window-functions.js';
+import { BroadbandMeterBank } from './weighting-meters.js';
 import { SourceData } from '../sources/source-data.js';
 
 export type InputPreFilterType = 'Z' | 'A' | 'C' | 'notch-1k';

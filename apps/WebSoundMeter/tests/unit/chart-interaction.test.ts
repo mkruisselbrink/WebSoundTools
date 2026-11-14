@@ -27,7 +27,7 @@ import {
   findHitEqBandIndex,
 } from '../../src/charts/chart-interaction.js';
 import { valueToNormX, valueToNormY } from '../../src/charts/plot-types.js';
-import { BiquadSpec } from '../../src/dsp/biquad.js';
+import { BiquadSpec } from '@foh/dsp';
 
 const defaultBounds: ChartAxisBounds = {
   xMin: 20,

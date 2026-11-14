@@ -24,8 +24,7 @@
  * and Cross-Correlation / Deconvolution Auto Delay Finder with Sub-Sample Parabolic Interpolation.
  */
 
-import { Radix2FFT } from './fft.js';
-import { WindowFunctionType } from './window-functions.js';
+import { Radix2FFT, WindowFunctionType } from '@foh/dsp';
 
 export interface DelayEstimate {
   /** Signed integer delay in samples (positive = Measurement arrives after Reference) */

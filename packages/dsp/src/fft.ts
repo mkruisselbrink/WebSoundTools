@@ -1,31 +1,10 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundTools Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * High-performance Radix-2 Cooley-Tukey FFT & IFFT in pure TypeScript.
- *
- * Includes a Dual-Real-Channel Packed FFT (`transformDualReal`) that packs
- * Measurement M[n] into the real part and Reference R[n] into the imaginary part
- * of a single complex buffer Z[n] = M[n] + i*R[n], runs one forward FFT, and
- * unpacks the conjugate-symmetric halves into M(k) and R(k) — cutting FFT CPU time in half!
+ * High-performance Radix-2 Cooley-Tukey FFT & IFFT in pure TypeScript,
+ * including simultaneous Dual-Real-Channel Packed FFT (`transformDualReal`).
  */
 
 import { WindowFunctionType, WindowTable, createWindowTable } from './window-functions.js';
@@ -38,7 +17,6 @@ export class Radix2FFT {
   private readonly sinTable: Float64Array;
   private windowTable: WindowTable;
 
-  // Scratch buffers for in-place complex transform
   private readonly workRe: Float32Array;
   private readonly workIm: Float32Array;
 
@@ -96,7 +74,6 @@ export class Radix2FFT {
     const N = this.size;
     const bitRev = this.bitRev;
 
-    // Bit-reversal permutation
     for (let i = 0; i < N; i++) {
       const j = bitRev[i];
       if (i < j) {
@@ -114,7 +91,6 @@ export class Radix2FFT {
     const sinTable = this.sinTable;
     const sign = inverse ? -1.0 : 1.0;
 
-    // Butterfly stages
     for (let len = 2; len <= N; len <<= 1) {
       const halfLen = len >>> 1;
       const step = N / len;
@@ -148,11 +124,8 @@ export class Radix2FFT {
   }
 
   /**
-   * Simultaneous Windowed FFT of two real signals (`inputA` and `inputB`, e.g., Measurement & Reference)
+   * Simultaneous Windowed FFT of two real signals (`inputA` and `inputB`)
    * using a single complex FFT via conjugate symmetry unpacking.
-   *
-   * Output arrays `outARe`, `outAIm`, `outBRe`, `outBIm` must have length >= `this.halfSize + 1` (bins 0 .. N/2).
-   * Values are normalized by `1 / (N * coherentGain)` so a full-scale sine wave on a bin has amplitude 1.0.
    */
   transformDualReal(
     inputA: Float32Array,
@@ -188,22 +161,18 @@ export class Radix2FFT {
 
     this.transformComplex(re, im, false);
 
-    // Scale by 1 / (N * coherentGain)
     const scale = 1.0 / (N * this.windowTable.coherentGain);
 
-    // Bin 0 (DC)
     outARe[0] = re[0] * scale;
     outAIm[0] = 0;
     outBRe[0] = im[0] * scale;
     outBIm[0] = 0;
 
-    // Bin N/2 (Nyquist)
     outARe[halfN] = re[halfN] * scale;
     outAIm[halfN] = 0;
     outBRe[halfN] = im[halfN] * scale;
     outBIm[halfN] = 0;
 
-    // Unpack bins k = 1 .. N/2 - 1 using Z(k) and Z*(N - k)
     const halfScale = 0.5 * scale;
     for (let k = 1; k < halfN; k++) {
       const nk = N - k;
@@ -212,14 +181,11 @@ export class Radix2FFT {
       const znRe = re[nk];
       const znIm = im[nk];
 
-      // A(k) = 0.5 * (Z(k) + Z*(N-k))
       outARe[k] = (zRe + znRe) * halfScale;
       outAIm[k] = (zIm - znIm) * halfScale;
 
-      // B(k) = -0.5i * (Z(k) - Z*(N-k))
       outBRe[k] = (zIm + znIm) * halfScale;
       outBIm[k] = (znRe - zRe) * halfScale;
     }
   }
 }
-

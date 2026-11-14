@@ -33,7 +33,7 @@ import {
   BiquadCascade,
   BiquadSpec,
   computeBiquadCoefficients,
-} from './biquad.js';
+} from '@foh/dsp';
 
 export type SimulatorPresetId =
   | 'flat-delayed'

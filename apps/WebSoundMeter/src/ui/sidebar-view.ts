@@ -1,23 +1,6 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import { html, nothing, TemplateResult } from 'lit';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
@@ -33,6 +16,7 @@ export interface SidebarViewProps {
   readonly onAddLiveSource?: () => void;
   readonly onAddEqSource: () => void;
   readonly onAddUnionSource: () => void;
+  readonly onImportFrdFile?: (file: File) => void;
   readonly onSelectSource: (id: string) => void;
   readonly onToggleSourceVisibility: (id: string, visible: boolean) => void;
 }
@@ -53,7 +37,7 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
       <div class="section-card">
         <div class="section-header">
           <span>Sources (${props.allSources.length})</span>
-          <div style="display:flex;gap:4px;">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
             ${props.onAddLiveSource
               ? html`
                   <button
@@ -67,7 +51,7 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
               : nothing}
             <button
               data-testid="btn-add-eq"
-              title="Add Virtual Parametric EQ Source"
+              title="Add Virtual Parametric EQ & Crossover Source"
               @click=${props.onAddEqSource}
             >
               + EQ
@@ -79,6 +63,36 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
             >
               + Math
             </button>
+            ${props.onImportFrdFile
+              ? html`
+                  <label
+                    style="display:inline-flex;align-items:center;cursor:pointer;"
+                    title="Import Predicted or Measured .FRD Curve as Stored Trace"
+                  >
+                    <input
+                      type="file"
+                      accept=".frd,.cal,.txt,.csv"
+                      data-testid="input-import-frd"
+                      style="display:none;"
+                      @change=${(e: Event) => {
+                        const input = e.target as HTMLInputElement;
+                        const file = input.files?.[0];
+                        if (file) {
+                          props.onImportFrdFile?.(file);
+                        }
+                        input.value = '';
+                      }}
+                    />
+                    <span
+                      class="btn-like"
+                      data-testid="btn-import-frd"
+                      style="padding:3px 6px;border-radius:4px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:11px;"
+                    >
+                      + .FRD
+                    </span>
+                  </label>
+                `
+              : nothing}
           </div>
         </div>
 

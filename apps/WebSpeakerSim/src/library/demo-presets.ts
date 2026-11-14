@@ -22,9 +22,9 @@
  * Built-in Demo Venue Presets (`src/library/demo-presets.ts`).
  */
 
+import { DEFAULT_ATMOSPHERE } from '@foh/acoustics';
+import { DEFAULT_SOURCE_DSP_CONFIG } from '@foh/dsp';
 import type { ProjectScene } from '../model/project-types.js';
-import { DEFAULT_ATMOSPHERE } from '../physics/atmosphere.js';
-import { DEFAULT_SOURCE_DSP_CONFIG } from '../physics/biquad.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 
 export interface DemoVenuePreset {

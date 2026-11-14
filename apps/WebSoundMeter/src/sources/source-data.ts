@@ -27,6 +27,11 @@
  * enabling any chart to plot any source interchangeably.
  */
 
+import {
+  interpolateFrdCurveLogFreq,
+  parseFrdCurveText,
+  serializeFrdText,
+} from '@foh/acoustics';
 import { DelayEstimate } from '../dsp/deconvolution.js';
 import { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import { SplHistoryData } from '../dsp/spl-history.js';
@@ -335,5 +340,121 @@ export function deserializeSourceData(raw: SerializedSourceData): SourceData {
       stepResponse: new Float32Array(raw.timeData.stepResponse),
     },
   };
+}
+
+export interface FrdStoredImportOptions {
+  readonly name?: string;
+  readonly color?: string;
+  readonly sampleRate?: number;
+  readonly binCount?: number;
+  /**
+   * When undefined (default), automatically normalizes absolute dB SPL curves (passband > 35 dB,
+   * such as WebSpeakerSim Virtual Mic exports) to 0 dB passband average so they overlay cleanly
+   * onto Transfer Function Magnitude traces.
+   */
+  readonly normalizeToZeroDb?: boolean;
+}
+
+/**
+ * Imports a 2-column or 3-column `.frd` / `.csv` curve as a `SourceData` (`kind: 'stored'`)
+ * interpolated onto WebSoundMeter's FFT frequency grid.
+ */
+export function importFrdAsStoredSource(
+  frdText: string,
+  options: FrdStoredImportOptions = {}
+): SourceData {
+  const curve = parseFrdCurveText(frdText);
+  const sampleRate = options.sampleRate ?? 48000;
+  const binCount = options.binCount ?? 2049;
+
+  const freqData = createEmptyFrequencyDomainData(binCount, sampleRate);
+  const timeData = createEmptyTimeDomainData((binCount - 1) * 2, sampleRate);
+
+  // Estimate 200 Hz .. 2 kHz passband mean to detect absolute SPL vs relative TF dB
+  let pbSum = 0;
+  let pbCount = 0;
+  for (let i = 0; i < curve.frequenciesHz.length; i++) {
+    const f = curve.frequenciesHz[i];
+    if (f >= 200 && f <= 2000) {
+      pbSum += curve.magnitudeDb[i];
+      pbCount++;
+    }
+  }
+  const pbMeanDb =
+    pbCount > 0
+      ? pbSum / pbCount
+      : curve.magnitudeDb[Math.floor(curve.magnitudeDb.length / 2)] ?? 0;
+  const shouldNormalize =
+    options.normalizeToZeroDb !== undefined ? options.normalizeToZeroDb : pbMeanDb > 35;
+  const normOffsetDb = shouldNormalize ? pbMeanDb : 0;
+
+  for (let k = 1; k < binCount; k++) {
+    const f = freqData.frequency[k];
+    const sample = interpolateFrdCurveLogFreq(curve, f);
+    const relDb = sample.magDb - normOffsetDb;
+    const linMag = Math.pow(10.0, relDb / 20.0);
+    freqData.magnitude[k] = linMag;
+    freqData.module[k] = linMag * Math.pow(10.0, -30.0 / 20.0);
+    freqData.phaseReal[k] = Math.cos(sample.phaseRad);
+    freqData.phaseImag[k] = Math.sin(sample.phaseRad);
+    freqData.coherence[k] = 1.0;
+  }
+
+  const id = `stored-frd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const refNote = shouldNormalize
+    ? `Imported .FRD (${curve.frequenciesHz.length} pts, normalized from ${pbMeanDb.toFixed(1)} dB SPL)`
+    : `Imported .FRD (${curve.frequenciesHz.length} pts)`;
+
+  return {
+    id,
+    name: options.name ?? 'Imported .FRD Trace',
+    kind: 'stored',
+    color: options.color ?? '#a855f7',
+    visible: true,
+    active: true,
+    gainOffsetDb: 0,
+    delayOffsetMs: 0,
+    invertPolarity: false,
+    notes: refNote,
+    createdAt: new Date().toISOString(),
+    sampleRate,
+    freqData,
+    timeData,
+  };
+}
+
+/**
+ * Exports any `SourceData` trace (including effective Gain Offset, Delay Offset, and Polarity)
+ * to standard 3-column `.frd` text (`FreqHz\tMagDb\tPhaseDeg`).
+ */
+export function exportSourceDataToFrd(source: SourceData): string {
+  const B = source.freqData.length;
+  const freqs: number[] = [];
+  const magsDb: number[] = [];
+  const phasesDeg: number[] = [];
+  const bin: EffectiveBinResponse = {
+    frequency: 0,
+    module: 0,
+    magnitude: 0,
+    phaseRe: 1,
+    phaseIm: 0,
+    coherence: 0,
+  };
+  const radToDeg = 180.0 / Math.PI;
+
+  for (let k = 1; k < B; k++) {
+    writeEffectiveBinResponse(source, k, bin);
+    if (bin.frequency < 10 || bin.frequency > 24000) continue;
+    freqs.push(bin.frequency);
+    magsDb.push(bin.magnitude > 1e-10 ? 20.0 * Math.log10(bin.magnitude) : -120.0);
+    phasesDeg.push(Math.atan2(bin.phaseIm, bin.phaseRe) * radToDeg);
+  }
+
+  return serializeFrdText(
+    freqs,
+    magsDb,
+    phasesDeg,
+    `WebSoundMeter Trace — ${source.name} (${source.notes || source.kind})`
+  );
 }
 

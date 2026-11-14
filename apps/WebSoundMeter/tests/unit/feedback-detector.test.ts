@@ -1,3 +1,4 @@
+import { Radix2FFT, createWindowTable } from '@foh/dsp';
 import { describe, expect, it } from 'vitest';
 import {
   computeTrackMatchToleranceHz,
@@ -8,7 +9,6 @@ import {
   frequencyToMusicalNote,
   MAX_ACTIVE_TRACKS_PER_SLOT,
 } from '../../src/dsp/feedback-detector.js';
-import { Radix2FFT } from '../../src/dsp/fft.js';
 import { SignalGenerator } from '../../src/dsp/signal-generator.js';
 import {
   SIMULATOR_PRESETS,
@@ -16,7 +16,6 @@ import {
   SyntheticAcousticRig,
 } from '../../src/dsp/synthetic-rig.js';
 import { TransferFunctionAnalyzer } from '../../src/dsp/transfer-function.js';
-import { createWindowTable } from '../../src/dsp/window-functions.js';
 
 describe('FeedbackDetector & Acoustic Utility Mappers', () => {
   it('maps arbitrary frequencies to nearest 31-band ISO center frequency and musical note', () => {

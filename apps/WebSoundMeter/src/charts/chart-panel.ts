@@ -29,7 +29,7 @@
 
 import { LitElement, css, html } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { BiquadSpec } from '../dsp/biquad.js';
+import { BiquadSpec } from '@foh/dsp';
 import {
   DEFAULT_SPL_ALERT_THRESHOLDS,
   SplAlertThresholds,

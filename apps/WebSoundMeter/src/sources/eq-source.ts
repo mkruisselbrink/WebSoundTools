@@ -1,39 +1,28 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Virtual Parametric Equalizer & Crossover Modeling Source (inspired by OSM's `Equalizer` & `FilterSource`).
+ * Virtual Parametric Equalizer, Delay, Polarity & Crossover Modeling Source (`src/sources/eq-source.ts`).
  *
- * Evaluates a cascade of biquad filter bands (Peaking, Shelves, Highpass/Lowpass Crossovers, Allpass, Notch)
- * and optionally applies them onto a target `baseSource` (e.g. a live Measurement or Stored trace)
- * so the sound engineer can design a corrective EQ curve and immediately see the predicted
- * post-EQ Magnitude and Phase response in real time.
+ * Upgraded to full `@foh/dsp` `SourceDspConfig` (Gain, Electronic Delay e^{-j*omega*tau},
+ * Polarity Inversion, Mute, Butterworth/Linkwitz-Riley 12–48 dB/oct HPF/LPF Crossovers,
+ * and Parametric EQ bands evaluated at 192 kHz to prevent Nyquist cramping), while maintaining
+ * 100% backward compatibility with legacy `{ bands: BiquadSpec[] }` IndexedDB records.
  */
 
 import {
-  BiquadCoefficients,
   BiquadSpec,
-  computeBiquadCoefficients,
-  evaluateBiquadCascadeResponse,
-} from '../dsp/biquad.js';
+  CrossoverFilterConfig,
+  DEFAULT_SOURCE_DSP_CONFIG,
+  DSP_REFERENCE_SAMPLE_RATE_HZ,
+  ParametricEqBand,
+  SourceDspConfig,
+  biquadSpecToEqBand,
+  compileDspChain,
+  eqBandToBiquadSpec,
+  evaluateCompiledDspAtFrequency,
+} from '@foh/dsp';
 import {
   EffectiveBinResponse,
   SourceData,
@@ -47,7 +36,10 @@ export interface EqualizerSourceConfig {
   name: string;
   color: string;
   visible: boolean;
+  /**Synchronized Parametric EQ bands view (kept in sync with `dsp.eqBands` for chart drag & legacy compatibility) */
   bands: BiquadSpec[];
+  /** Complete DSP chain configuration (Gain, Delay, Polarity, Mute, HPF/LPF Crossovers, Parametric EQ) */
+  dsp?: SourceDspConfig;
   /** Optional ID of a live Measurement or Stored source to apply this EQ onto */
   targetSourceId?: string | null;
   createdAt?: string;
@@ -75,7 +67,104 @@ export function createRoomModeFlattenEqBands(): BiquadSpec[] {
   ];
 }
 
-interface CachedBandCascadeCurve {
+export function createDefaultEqDspConfig(
+  bands: readonly BiquadSpec[] = createDefaultEqBands()
+): SourceDspConfig {
+  return {
+    ...DEFAULT_SOURCE_DSP_CONFIG,
+    eqBands: bands.map((b, i) => biquadSpecToEqBand(b, i)),
+  };
+}
+
+/**
+ * Resolves a complete `SourceDspConfig` from an `EqualizerSourceConfig`,
+ * seamlessly upgrading legacy records that only carry `bands: BiquadSpec[]`.
+ */
+export function resolveEqDspConfig(config: EqualizerSourceConfig): SourceDspConfig {
+  const base = config.dsp ?? DEFAULT_SOURCE_DSP_CONFIG;
+  const eqBands: ParametricEqBand[] = config.dsp
+    ? [...config.dsp.eqBands]
+    : config.bands.map((b, i) => biquadSpecToEqBand(b, i));
+  return {
+    gainDb: base.gainDb ?? 0,
+    delayMs: base.delayMs ?? 0,
+    invertPolarity: Boolean(base.invertPolarity),
+    muted: Boolean(base.muted),
+    highPass: base.highPass ?? { topology: 'off', frequencyHz: 80 },
+    lowPass: base.lowPass ?? { topology: 'off', frequencyHz: 120 },
+    eqBands,
+  };
+}
+
+/**
+ * Normalizes an `EqualizerSourceConfig` loaded from persistence or updated via UI
+ * so `config.dsp` and `config.bands` are always consistent.
+ */
+export function normalizeEqSourceConfig(raw: EqualizerSourceConfig): EqualizerSourceConfig {
+  const dsp = resolveEqDspConfig(raw);
+  const bands = dsp.eqBands.map(eqBandToBiquadSpec);
+  return {
+    ...raw,
+    bands,
+    dsp,
+  };
+}
+
+export function syncEqConfigWithBands(
+  config: EqualizerSourceConfig,
+  bands: BiquadSpec[]
+): EqualizerSourceConfig {
+  const prevDsp = resolveEqDspConfig(config);
+  const eqBands: ParametricEqBand[] = bands.map((spec, idx) => ({
+    id: prevDsp.eqBands[idx]?.id ?? `band-${idx + 1}`,
+    enabled: spec.enabled !== false,
+    type: spec.type,
+    frequencyHz: spec.frequency,
+    gainDb: spec.gainDb ?? 0,
+    q: spec.q ?? Math.SQRT1_2,
+  }));
+  return {
+    ...config,
+    bands,
+    dsp: {
+      ...prevDsp,
+      eqBands,
+    },
+  };
+}
+
+export interface SourceDspPatch {
+  readonly gainDb?: number;
+  readonly delayMs?: number;
+  readonly invertPolarity?: boolean;
+  readonly muted?: boolean;
+  readonly highPass?: Partial<CrossoverFilterConfig>;
+  readonly lowPass?: Partial<CrossoverFilterConfig>;
+  readonly eqBands?: readonly ParametricEqBand[];
+}
+
+export function applyPatchToEqConfig(
+  config: EqualizerSourceConfig,
+  patch: SourceDspPatch
+): EqualizerSourceConfig {
+  const prev = resolveEqDspConfig(config);
+  const nextDsp: SourceDspConfig = {
+    gainDb: patch.gainDb ?? prev.gainDb,
+    delayMs: patch.delayMs ?? prev.delayMs,
+    invertPolarity: patch.invertPolarity ?? prev.invertPolarity,
+    muted: patch.muted ?? prev.muted,
+    highPass: patch.highPass ? { ...prev.highPass, ...patch.highPass } : prev.highPass,
+    lowPass: patch.lowPass ? { ...prev.lowPass, ...patch.lowPass } : prev.lowPass,
+    eqBands: patch.eqBands ?? prev.eqBands,
+  };
+  return {
+    ...config,
+    dsp: nextDsp,
+    bands: nextDsp.eqBands.map(eqBandToBiquadSpec),
+  };
+}
+
+interface CachedDspChainCurve {
   readonly sampleRate: number;
   readonly binCount: number;
   readonly eqMag: Float32Array;
@@ -83,15 +172,15 @@ interface CachedBandCascadeCurve {
   readonly eqPhIm: Float32Array;
 }
 
-const bandCascadeCache = new WeakMap<BiquadSpec[], CachedBandCascadeCurve>();
+const eqConfigCurveCache = new WeakMap<EqualizerSourceConfig, CachedDspChainCurve>();
 
-function getOrComputeBandCascadeCurve(
-  bands: BiquadSpec[],
+function getOrComputeEqChainCurve(
+  config: EqualizerSourceConfig,
   frequencies: Float32Array,
   sampleRate: number
-): CachedBandCascadeCurve {
+): CachedDspChainCurve {
   const B = frequencies.length;
-  const cached = bandCascadeCache.get(bands);
+  const cached = eqConfigCurveCache.get(config);
   if (cached && cached.sampleRate === sampleRate && cached.binCount === B) {
     return cached;
   }
@@ -100,31 +189,32 @@ function getOrComputeBandCascadeCurve(
   const eqPhRe = new Float32Array(B);
   const eqPhIm = new Float32Array(B);
 
-  const cascade: BiquadCoefficients[] = bands
-    .filter((b) => b.enabled !== false)
-    .map((b) => computeBiquadCoefficients(b, sampleRate));
+  const dsp = resolveEqDspConfig(config);
+  const compiled = compileDspChain(dsp, undefined, DSP_REFERENCE_SAMPLE_RATE_HZ);
 
   for (let i = 0; i < B; i++) {
     const f = frequencies[i];
-    const eqResp =
-      f > 0
-        ? evaluateBiquadCascadeResponse(cascade, f, sampleRate)
-        : { re: 1.0, im: 0.0, magnitude: 1.0, phaseRad: 0.0 };
-
-    const mag = eqResp.magnitude;
-    eqMag[i] = mag;
-    eqPhRe[i] = mag > 1e-12 ? eqResp.re / mag : 1.0;
-    eqPhIm[i] = mag > 1e-12 ? eqResp.im / mag : 0.0;
+    if (f > 0) {
+      const c = evaluateCompiledDspAtFrequency(compiled, f, DSP_REFERENCE_SAMPLE_RATE_HZ);
+      const mag = Math.hypot(c.re, c.im);
+      eqMag[i] = mag;
+      eqPhRe[i] = mag > 1e-12 ? c.re / mag : 1.0;
+      eqPhIm[i] = mag > 1e-12 ? c.im / mag : 0.0;
+    } else {
+      eqMag[i] = compiled.muted ? 0 : Math.abs(compiled.linearGainSigned);
+      eqPhRe[i] = compiled.linearGainSigned < 0 ? -1.0 : 1.0;
+      eqPhIm[i] = 0.0;
+    }
   }
 
-  const entry: CachedBandCascadeCurve = {
+  const entry: CachedDspChainCurve = {
     sampleRate,
     binCount: B,
     eqMag,
     eqPhRe,
     eqPhIm,
   };
-  bandCascadeCache.set(bands, entry);
+  eqConfigCurveCache.set(config, entry);
   return entry;
 }
 
@@ -153,8 +243,8 @@ export function computeEqualizerSourceData(
   }
   const timeData = createEmptyTimeDomainData(T, sr);
 
-  const { eqMag, eqPhRe, eqPhIm } = getOrComputeBandCascadeCurve(
-    config.bands,
+  const { eqMag, eqPhRe, eqPhIm } = getOrComputeEqChainCurve(
+    config,
     freqData.frequency,
     sr
   );
@@ -200,4 +290,3 @@ export function computeEqualizerSourceData(
     timeData,
   };
 }
-

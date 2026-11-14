@@ -19,14 +19,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { describe, expect, it } from 'vitest';
 import {
   BiquadFilter,
   BiquadSpec,
+  Radix2FFT,
   computeBiquadCoefficients,
   evaluateBiquadComplexResponse,
-} from '../../src/dsp/biquad.js';
-import { Radix2FFT } from '../../src/dsp/fft.js';
+} from '@foh/dsp';
+import { describe, expect, it } from 'vitest';
 import { TransferFunctionAnalyzer } from '../../src/dsp/transfer-function.js';
 
 function createPrng(seed: number = 123456789): () => number {

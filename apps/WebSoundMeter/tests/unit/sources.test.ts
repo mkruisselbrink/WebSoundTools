@@ -20,14 +20,20 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { computeEqualizerSourceData } from '../../src/sources/eq-source.js';
+import {
+  applyPatchToEqConfig,
+  computeEqualizerSourceData,
+  normalizeEqSourceConfig,
+} from '../../src/sources/eq-source.js';
 import {
   SourceData,
   cloneSourceDataAsStored,
   createEmptyFrequencyDomainData,
   createEmptyTimeDomainData,
   deserializeSourceData,
+  exportSourceDataToFrd,
   getEffectiveBinResponse,
+  importFrdAsStoredSource,
   serializeSourceData,
 } from '../../src/sources/source-data.js';
 import { computeUnionSourceData } from '../../src/sources/union-source.js';
@@ -186,6 +192,73 @@ describe('SourceData, UnionSource & EqualizerSource', () => {
       expect(corrected.freqData.phaseReal[k]).toBeCloseTo(1.0, 3);
       expect(corrected.freqData.phaseImag[k]).toBeCloseTo(0.0, 3);
     }
+  });
+
+  it('models full SourceDspConfig (Gain, Delay, Polarity, Linkwitz-Riley 24 dB/oct Crossover) in Virtual EQ', () => {
+    const baseEq = normalizeEqSourceConfig({
+      id: 'eq-lr24',
+      name: 'LR24 Sub/Top',
+      color: '#10b981',
+      visible: true,
+      bands: [],
+    });
+
+    const hpEq = applyPatchToEqConfig(baseEq, {
+      highPass: { topology: 'linkwitz-riley-24', frequencyHz: 93.75 },
+    });
+    const lpEq = applyPatchToEqConfig(baseEq, {
+      lowPass: { topology: 'linkwitz-riley-24', frequencyHz: 93.75 },
+    });
+
+    const hpData = computeEqualizerSourceData(hpEq, null, 2049, 48000);
+    const lpData = computeEqualizerSourceData(lpEq, null, 2049, 48000);
+
+    // Bin 4 @ 48 kHz / 4096 FFT is exactly 4 * 11.71875 = 46.875 Hz; Bin 8 is exactly 93.75 Hz!
+    expect(20 * Math.log10(hpData.freqData.magnitude[8])).toBeCloseTo(-6.02, 1);
+    expect(20 * Math.log10(lpData.freqData.magnitude[8])).toBeCloseTo(-6.02, 1);
+
+    // Vector sum of LR24 HPF + LPF equals flat 0 dB across the spectrum
+    const lrSum = computeUnionSourceData(
+      {
+        id: 'u-lr',
+        name: 'LR24 Sum',
+        color: '#fff',
+        visible: true,
+        operation: 'sum',
+        sourceIds: ['eq-lr24', 'eq-lr24-lp'],
+      },
+      [hpData, { ...lpData, id: 'eq-lr24-lp' }]
+    );
+    expect(20 * Math.log10(lrSum.freqData.magnitude[8])).toBeCloseTo(0.0, 2);
+    expect(20 * Math.log10(lrSum.freqData.magnitude[64])).toBeCloseTo(0.0, 2);
+  });
+
+  it('exports and imports .FRD traces and normalizes absolute SPL curves for TF overlay', () => {
+    const src = createTestSource('s-frd', 'FOH Measured', 1.0, -30);
+    src.gainOffsetDb = -3.0;
+    const frdText = exportSourceDataToFrd(src);
+    expect(frdText).toContain('* WebSoundMeter Trace — FOH Measured');
+
+    const reimported = importFrdAsStoredSource(frdText, {
+      name: 'Reimported Trace',
+      binCount: 513,
+      sampleRate: 48000,
+    });
+    expect(20 * Math.log10(reimported.freqData.magnitude[50])).toBeCloseTo(-3.0, 2);
+
+    // Simulate a WebSpeakerSim absolute SPL .frd around 96 dB SPL
+    const wssFrd = ['50\t93.0\t20.0', '500\t96.0\t0.0', '2000\t96.0\t-15.0', '10000\t92.0\t-60.0'].join(
+      '\n'
+    );
+    const predictedOverlay = importFrdAsStoredSource(wssFrd, {
+      name: 'FOH Predicted',
+      binCount: 513,
+      sampleRate: 48000,
+    });
+    expect(predictedOverlay.notes).toContain('normalized from 96.0 dB SPL');
+    // At 500..2000 Hz, normalized TF magnitude sits right around 0 dB!
+    const idx1k = Math.round(1000 / (48000 / 1024));
+    expect(20 * Math.log10(predictedOverlay.freqData.magnitude[idx1k])).toBeCloseTo(0.0, 1);
   });
 });
 

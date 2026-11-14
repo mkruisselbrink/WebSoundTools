@@ -2,17 +2,22 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { BiquadSpec } from '@foh/dsp';
 import { ReactiveUndoStore } from '@foh/state';
-import { BiquadSpec } from '../dsp/biquad.js';
 import {
   DetectedFeedbackTrack,
   MAX_RING_LOG_ENTRIES,
 } from '../dsp/feedback-detector.js';
 import {
   EqualizerSourceConfig,
+  SourceDspPatch,
+  applyPatchToEqConfig,
   computeEqualizerSourceData,
   createDefaultEqBands,
+  createDefaultEqDspConfig,
   createRoomModeFlattenEqBands,
+  normalizeEqSourceConfig,
+  syncEqConfigWithBands,
 } from './eq-source.js';
 import {
   deleteEqSourceFromDb,
@@ -29,6 +34,7 @@ import {
   DEFAULT_SOURCE_PALETTE,
   SourceData,
   cloneSourceDataAsStored,
+  importFrdAsStoredSource,
 } from './source-data.js';
 import { UnionSourceConfig, computeUnionSourceData } from './union-source.js';
 
@@ -228,7 +234,8 @@ export class SourceStore {
       this.authoredStore.replace(
         {
           storedSources: loadedStored.length > 0 ? loadedStored : this.storedSources,
-          eqSources: loadedEq.length > 0 ? loadedEq : this.eqSources,
+          eqSources:
+            loadedEq.length > 0 ? loadedEq.map(normalizeEqSourceConfig) : this.eqSources,
           unionSources: loadedUnion.length > 0 ? loadedUnion : this.unionSources,
         },
         false
@@ -404,7 +411,7 @@ export class SourceStore {
         gainDb: initialCutDb,
         enabled: true,
       };
-      const createdEq: EqualizerSourceConfig = {
+      const createdEq: EqualizerSourceConfig = normalizeEqSourceConfig({
         id,
         name: `Feedback Notch (${track.slotName})`,
         color: '#10b981',
@@ -412,7 +419,7 @@ export class SourceStore {
         bands,
         targetSourceId: track.slotId,
         createdAt: new Date().toISOString(),
-      };
+      });
       this.authoredStore.update((s) => ({
         ...s,
         eqSources: [...s.eqSources, createdEq],
@@ -461,22 +468,22 @@ export class SourceStore {
       eqSources: updateInList(
         s.eqSources,
         targetEq.id,
-        (eq) => ({
-          ...eq,
-          visible: true,
-          bands: eq.bands.map((b, idx) =>
-            idx === bandIdxToUpdate
-              ? {
-                  ...b,
-                  type: 'peaking',
-                  frequency: freqHz,
-                  q: qVal,
-                  gainDb: nextGainDb,
-                  enabled: true,
-                }
-              : b
+        (eq) =>
+          syncEqConfigWithBands(
+            { ...eq, visible: true },
+            eq.bands.map((b, idx) =>
+              idx === bandIdxToUpdate
+                ? {
+                    ...b,
+                    type: 'peaking',
+                    frequency: freqHz,
+                    q: qVal,
+                    gainDb: nextGainDb,
+                    enabled: true,
+                  }
+                : b
+            )
           ),
-        }),
         this.persistence.saveEq
       ),
     }));
@@ -594,6 +601,21 @@ export class SourceStore {
     return source;
   }
 
+  importFrdStoredSource(frdText: string, fileName?: string): SourceData {
+    const cleanName = fileName
+      ? fileName.replace(/\.(frd|cal|txt|csv)$/i, '')
+      : `Imported .FRD #${this.storedSources.length + 1}`;
+    const paletteIdx = (this.storedSources.length + 1) % DEFAULT_SOURCE_PALETTE.length;
+    const live = this.getLiveSource();
+    const imported = importFrdAsStoredSource(frdText, {
+      name: cleanName,
+      color: DEFAULT_SOURCE_PALETTE[paletteIdx],
+      sampleRate: live?.sampleRate ?? 48000,
+      binCount: live?.freqData.length ?? 2049,
+    });
+    return this.addStoredSource(imported);
+  }
+
   deleteStoredSource(id: string): void {
     this.authoredStore.update((s) => ({
       ...s,
@@ -666,12 +688,14 @@ export class SourceStore {
 
   addVirtualEqSource(): EqualizerSourceConfig {
     const id = generateShortId('eq');
+    const bands = createDefaultEqBands();
     const newEq: EqualizerSourceConfig = {
       id,
       name: `Virtual EQ #${this.eqSources.length + 1}`,
       color: '#10b981',
       visible: true,
-      bands: createDefaultEqBands(),
+      bands,
+      dsp: createDefaultEqDspConfig(bands),
       targetSourceId: this.getActiveLiveSourceId(),
       createdAt: new Date().toISOString(),
     };
@@ -711,7 +735,7 @@ export class SourceStore {
       eqSources: updateInList(
         s.eqSources,
         eqId,
-        (eq) => ({ ...eq, bands: createRoomModeFlattenEqBands() }),
+        (eq) => syncEqConfigWithBands(eq, createRoomModeFlattenEqBands()),
         this.persistence.saveEq
       ),
     }));
@@ -731,6 +755,22 @@ export class SourceStore {
     this.notify();
   }
 
+  updateEqDsp(eqId: string, patch: SourceDspPatch, txKey?: string): void {
+    this.authoredStore.update(
+      (s) => ({
+        ...s,
+        eqSources: updateInList(
+          s.eqSources,
+          eqId,
+          (eq) => applyPatchToEqConfig(eq, patch),
+          this.persistence.saveEq
+        ),
+      }),
+      txKey
+    );
+    this.notify();
+  }
+
   updateEqBand(
     eqId: string,
     bandIdx: number,
@@ -743,10 +783,11 @@ export class SourceStore {
         eqSources: updateInList(
           s.eqSources,
           eqId,
-          (eq) => ({
-            ...eq,
-            bands: eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b)),
-          }),
+          (eq) =>
+            syncEqConfigWithBands(
+              eq,
+              eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b))
+            ),
           this.persistence.saveEq
         ),
       }),
@@ -768,7 +809,7 @@ export class SourceStore {
           const bands = eq.bands.map((b, i) =>
             i === bandIndex ? { ...b, frequency, gainDb } : b
           );
-          const updated = { ...eq, bands };
+          const updated = syncEqConfigWithBands(eq, bands);
           this.scheduleDebouncedEqSave(updated);
           return updated;
         }),

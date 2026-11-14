@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DEFAULT_ATMOSPHERE } from '@foh/acoustics';
+import { DEFAULT_SOURCE_DSP_CONFIG } from '@foh/dsp';
 import { describe, expect, it } from 'vitest';
 import { getBuiltinSpeakerMap } from '../../src/library/builtin-speakers.js';
 import type { ProjectScene } from '../../src/model/project-types.js';
-import { DEFAULT_ATMOSPHERE } from '../../src/physics/atmosphere.js';
-import { DEFAULT_SOURCE_DSP_CONFIG } from '../../src/physics/biquad.js';
 import { evaluatePlanGrid } from '../../src/physics/summation-solver.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../../src/physics/transform3d.js';
-import { evaluateVirtualMic } from '../../src/physics/virtual-mic-solver.js';
+import { evaluateVirtualMic, exportVirtualMicToFrd } from '../../src/physics/virtual-mic-solver.js';
 
 function createBasePointScene(): ProjectScene {
   return {
@@ -175,6 +175,16 @@ describe('summation-solver & virtual-mic-solver', () => {
     expect(res.rows).toBe(11);
     expect(res.stats.audienceSampleCount).toBeGreaterThan(100);
     expect(res.stats.maxAudienceSplDb).toBeGreaterThan(res.stats.minAudienceSplDb);
+
+    const micRes = evaluateVirtualMic(
+      { id: 'foh', name: 'FOH Center', color: '#fff', position: { x: 10, y: 0, z: 1.5 }, enabled: true },
+      scene,
+      speakerMap,
+      new Float32Array([100, 1000, 10000])
+    );
+    const frd = exportVirtualMicToFrd(micRes);
+    expect(frd).toContain('WebSpeakerSim Predicted Response — FOH Center');
+    expect(frd).toContain('1000.00\t');
   });
 });
 

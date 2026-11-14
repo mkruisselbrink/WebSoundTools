@@ -43,7 +43,7 @@ import {
   resolveEffectiveReferenceChannel,
   splitMeasurementConfigPartial,
 } from './analyzer-pipeline.js';
-import { parseCalibrationFile } from './calibration.js';
+import { parseCalibrationFile } from '@foh/acoustics';
 import {
   SignalGenerator,
   SignalGeneratorConfig,

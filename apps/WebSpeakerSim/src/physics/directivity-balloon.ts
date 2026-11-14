@@ -23,13 +23,13 @@
  * complex interpolation, and analytical piston + horn synthesis (`src/physics/directivity-balloon.ts`).
  */
 
-import { ISO_THIRD_OCTAVE_BANDS_HZ } from './atmosphere.js';
+import { ISO_THIRD_OCTAVE_BANDS_HZ } from '@foh/acoustics';
 import {
   DSP_REFERENCE_SAMPLE_RATE_HZ,
   designCrossoverSections,
   evaluateBiquadCascade,
   type ComplexSample,
-} from './biquad.js';
+} from '@foh/dsp';
 import { DEG_TO_RAD } from './transform3d.js';
 
 export type BalloonSymmetry = 'axial' | 'quadrant' | 'none';

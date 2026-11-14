@@ -1,27 +1,9 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundTools Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * O(1)-per-bin Prefix-Sum (Integral Array) Fractional-Octave Smoothing
- * and Fractional-Octave RTA Band Aggregation.
+ * O(1)-per-bin Prefix-Sum (Integral Array) Fractional-Octave Magnitude & Phase Smoothing.
  */
 
 export type OctaveSmoothingType =
@@ -144,66 +126,3 @@ export function smoothPhaseOctave(
     }
   }
 }
-
-export interface OctaveBandData {
-  readonly centerFrequencies: Float32Array;
-  readonly magnitudes: Float32Array;
-  readonly peaks: Float32Array;
-}
-
-/**
- * Generates standard fractional-octave band center frequencies (20 Hz .. 20 kHz, anchored at 1000 Hz)
- * and aggregates narrowband FFT bins into fractional-octave RTA bars.
- */
-export function aggregateFractionalOctaveBands(
-  frequencies: Float32Array,
-  module: Float32Array,
-  peakSquared: Float32Array,
-  bandsPerOctave: 1 | 3 | 6 | 12 | 24 = 3
-): OctaveBandData {
-  const stepRatio = Math.pow(2.0, 1.0 / bandsPerOctave);
-  const halfStep = Math.pow(2.0, 0.5 / bandsPerOctave);
-
-  // Generate centers around 1000 Hz within [20 Hz, 20000 Hz]
-  const centers: number[] = [];
-  const minIndex = Math.ceil(bandsPerOctave * Math.log2(20.0 / 1000.0));
-  const maxIndex = Math.floor(bandsPerOctave * Math.log2(20000.0 / 1000.0));
-  for (let idx = minIndex; idx <= maxIndex; idx++) {
-    centers.push(1000.0 * Math.pow(stepRatio, idx));
-  }
-
-  const numBands = centers.length;
-  const centerFrequencies = new Float32Array(centers);
-  const magnitudes = new Float32Array(numBands);
-  const peaks = new Float32Array(numBands);
-
-  const N = frequencies.length;
-  const df = N > 1 ? frequencies[1] - frequencies[0] : 1;
-
-  for (let b = 0; b < numBands; b++) {
-    const fc = centerFrequencies[b];
-    const fLow = fc / halfStep;
-    const fHigh = fc * halfStep;
-
-    const kStart = Math.max(1, Math.floor(fLow / df));
-    const kEnd = Math.min(N - 1, Math.ceil(fHigh / df));
-
-    let sumPower = 0;
-    let maxPeakSq = 0;
-    let count = 0;
-    for (let k = kStart; k <= kEnd; k++) {
-      const m = module[k];
-      sumPower += m * m;
-      if (peakSquared[k] > maxPeakSq) {
-        maxPeakSq = peakSquared[k];
-      }
-      count++;
-    }
-
-    magnitudes[b] = count > 0 ? Math.sqrt(sumPower / count) : 0;
-    peaks[b] = Math.sqrt(maxPeakSq);
-  }
-
-  return { centerFrequencies, magnitudes, peaks };
-}
-

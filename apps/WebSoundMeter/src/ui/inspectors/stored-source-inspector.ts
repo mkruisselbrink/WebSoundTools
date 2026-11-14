@@ -1,33 +1,17 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import { SourceData } from '../../sources/source-data.js';
 
 export interface StoredInspectorHandlers {
   readonly onDelete: (id: string) => void;
   readonly onUpdateStored: (
     id: string,
-    partial: Partial<Pick<SourceData, 'name' | 'gainOffsetDb' | 'delayOffsetMs'>>
+    partial: Partial<Pick<SourceData, 'name' | 'gainOffsetDb' | 'delayOffsetMs' | 'invertPolarity'>>
   ) => void;
+  readonly onExportFrd?: (stored: SourceData) => void;
 }
 
 export function renderStoredInspector(
@@ -38,9 +22,22 @@ export function renderStoredInspector(
     <div class="section-card" data-testid="inspector-stored-source">
       <div class="section-header">
         <span>Stored Trace</span>
-        <button style="color:#f43f5e;" @click=${() => handlers.onDelete(stored.id)}>
-          Delete
-        </button>
+        <div style="display:flex;gap:4px;">
+          ${handlers.onExportFrd
+            ? html`
+                <button
+                  data-testid="btn-export-stored-frd"
+                  title="Export Magnitude + Phase trace as .frd file"
+                  @click=${() => handlers.onExportFrd?.(stored)}
+                >
+                  Export .FRD
+                </button>
+              `
+            : nothing}
+          <button style="color:#f43f5e;" @click=${() => handlers.onDelete(stored.id)}>
+            Delete
+          </button>
+        </div>
       </div>
 
       <div class="prop-grid">
@@ -89,4 +86,3 @@ export function renderStoredInspector(
     </div>
   `;
 }
-

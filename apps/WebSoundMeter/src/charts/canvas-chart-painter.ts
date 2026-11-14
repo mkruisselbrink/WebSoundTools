@@ -27,12 +27,12 @@
  *  - Interactive Virtual EQ band handles and hover crosshair
  */
 
-import { BiquadSpec } from '../dsp/biquad.js';
+import { OctaveBandData, aggregateFractionalOctaveBands } from '@foh/acoustics';
+import { BiquadSpec } from '@foh/dsp';
 import {
   DetectedFeedbackTrack,
   MAX_VISIBLE_CALLOUT_FLAGS,
 } from '../dsp/feedback-detector.js';
-import { OctaveBandData, aggregateFractionalOctaveBands } from '../dsp/smoothing.js';
 import {
   DEFAULT_SPL_ALERT_THRESHOLDS,
   SplAlertThresholds,

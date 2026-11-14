@@ -36,7 +36,7 @@ import {
   GlTraceRenderer,
   parseCssColorToRgba,
 } from '../../src/charts/gl-trace-renderer.js';
-import { BiquadSpec } from '../../src/dsp/biquad.js';
+import { BiquadSpec } from '@foh/dsp';
 import { DEFAULT_SPL_ALERT_THRESHOLDS } from '../../src/dsp/spl-history.js';
 import {
   SourceData,

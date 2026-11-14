@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DEFAULT_ATMOSPHERE, computeSpeedOfSoundMpS } from '@foh/acoustics';
+import { DEFAULT_SOURCE_DSP_CONFIG } from '@foh/dsp';
 import { describe, expect, it } from 'vitest';
 import { getBuiltinSpeakerMap } from '../../src/library/builtin-speakers.js';
 import type { ProjectScene, SubArrayInstance } from '../../src/model/project-types.js';
-import { DEFAULT_ATMOSPHERE, computeSpeedOfSoundMpS } from '../../src/physics/atmosphere.js';
-import { DEFAULT_SOURCE_DSP_CONFIG } from '../../src/physics/biquad.js';
 import {
   computeQuarterWaveSpacingM,
   computeTimeAlignmentAtPoint,

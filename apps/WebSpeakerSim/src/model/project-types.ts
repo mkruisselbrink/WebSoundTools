@@ -23,8 +23,8 @@
  * DSP groups, virtual measurement microphones, and simulation settings (`src/model/project-types.ts`).
  */
 
-import type { AtmosphericConditions, FrequencyWeighting } from '../physics/atmosphere.js';
-import type { SourceDspConfig } from '../physics/biquad.js';
+import type { AtmosphericConditions, FrequencyWeighting } from '@foh/acoustics';
+import type { SourceDspConfig } from '@foh/dsp';
 import type { EulerOrientationDeg, PlanarReflector, Vec3 } from '../physics/transform3d.js';
 
 export type SurfaceRole = 'audience' | 'stage';

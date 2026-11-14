@@ -19,6 +19,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import {
+  OctaveSmoothingType,
+  WINDOW_FUNCTION_LABELS,
+  WindowFunctionType,
+} from '@foh/dsp';
 import { html, nothing, TemplateResult } from 'lit';
 import {
   InputPreFilterType,
@@ -31,16 +36,11 @@ import type {
   LiveMeasurementSlotConfig,
 } from '../../dsp/dsp.worker.js';
 import { FeedbackSensitivityMode } from '../../dsp/feedback-detector.js';
-import { OctaveSmoothingType } from '../../dsp/smoothing.js';
 import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
 } from '../../dsp/synthetic-rig.js';
 import { AveragingType, TransferEstimatorType } from '../../dsp/transfer-function.js';
-import {
-  WINDOW_FUNCTION_LABELS,
-  WindowFunctionType,
-} from '../../dsp/window-functions.js';
 import { StoredCalibrationFile } from '../../sources/session-storage.js';
 
 export interface LiveMeasurementInspectorHandlers {

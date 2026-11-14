@@ -21,6 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { DeconvolutionAnalyzer } from '../../src/dsp/deconvolution.js';
+import { SyntheticAcousticRig } from '../../src/dsp/synthetic-rig.js';
 
 function createPrng(seed: number = 777): () => number {
   let state = seed >>> 0;
@@ -90,6 +91,26 @@ describe('DeconvolutionAnalyzer & Auto Delay Finder', () => {
     // Step response after t = 0 ms should step from ~0 to ~1
     expect(deconv.stepResponse[200]).toBeCloseTo(0.0, 2);
     expect(deconv.stepResponse[800]).toBeCloseTo(1.0, 2);
+  });
+
+  it('simulates expected propagation delay in SyntheticAcousticRig presets', () => {
+    const rig = new SyntheticAcousticRig(sampleRate, 'flat-delayed');
+    const deconv = new DeconvolutionAnalyzer(4096, sampleRate, 'hann');
+
+    const blockR = new Float32Array(4096);
+    const blockM = new Float32Array(4096);
+
+    const rand = createPrng(987654321);
+    for (let f = 0; f < 3; f++) {
+      for (let i = 0; i < 4096; i++) {
+        blockR[i] = rand() * 0.5;
+      }
+      rig.processBlock(blockR, blockM);
+    }
+
+    const est = deconv.processTimeDomain(blockM, blockR, 0);
+    expect(est.delaySamples).toBe(480);
+    expect(est.delayMs).toBeCloseTo(10.0, 1);
   });
 });
 

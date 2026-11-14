@@ -26,7 +26,7 @@
  * and 3D directivity balloon magnitude/phase grids from user-supplied `.gll` files.
  */
 
-import { ISO_THIRD_OCTAVE_BANDS_HZ } from '../../physics/atmosphere.js';
+import { ISO_THIRD_OCTAVE_BANDS_HZ } from '@foh/acoustics';
 import {
   synthesizeParametricBalloon,
   type BalloonSymmetry,

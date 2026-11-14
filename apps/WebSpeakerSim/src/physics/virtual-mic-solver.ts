@@ -24,16 +24,17 @@
  * group delay, broadband SPL, and discrete ray arrival impulses.
  */
 
-import type { SpeakerDefinition } from '../library/speaker-schema.js';
-import type { ProjectScene, VirtualMicInstance } from '../model/project-types.js';
 import {
   computeAWeightingDb,
   computeAirAbsorptionTable,
   computeCWeightingDb,
   computeSpeedOfSoundMpS,
   createLogFrequencyGrid,
-} from './atmosphere.js';
-import { evaluateCompiledDspAtFrequency } from './biquad.js';
+  serializeFrdText,
+} from '@foh/acoustics';
+import { computeGroupDelayFromPhasorsMs, evaluateCompiledDspAtFrequency } from '@foh/dsp';
+import type { SpeakerDefinition } from '../library/speaker-schema.js';
+import type { ProjectScene, VirtualMicInstance } from '../model/project-types.js';
 import { sampleDirectivityBalloon } from './directivity-balloon.js';
 import { expandSceneRadiators, type ActiveRadiator } from './summation-solver.js';
 import { RAD_TO_DEG, computeLocalDirection } from './transform3d.js';
@@ -267,21 +268,9 @@ export function evaluateVirtualMicFromRadiators(
     sumZ += magSq * invBinNorm;
     sumA += magSq * wA * invBinNorm;
     sumC += magSq * wC * invBinNorm;
+  }
 
-    if (k > 0) {
-      // Phase difference via unit-phasor conjugate product H[k] * conj(H[k-1])
-      const prevRe = totalRe[k - 1];
-      const prevIm = totalIm[k - 1];
-      const crossRe = re * prevRe + im * prevIm;
-      const crossIm = im * prevRe - re * prevIm;
-      const dPhi = Math.atan2(crossIm, crossRe);
-      const df = Math.max(1e-6, frequenciesHz[k] - frequenciesHz[k - 1]);
-      groupDelayMs[k] = (-dPhi / (2 * Math.PI * df)) * 1000;
-    }
-  }
-  if (F > 1) {
-    groupDelayMs[0] = groupDelayMs[1];
-  }
+  computeGroupDelayFromPhasorsMs(frequenciesHz, totalRe, totalIm, groupDelayMs);
 
   return {
     micId: mic.id,
@@ -296,5 +285,18 @@ export function evaluateVirtualMicFromRadiators(
     broadbandSplCDb: sumC > 1e-18 ? 10 * Math.log10(sumC) : -120,
     arrivals,
   };
+}
+
+/**
+ * Exports a `VirtualMicResponse` as standard 3-column `.frd` text (`FreqHz\tMagDb\tPhaseDeg`)
+ * so predicted responses can be imported directly into WebSoundMeter as Stored Traces.
+ */
+export function exportVirtualMicToFrd(micResponse: VirtualMicResponse): string {
+  return serializeFrdText(
+    micResponse.frequenciesHz,
+    micResponse.magnitudeDbSpl,
+    micResponse.phaseDeg,
+    `WebSpeakerSim Predicted Response — ${micResponse.micName} (ref arrival ${micResponse.referenceDelayMs.toFixed(2)} ms, ${micResponse.broadbandSplADb.toFixed(1)} dBA)`
+  );
 }
 

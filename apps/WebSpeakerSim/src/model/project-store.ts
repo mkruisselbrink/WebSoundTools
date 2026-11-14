@@ -23,12 +23,12 @@
  * selection state, colormap settings, and merged speaker library (`src/model/project-store.ts`).
  */
 
+import type { AtmosphericConditions } from '@foh/acoustics';
+import { DEFAULT_SOURCE_DSP_CONFIG, type SourceDspConfig } from '@foh/dsp';
 import { ReactiveUndoStore } from '@foh/state';
 import { getBuiltinSpeakerMap } from '../library/builtin-speakers.js';
 import { getDemoPresetById } from '../library/demo-presets.js';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
-import type { AtmosphericConditions } from '../physics/atmosphere.js';
-import { DEFAULT_SOURCE_DSP_CONFIG, type SourceDspConfig } from '../physics/biquad.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 import type {
   AnalysisBandSelection,

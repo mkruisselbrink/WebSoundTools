@@ -22,7 +22,7 @@
  * Unified loudspeaker data structures (`src/library/speaker-schema.ts`).
  */
 
-import type { SourceDspConfig } from '../physics/biquad.js';
+import type { SourceDspConfig } from '@foh/dsp';
 import type { DirectivityBalloon } from '../physics/directivity-balloon.js';
 import type { Vec3 } from '../physics/transform3d.js';
 

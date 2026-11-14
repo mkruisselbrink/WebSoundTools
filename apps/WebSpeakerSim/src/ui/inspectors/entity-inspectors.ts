@@ -24,6 +24,14 @@
  * Virtual Microphones (including interactive Auto Time-Alignment), and Environment.
  */
 
+import { computeSpeedOfSoundMpS } from '@foh/acoustics';
+import {
+  compileDspChain,
+  evaluateCompiledDspAtFrequency,
+  type BiquadFilterType,
+  type CrossoverTopology,
+  type ParametricEqBand,
+} from '@foh/dsp';
 import { html, type TemplateResult } from 'lit';
 import type {
   ColormapPaletteId,
@@ -39,14 +47,6 @@ import type {
   SubArrayMode,
   VirtualMicInstance,
 } from '../../model/project-types.js';
-import { computeSpeedOfSoundMpS } from '../../physics/atmosphere.js';
-import {
-  compileDspChain,
-  evaluateCompiledDspAtFrequency,
-  type BiquadFilterType,
-  type CrossoverTopology,
-  type ParametricEqBand,
-} from '../../physics/biquad.js';
 import type { SimulationSnapshot } from '../../physics/sim-controller.js';
 import {
   computeQuarterWaveSpacingM,
@@ -55,6 +55,7 @@ import {
 } from '../../physics/sub-array-designer.js';
 import { expandSceneRadiators } from '../../physics/summation-solver.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../../physics/transform3d.js';
+import { exportVirtualMicToFrd } from '../../physics/virtual-mic-solver.js';
 
 export interface AlignmentUiState {
   readonly refGroupId: string;
@@ -1365,6 +1366,30 @@ function renderVirtualMicInspector(
                 <div><strong>${micRes.broadbandSplCDb.toFixed(1)}</strong> dBC</div>
                 <div><strong>${micRes.referenceDelayMs.toFixed(2)}</strong> ms</div>
               </div>
+              <button
+                class="btn btn-xs"
+                style="width:100%;margin-top:8px"
+                data-testid="btn-export-mic-frd"
+                title="Export predicted Magnitude + Phase curve as .frd for WebSoundMeter comparison"
+                @click=${() => {
+                  const frdText = exportVirtualMicToFrd(micRes);
+                  const blob = new Blob([frdText], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  const slug =
+                    mic.name
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .replace(/^-+|-+$/g, '') || 'virtual-mic';
+                  a.href = url;
+                  a.download = `${slug}-predicted.frd`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  alignUi.onNotify(`Exported "${mic.name}" predicted response (.frd)`);
+                }}
+              >
+                Export Predicted .FRD
+              </button>
             </div>
           `
         : ''}
