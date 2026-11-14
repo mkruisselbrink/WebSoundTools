@@ -103,6 +103,9 @@ export function paintViewportCadOverlay(
   // 1. Metric Grid
   drawMetricGrid(ctx, camera, cssWidth, cssHeight, mode);
 
+  // Track pill rectangles so Virtual Mic badges never collide with each other or Section label
+  const occupiedPills: Array<{ x: number; y: number; w: number; h: number }> = [];
+
   // 2. Ground Datum (Section View) or Centerline + Slice Line (Plan View)
   if (mode === 'section') {
     const groundRef = scene.reflectors.find((r) => r.id === DEFAULT_GROUND_REFLECTOR.id);
@@ -133,10 +136,13 @@ export function paintViewportCadOverlay(
     const label = `Section Y = ${sliceY.toFixed(1)} m`;
     ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
     const tw = ctx.measureText(label).width + 12;
+    const sx = cssWidth - tw - 10;
+    const sy = pSlice.py - 10;
+    occupiedPills.push({ x: sx - 3, y: sy - 2, w: tw + 6, h: 24 });
     ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.8)';
     ctx.beginPath();
-    ctx.roundRect(cssWidth - tw - 10, pSlice.py - 10, tw, 20, 4);
+    ctx.roundRect(sx, sy, tw, 20, 4);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#bae6fd';
@@ -322,8 +328,38 @@ export function paintViewportCadOverlay(
     ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
     const bw = ctx.measureText(badge).width + 10;
     const bh = 19;
-    const bx = p.px + 9 + bw <= cssWidth - 6 ? p.px + 9 : Math.max(6, p.px - 9 - bw);
-    const by = Math.max(6, Math.min(cssHeight - bh - 6, p.py - 10));
+    const clampX = (x: number) => Math.max(6, Math.min(cssWidth - bw - 6, x));
+    const clampY = (y: number) => Math.max(6, Math.min(cssHeight - bh - 6, y));
+    const candidates = [
+      { x: clampX(p.px + 9), y: clampY(p.py - 10), fitsRight: p.px + 9 + bw <= cssWidth - 6 },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - 28), fitsRight: true },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 10), fitsRight: true },
+      { x: clampX(p.px - 9 - bw), y: clampY(p.py - 10), fitsRight: true },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - 48), fitsRight: true },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 30), fitsRight: true },
+    ];
+    const overlapsAny = (cx: number, cy: number) =>
+      occupiedPills.some(
+        (r) => cx < r.x + r.w && cx + bw > r.x && cy < r.y + r.h && cy + bh > r.y
+      );
+    const chosen =
+      candidates.find((cnd) => cnd.fitsRight && !overlapsAny(cnd.x, cnd.y)) ?? candidates[1];
+    const bx = chosen.x;
+    const by = chosen.y;
+    occupiedPills.push({ x: bx - 2, y: by - 2, w: bw + 4, h: bh + 4 });
+
+    // Subtle leader tick when badge is displaced vertically from mic dot
+    if (Math.abs(by + bh * 0.5 - p.py) > 13) {
+      ctx.strokeStyle = mic.color;
+      ctx.globalAlpha = 0.65;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(p.px, p.py);
+      ctx.lineTo(Math.max(bx + 4, Math.min(bx + bw - 4, p.px)), by < p.py ? by + bh : by);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+    }
+
     ctx.fillStyle = 'rgba(6, 9, 17, 0.88)';
     ctx.strokeStyle = mic.color;
     ctx.lineWidth = 1;
@@ -631,9 +667,9 @@ function drawColormapLegendBar(
   cssWidth: number,
   cssHeight: number
 ): void {
-  if (cssWidth < 220 || cssHeight < 95) return;
+  if (cssWidth < 240 || cssHeight < 95) return;
 
-  const pillW = 172;
+  const pillW = 200;
   const pillH = 34;
   const x = cssWidth - pillW - 10;
   const y = cssHeight - pillH - 18;

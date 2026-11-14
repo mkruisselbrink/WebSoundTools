@@ -28,10 +28,12 @@ Open the local URL printed in your terminal (typically `http://localhost:5173`).
 
 1. **Top Control Bar:**
    - **Venue Preset & Project Controls (`Venue`, `Projects`, `Export`, `Import`, `Undo`, `Redo`):** Switch between built-in example venues, save named scenes inside your browser, or export/import portable `.wss-project.json` files.
-   - **Acoustic Analysis Controls (`Band`, `Contours`, `Ground Bounce`):**
+   - **Acoustic & Colormap Controls (`Band`, `Scale`, `Palette`, `Contours`, `Stepped`, `Ground Bounce`):**
      - **Band:** Choose what the heatmap displays—broadband pink noise (`dBA`, `dBC`, `dBZ`), a live-music spectral contour, the subwoofer passband (`31.5–100 Hz`), or any single octave band (`31.5 Hz` up to `16 kHz`).
-     - **Contours:** Draw `3 dB` or `6 dB` equal-level contour lines over the heatmap so you can judge drop-off even without relying on color alone.
-     - **Ground Bounce:** Toggle the 1st-order floor reflection (`Z = 0 m`) on or off to hear/see the effect of half-space subwoofer loading and floor comb filtering.
+     - **Scale:** Automatically window the SPL color scale around the room (`Auto 21 dB` default, `Auto ±3 dB` or `Auto ±6 dB` to spotlight subtle ripples across very even rooms, `Auto 36 dB` for wide stage-rejection views, or `Manual` to enter exact Min/Max dB limits).
+     - **Palette & Stepped:** Switch between high-discrimination **`Rainbow`**, monotonic luminance **`Thermal`**, or colorblind-safe **`Viridis`**, and click **`Stepped`** to quantize smooth gradients into discrete dB isobar bands. Each viewport also displays a live dB colorbar legend in its bottom-right corner.
+     - **Contours:** Draw `1 dB`, `2 dB`, `3 dB`, or `6 dB` equal-level contour lines over both viewports (`Off` hides contours).
+     - **Ground Bounce:** Toggle the 1st-order floor reflection (`Z = 0 m`) on or off to inspect half-space subwoofer loading and floor comb filtering.
    - **Live Coverage Readout (`Mean`, `±3dB`, `Stage Rej`, `Sim`):**
      - **Mean:** Average predicted SPL across all active audience zones.
      - **±3dB:** Percentage of the audience listening area that falls within `±3 dB` of the average level (higher = smoother front-to-back and side-to-side coverage; `75%+` is highlighted in green).
@@ -47,7 +49,7 @@ Open the local URL printed in your terminal (typically `http://localhost:5173`).
    - **Bottom half (Inspector):** Displays editable coordinates, aiming angles, subwoofer array calculators, crossovers/EQ, or alignment tools for whichever item is currently selected.
 
 4. **Bottom Chart Drawer:**
-   - Displays predicted responses at every active **Virtual Microphone** (`Magnitude (dB)`, `Phase (°)`, `Group Delay`, and `Arrivals`), plus the venue-wide **`SPL Histogram`**.
+   - Displays auto-scaled responses at every active **Virtual Microphone** (`Magnitude (dB)` with a `30 / 60 / 80 dB` vertical span selector, `Phase (°)`, `Group Delay`, and `Arrivals`), plus the venue-wide **`SPL Histogram`**.
 
 ### Understanding the 3D Room Coordinates
 
@@ -87,7 +89,7 @@ Look at two clues right away:
 1. With **`Main L`** selected, verify **Symmetric L/R Pair** is checked—any position or angle tweak you make to `Main L` automatically updates `Main L (R)` in mirror symmetry.
 2. Adjust **Z Height** (`3.8 m`), **Azimuth** (`-12°` inward toe-in), and **Tilt** (`-11°` aiming roughly two-thirds of the way back into the room so louder near-field off-axis energy balances distance loss toward the back).
 3. Unmute **`Front Fill L`** (click **`Muted`** $\rightarrow$ **`On`**) to cover the near-field center gap with compact 8" cabinets sitting on the stage lip (`Z = 1.05 m`, `Tilt = -4°`).
-4. Switch **Band** back to **`Broadband Pink (dBA)`** and click the **`SPL Histogram`** tab in the bottom chart drawer.
+4. Switch **Band** back to **`Broadband Pink (dBA)`**, set **Scale** to **`Auto ±6 dB`** with **`2 dB`** contours to inspect fine coverage variations, and click the **`SPL Histogram`** tab in the bottom chart drawer.
 
 ![Balanced Club Coverage & SPL Histogram](./images/03-frontfills-coverage-histogram.png)
 
@@ -102,7 +104,7 @@ The **SPL Histogram** shows a tight green cluster centered around `105.9 dBA`, a
 ### Step 1: Observe Stage Wash with a Standard Broadside Line
 
 1. Load `Live Club — 12" Mains + Cardioid Subs + Front Fills` and set **Band** to **`63 Hz (Single Band)`**.
-2. *(Optional visual tip)* When viewing a full-output single sub frequency on a multi-sub array, click **Atmosphere, Colormap & Venue Bounds** at the bottom of the scene tree and set **Min / Max SPL** to `102` and `138 dB` so the full dynamic range maps cleanly across blue–green–orange–red.
+2. Set **Scale** in the top bar to **`Auto 36 dB`** so both peak audience bass and quieter stage nulls fit comfortably inside the color scale.
 3. Click **`Center Cardioid Subs`** under **Subwoofer Arrays** in the scene tree.
 4. Change **Array Mode** to **`Broadside Line`**.
 
@@ -229,3 +231,4 @@ Even if you only have a manufacturer's 1-page spec sheet, you can build a calibr
 | `L` | Open Loudspeaker Library, Spec Builder & File Importer |
 | `1` / `2` / `3` | Switch Viewport Layout (`Split` / `Plan` / `Section`) |
 | `Escape` | Close open modal or clear selection |
+
