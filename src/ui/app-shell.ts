@@ -88,7 +88,13 @@ import {
   syncBrowserUrlState,
 } from './url-state.js';
 
-export type LayoutPreset = 'tf-dual' | 'pa-triple' | 'rta-mix' | 'single';
+export type LayoutPreset =
+  | 'tf-dual'
+  | 'pa-triple'
+  | 'rta-mix'
+  | 'show-dual'
+  | 'show-triple'
+  | 'single';
 
 @customElement('web-sound-meter-app')
 export class WebSoundMeterApp extends LitElement {
@@ -141,6 +147,10 @@ export class WebSoundMeterApp extends LitElement {
   @state()
   private layoutPreset: LayoutPreset = 'pa-triple';
 
+  private tuningLayoutPreset: LayoutPreset = 'pa-triple';
+
+  private showLayoutPreset: LayoutPreset = 'show-dual';
+
   @state()
   private chartPlotTypes: PlotType[] = ['magnitude', 'phase', 'impulse'];
 
@@ -182,7 +192,7 @@ export class WebSoundMeterApp extends LitElement {
     const next = parseUrlViewState(window.location.search, this.getUrlViewState());
     const nextMode: WorkspaceMode = next.workspaceMode ?? 'tuning';
     this.workspaceMode = nextMode;
-    if (nextMode === 'show' && this.genConfig.enabled) {
+    if (nextMode === 'show' && this.audioInputMode === 'hardware' && this.genConfig.enabled) {
       this.updateGenerator({ enabled: false });
     }
     this.layoutPreset = next.layoutPreset;
@@ -216,6 +226,11 @@ export class WebSoundMeterApp extends LitElement {
     });
 
     this.workspaceMode = initialUrl.workspaceMode ?? session.workspaceMode ?? 'tuning';
+    this.tuningLayoutPreset =
+      session.layoutPreset === 'show-dual' || session.layoutPreset === 'show-triple'
+        ? 'pa-triple'
+        : session.layoutPreset;
+    this.showLayoutPreset = 'show-dual';
     this.tuningChartPlotTypes = [...session.chartPlotTypes];
     this.showChartPlotTypes = [...(session.showChartPlotTypes ?? ['rta', 'spl-history'])];
     this.splAlertThresholds = {
@@ -223,16 +238,19 @@ export class WebSoundMeterApp extends LitElement {
       ...session.splAlertThresholds,
     };
 
-    this.layoutPreset = initialUrl.layoutPreset;
     const hasExplicitUrlPlots =
       searchStr.includes('plots=') || searchStr.includes('layout=');
     if (this.workspaceMode === 'show' && !hasExplicitUrlPlots) {
+      this.layoutPreset = this.showLayoutPreset;
       this.chartPlotTypes = [...this.showChartPlotTypes];
     } else {
+      this.layoutPreset = initialUrl.layoutPreset;
       this.chartPlotTypes = initialUrl.chartPlotTypes;
       if (this.workspaceMode === 'show') {
+        this.showLayoutPreset = initialUrl.layoutPreset;
         this.showChartPlotTypes = [...initialUrl.chartPlotTypes];
       } else {
+        this.tuningLayoutPreset = initialUrl.layoutPreset;
         this.tuningChartPlotTypes = [...initialUrl.chartPlotTypes];
       }
     }
@@ -264,7 +282,7 @@ export class WebSoundMeterApp extends LitElement {
     this.engine.setGlobalReferenceChannel(this.globalReferenceChannel);
     this.engine.setLiveSlots(hydratedSlots);
     const safeGenConfig =
-      this.workspaceMode === 'show'
+      this.workspaceMode === 'show' && this.audioInputMode === 'hardware'
         ? { ...session.genConfig, enabled: false }
         : session.genConfig;
     this.engine.updateGeneratorConfig(safeGenConfig);
@@ -403,19 +421,23 @@ export class WebSoundMeterApp extends LitElement {
   private setWorkspaceMode(mode: WorkspaceMode): void {
     if (this.workspaceMode === mode) return;
     if (this.workspaceMode === 'tuning') {
+      this.tuningLayoutPreset = this.layoutPreset;
       this.tuningChartPlotTypes = [...this.chartPlotTypes];
     } else {
+      this.showLayoutPreset = this.layoutPreset;
       this.showChartPlotTypes = [...this.chartPlotTypes];
     }
 
     this.workspaceMode = mode;
     if (mode === 'show') {
-      // Safety interlock: immediately mute internal test signal generator when entering Show mode
-      if (this.genConfig.enabled) {
+      // Safety interlock: mute hardware output test generator when entering Show mode
+      if (this.audioInputMode === 'hardware' && this.genConfig.enabled) {
         this.updateGenerator({ enabled: false });
       }
+      this.layoutPreset = this.showLayoutPreset;
       this.chartPlotTypes = [...this.showChartPlotTypes];
     } else {
+      this.layoutPreset = this.tuningLayoutPreset;
       this.chartPlotTypes = [...this.tuningChartPlotTypes];
     }
     this.persistState('push');
@@ -443,8 +465,10 @@ export class WebSoundMeterApp extends LitElement {
     this.layoutPreset = preset;
     this.chartPlotTypes = plotsForLayoutPreset(preset, this.chartPlotTypes[0]);
     if (this.workspaceMode === 'show') {
+      this.showLayoutPreset = preset;
       this.showChartPlotTypes = [...this.chartPlotTypes];
     } else {
+      this.tuningLayoutPreset = preset;
       this.tuningChartPlotTypes = [...this.chartPlotTypes];
     }
     this.persistState('push');
@@ -475,6 +499,9 @@ export class WebSoundMeterApp extends LitElement {
     const modeChanged = this.audioInputMode !== mode;
     this.audioInputMode = mode;
     if (mode === 'hardware') {
+      if (this.workspaceMode === 'show' && this.genConfig.enabled) {
+        this.updateGenerator({ enabled: false });
+      }
       this.selectedDeviceId = deviceId;
       const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
       this.selectedDeviceLabel = dev ? dev.label : '';
@@ -698,6 +725,10 @@ export class WebSoundMeterApp extends LitElement {
 
   render() {
     const allSources = this.sourceStore.getAllSources();
+    const chartSources =
+      this.workspaceMode === 'show'
+        ? allSources.filter((s) => s.kind !== 'stored' && s.kind !== 'union')
+        : allSources;
     const activeEq = this.sourceStore.getActiveEq();
     const activeLiveId = this.sourceStore.getActiveLiveSourceId();
     const activeSlot = this.getActiveLiveSlot();
@@ -758,7 +789,7 @@ export class WebSoundMeterApp extends LitElement {
               <chart-panel
                 data-testid="chart-panel-${idx}"
                 .plotType=${pt}
-                .sources=${allSources}
+                .sources=${chartSources}
                 .eqBands=${activeEq ? activeEq.bands : null}
                 .splAlertThresholds=${this.splAlertThresholds}
                 @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {
@@ -785,15 +816,29 @@ export class WebSoundMeterApp extends LitElement {
 
         ${this.workspaceMode === 'show'
           ? renderShowSidebar({
+              audioInputMode: this.audioInputMode,
+              availableChannels: this.availableChannels,
+              globalReferenceChannel: this.globalReferenceChannel,
+              selectedSourceId: activeLiveId,
               liveSlots: this.engine?.getLiveSlots() ?? [],
               liveSources: this.sourceStore.getLiveSources(),
               feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
               splAlertThresholds: this.splAlertThresholds,
               onAddLiveSource: this.handleAddLiveSource,
+              onSelectSlot: (slotId) => {
+                this.sourceStore.setSelectedSourceId(slotId);
+                this.persistState('replace');
+              },
+              onDeleteSlot: (slotId) => this.handleDeleteLiveSlot(slotId),
               onToggleSlotVisibility: (id, vis) => {
                 this.sourceStore.toggleVisibility(id, vis);
                 this.engine?.updateLiveSlot(id, { visible: vis });
                 this.persistState('none');
+              },
+              onUpdateSlotMeta: (slotId, partial) => {
+                this.engine?.updateLiveSlot(slotId, partial);
+                this.persistState(partial.simulatorPreset !== undefined ? 'push' : 'none');
+                this.requestUpdate();
               },
               onSlotFeedbackModeChange: (slotId, mode) => {
                 this.engine?.updateMeasurementConfig({ feedbackMode: mode }, slotId);

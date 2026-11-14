@@ -72,15 +72,35 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
           @change=${(e: Event) =>
             props.onLayoutPresetChange((e.target as HTMLSelectElement).value as LayoutPreset)}
         >
-          <option value="pa-triple">PA Alignment (Mag + Phase + Impulse)</option>
-          <option value="tf-dual">Transfer Function (Mag + Phase)</option>
-          <option value="rta-mix">Live Mixing (RTA + Magnitude)</option>
-          <option value="single">Single Chart</option>
+          <optgroup label="Live Show Monitoring">
+            <option value="show-dual" ?selected=${props.layoutPreset === 'show-dual'}>
+              Live Show 2x (RTA + SPL History)
+            </option>
+            <option value="show-triple" ?selected=${props.layoutPreset === 'show-triple'}>
+              Live Show 3x (RTA + Mag + SPL History)
+            </option>
+            <option value="rta-mix" ?selected=${props.layoutPreset === 'rta-mix'}>
+              Live Mixing 2x (RTA + Magnitude)
+            </option>
+          </optgroup>
+          <optgroup label="System Tuning & Alignment">
+            <option value="pa-triple" ?selected=${props.layoutPreset === 'pa-triple'}>
+              PA Alignment 3x (Mag + Phase + Impulse)
+            </option>
+            <option value="tf-dual" ?selected=${props.layoutPreset === 'tf-dual'}>
+              Transfer Function 2x (Mag + Phase)
+            </option>
+            <option value="single" ?selected=${props.layoutPreset === 'single'}>
+              Single Chart 1x
+            </option>
+          </optgroup>
         </select>
       </div>
 
       ${renderInputRoutingGroup(props)}
-      ${mode === 'show' ? nothing : renderGeneratorGroup(props)}
+      ${mode === 'show' && props.audioInputMode === 'hardware'
+        ? nothing
+        : renderGeneratorGroup(props)}
       ${renderSplMeterGroup(props)}
     </header>
   `;

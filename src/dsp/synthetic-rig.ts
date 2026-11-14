@@ -40,7 +40,8 @@ export type SimulatorPresetId =
   | 'pa-room-modes'
   | 'sub-top-misaligned'
   | 'comb-filtering'
-  | 'noisy-crowd';
+  | 'noisy-crowd'
+  | 'feedback-ring-demo';
 
 export interface ReflectionTap {
   /** Additional delay relative to direct sound in milliseconds */
@@ -170,6 +171,35 @@ export const SIMULATOR_PRESETS: Record<SimulatorPresetId, SimulatorRigConfig> = 
     ],
     reflections: [{ delayMs: 4.2, gainDb: -11.0 }],
     ambientNoiseDbFs: -16.0,
+  },
+  'feedback-ring-demo': {
+    id: 'feedback-ring-demo',
+    name: '6. Live Show Feedback Ring (2.5 kHz & 630 Hz)',
+    description:
+      'Live FOH/Monitor mix with a runaway 2.48 kHz feedback howl (+16 dB) and a warm 630 Hz stage ring (+11.5 dB).',
+    propagationDelayMs: 8.5,
+    gainDb: 2.0,
+    polarity: 1,
+    eqFilters: [
+      { type: 'highpass', frequency: 35, q: 0.707 },
+      { type: 'peaking', frequency: 160, q: 2.0, gainDb: 4.0 },
+    ],
+    reflections: [{ delayMs: 6.5, gainDb: -16.0 }],
+    ambientNoiseDbFs: -50.0,
+    simulatedFeedbackRings: [
+      {
+        frequencyHz: 2480,
+        q: 35,
+        gainDb: 16.0,
+        toneLevelDbFs: -14.0,
+      },
+      {
+        frequencyHz: 630,
+        q: 24,
+        gainDb: 11.5,
+        toneLevelDbFs: -20.0,
+      },
+    ],
   },
 };
 

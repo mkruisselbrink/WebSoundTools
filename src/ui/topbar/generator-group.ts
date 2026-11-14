@@ -72,6 +72,8 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
         @change=${(e: Event) =>
           props.onGeneratorLevelChange(Number((e.target as HTMLSelectElement).value))}
       >
+        <option value="0">0 dBFS (Hot)</option>
+        <option value="-3">-3 dBFS</option>
         <option value="-6">-6 dBFS</option>
         <option value="-12">-12 dBFS</option>
         <option value="-18">-18 dBFS</option>

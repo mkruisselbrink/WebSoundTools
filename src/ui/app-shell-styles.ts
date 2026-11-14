@@ -370,6 +370,16 @@ export const appShellStyles = css`
     font-weight: 600;
   }
 
+  .mode-toggle-group button.active {
+    background: #0284c7;
+    color: #ffffff;
+  }
+
+  .mode-toggle-group button.show-active {
+    background: #059669;
+    color: #ffffff;
+  }
+
   /* Show Mode Top Bar SPL Metrics & Alert Badges */
   .spl-readout.alert-warn {
     border-color: #f59e0b;
@@ -451,6 +461,12 @@ export const appShellStyles = css`
     border: 1px solid #1e293b;
     border-radius: 5px;
     font-size: 12px;
+    cursor: pointer;
+  }
+
+  .show-mic-row.selected {
+    border-color: #38bdf8;
+    background: #172554;
   }
 
   .show-mic-top {

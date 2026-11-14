@@ -57,6 +57,8 @@ const VALID_LAYOUTS = new Set<LayoutPreset>([
   'pa-triple',
   'tf-dual',
   'rta-mix',
+  'show-dual',
+  'show-triple',
   'single',
 ]);
 const VALID_MODES = new Set<InputSourceMode>(['simulator', 'hardware']);
@@ -74,6 +76,10 @@ export function plotsForLayoutPreset(
       return ['magnitude', 'phase', 'impulse'];
     case 'rta-mix':
       return ['rta', 'magnitude'];
+    case 'show-dual':
+      return ['rta', 'spl-history'];
+    case 'show-triple':
+      return ['rta', 'magnitude', 'spl-history'];
     case 'single':
       return [currentFirstPlot];
   }

@@ -20,7 +20,11 @@
  */
 
 import { html, nothing, TemplateResult } from 'lit';
-import { LiveMeasurementSlotConfig } from '../dsp/dsp.worker.js';
+import { REFERENCE_CHANNEL_GLOBAL } from '../dsp/analyzer-pipeline.js';
+import {
+  InputSourceMode,
+  LiveMeasurementSlotConfig,
+} from '../dsp/dsp.worker.js';
 import {
   DetectedFeedbackTrack,
   FeedbackSensitivityMode,
@@ -29,15 +33,34 @@ import {
   SplAlertMetric,
   SplAlertThresholds,
 } from '../dsp/spl-history.js';
+import {
+  SIMULATOR_PRESETS,
+  SimulatorPresetId,
+} from '../dsp/synthetic-rig.js';
 import { SourceData } from '../sources/source-data.js';
 
 export interface ShowSidebarViewProps {
+  readonly audioInputMode?: InputSourceMode;
+  readonly availableChannels?: number;
+  readonly globalReferenceChannel?: number;
+  readonly selectedSourceId?: string;
   readonly liveSlots: readonly LiveMeasurementSlotConfig[];
   readonly liveSources: readonly SourceData[];
   readonly feedbackRingLog: readonly DetectedFeedbackTrack[];
   readonly splAlertThresholds: SplAlertThresholds;
   readonly onAddLiveSource?: () => void;
+  readonly onSelectSlot?: (slotId: string) => void;
+  readonly onDeleteSlot?: (slotId: string) => void;
   readonly onToggleSlotVisibility: (slotId: string, visible: boolean) => void;
+  readonly onUpdateSlotMeta?: (
+    slotId: string,
+    partial: Partial<
+      Pick<
+        LiveMeasurementSlotConfig,
+        'name' | 'simulatorPreset' | 'measurementChannel' | 'referenceChannel'
+      >
+    >
+  ) => void;
   readonly onSlotFeedbackModeChange: (
     slotId: string,
     mode: FeedbackSensitivityMode
@@ -54,6 +77,13 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
   for (const src of props.liveSources) {
     sourceById.set(src.id, src);
   }
+  const inputMode = props.audioInputMode ?? 'simulator';
+  const availCh = Math.max(2, props.availableChannels ?? 2);
+  const channelOptions = Array.from({ length: availCh }, (_, i) => i);
+  const globalRefCh = props.globalReferenceChannel ?? 1;
+  const globalRefLabel =
+    globalRefCh < 0 ? 'Internal Gen' : `In Ch ${globalRefCh + 1}`;
+  const canDeleteSlot = props.liveSlots.length > 1;
 
   return html`
     <aside class="sidebar show-sidebar" data-testid="show-sidebar">
@@ -82,15 +112,21 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
               levels?.rollingLeq?.leq15m.A ?? levels?.levelsDb.A.Leq ?? -40.0;
             const laf = levels?.levelsDb.A.Fast ?? -40.0;
             const fbMode = slot.config.feedbackMode ?? 'foh-normal';
+            const isSelected = props.selectedSourceId === slot.id;
 
             return html`
-              <div class="show-mic-row" data-testid="show-mic-${slot.id}">
+              <div
+                class="show-mic-row ${isSelected ? 'selected' : ''}"
+                data-testid="show-mic-${slot.id}"
+                @click=${() => props.onSelectSlot?.(slot.id)}
+              >
                 <div class="show-mic-top">
                   <div class="source-row-left">
                     <input
                       type="checkbox"
                       aria-label="Toggle visibility for ${slot.name}"
                       .checked=${src?.visible ?? slot.visible}
+                      @click=${(e: Event) => e.stopPropagation()}
                       @change=${(e: Event) =>
                         props.onToggleSlotVisibility(
                           slot.id,
@@ -103,13 +139,117 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                     ></span>
                     <strong class="source-name">${slot.name}</strong>
                   </div>
-                  <span class="show-mic-spl-badge">
-                    ${laeq15.toFixed(1)} Aeq15
-                    <small style="color:#94a3b8;">(${laf.toFixed(0)}F)</small>
-                  </span>
+                  <div style="display:flex;align-items:center;gap:4px;">
+                    <span class="show-mic-spl-badge">
+                      ${laeq15.toFixed(1)} Aeq15
+                      <small style="color:#94a3b8;">(${laf.toFixed(0)}F)</small>
+                    </span>
+                    ${canDeleteSlot && props.onDeleteSlot
+                      ? html`
+                          <button
+                            style="padding:1px 5px;color:#f43f5e;font-size:10px;"
+                            title="Remove ${slot.name}"
+                            @click=${(e: Event) => {
+                              e.stopPropagation();
+                              props.onDeleteSlot?.(slot.id);
+                            }}
+                          >
+                            ×
+                          </button>
+                        `
+                      : nothing}
+                  </div>
                 </div>
 
-                <div class="show-mic-bottom">
+                ${inputMode === 'simulator'
+                  ? html`
+                      <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
+                        <span class="label-muted">Sim Rig:</span>
+                        <select
+                          aria-label="Simulator Rig Preset for ${slot.name}"
+                          data-testid="select-show-sim-preset-${slot.id}"
+                          style="flex:1;min-width:0;"
+                          .value=${slot.simulatorPreset}
+                          @change=${(e: Event) =>
+                            props.onUpdateSlotMeta?.(slot.id, {
+                              simulatorPreset: (e.target as HTMLSelectElement)
+                                .value as SimulatorPresetId,
+                            })}
+                        >
+                          ${Object.values(SIMULATOR_PRESETS).map(
+                            (preset) =>
+                              html`<option
+                                value=${preset.id}
+                                ?selected=${preset.id === slot.simulatorPreset}
+                              >
+                                ${preset.name}
+                              </option>`
+                          )}
+                        </select>
+                      </div>
+                    `
+                  : html`
+                      <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
+                        <span class="label-muted">In M / R:</span>
+                        <div style="display:flex;gap:4px;flex:1;justify-content:flex-end;">
+                          <select
+                            aria-label="Measurement Channel for ${slot.name}"
+                            data-testid="select-show-meas-ch-${slot.id}"
+                            title="Measurement Input Channel (M)"
+                            .value=${String(slot.measurementChannel)}
+                            @change=${(e: Event) =>
+                              props.onUpdateSlotMeta?.(slot.id, {
+                                measurementChannel: Number(
+                                  (e.target as HTMLSelectElement).value
+                                ),
+                              })}
+                          >
+                            ${channelOptions.map(
+                              (ch) =>
+                                html`<option
+                                  value=${String(ch)}
+                                  ?selected=${ch === slot.measurementChannel}
+                                >
+                                  M: Ch ${ch + 1}
+                                </option>`
+                            )}
+                          </select>
+                          <select
+                            aria-label="Reference Channel for ${slot.name}"
+                            data-testid="select-show-ref-ch-${slot.id}"
+                            title="Reference Input Channel (R)"
+                            .value=${String(slot.referenceChannel)}
+                            @change=${(e: Event) =>
+                              props.onUpdateSlotMeta?.(slot.id, {
+                                referenceChannel: Number(
+                                  (e.target as HTMLSelectElement).value
+                                ),
+                              })}
+                          >
+                            <option
+                              value=${String(REFERENCE_CHANNEL_GLOBAL)}
+                              ?selected=${slot.referenceChannel === REFERENCE_CHANNEL_GLOBAL}
+                            >
+                              R: Global (${globalRefLabel})
+                            </option>
+                            <option value="-1" ?selected=${slot.referenceChannel === -1}>
+                              R: Loopback
+                            </option>
+                            ${channelOptions.map(
+                              (ch) =>
+                                html`<option
+                                  value=${String(ch)}
+                                  ?selected=${ch === slot.referenceChannel}
+                                >
+                                  R: Ch ${ch + 1}
+                                </option>`
+                            )}
+                          </select>
+                        </div>
+                      </div>
+                    `}
+
+                <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
                   <span class="label-muted">FB Watch:</span>
                   <select
                     aria-label="Feedback Watch Sensitivity for ${slot.name}"
@@ -287,3 +427,4 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
     </aside>
   `;
 }
+
