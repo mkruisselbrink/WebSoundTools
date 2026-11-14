@@ -30,9 +30,7 @@ import type { SimulationSnapshot } from '../physics/sim-controller.js';
 import { getChartPlotBox, paintChartCanvas } from './canvas-chart-painter.js';
 import { GlTraceRenderer } from './gl-trace-renderer.js';
 import {
-  SIM_PLOT_METADATA,
   computeAdaptivePlotBounds,
-  normXToValue,
   valueToNormX,
   valueToNormY,
   type MagnitudeSpanMode,
@@ -72,13 +70,16 @@ export class WssChartPanel extends LitElement {
       background: #0f172a;
       border-bottom: 1px solid #1e293b;
       font-size: 11px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow: hidden;
+      min-height: 29px;
     }
 
     .tab-group {
       display: flex;
       align-items: center;
       gap: 4px;
+      flex-shrink: 0;
     }
 
     .tab-btn {
@@ -125,12 +126,21 @@ export class WssChartPanel extends LitElement {
       font-size: 10.5px;
       color: #cbd5e1;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      min-width: 0;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+
+    .legend-bar::-webkit-scrollbar {
+      display: none;
     }
 
     .legend-item {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 5px;
+      flex-shrink: 0;
     }
 
     .dot {
@@ -175,9 +185,6 @@ export class WssChartPanel extends LitElement {
 
   @state()
   private magSpanMode: MagnitudeSpanMode = 'auto-60';
-
-  @state()
-  private cursorReadout = '';
 
   private glCanvas: HTMLCanvasElement | null = null;
   private overlayCanvas: HTMLCanvasElement | null = null;
@@ -370,62 +377,12 @@ export class WssChartPanel extends LitElement {
   private handlePointerMove(ev: PointerEvent): void {
     if (!this.overlayCanvas) return;
     const rect = this.overlayCanvas.getBoundingClientRect();
-    const px = ev.clientX - rect.left;
-    this.hoverPx = px;
-
-    const meta = SIM_PLOT_METADATA[this.plotType];
-    const box = getChartPlotBox(this.cssWidth, this.cssHeight);
-    if (px < box.left || px > box.left + box.width) {
-      this.cursorReadout = '';
-      this.requestRepaint();
-      return;
-    }
-
-    const responses = this.snapshot?.virtualMics ?? [];
-    const bounds = computeAdaptivePlotBounds(
-      this.plotType,
-      responses,
-      this.snapshot?.planGrid ?? null,
-      this.magSpanMode
-    );
-    const normX = (px - box.left) / box.width;
-    const xVal = normXToValue(normX, bounds.xMin, bounds.xMax, meta.xLog);
-
-    if (meta.xLog) {
-      const fStr = xVal >= 1000 ? `${(xVal / 1000).toFixed(2)} kHz` : `${xVal.toFixed(1)} Hz`;
-      const firstResp = this.snapshot?.virtualMics[0];
-      let valStr = '';
-      if (firstResp && firstResp.frequenciesHz.length > 0) {
-        let bestIdx = 0;
-        let bestDiff = Number.POSITIVE_INFINITY;
-        for (let i = 0; i < firstResp.frequenciesHz.length; i++) {
-          const d = Math.abs(firstResp.frequenciesHz[i] - xVal);
-          if (d < bestDiff) {
-            bestDiff = d;
-            bestIdx = i;
-          }
-        }
-        const yVal =
-          this.plotType === 'magnitude'
-            ? firstResp.magnitudeDbSpl[bestIdx]
-            : this.plotType === 'phase'
-              ? firstResp.phaseDeg[bestIdx]
-              : firstResp.groupDelayMs[bestIdx];
-        valStr = ` · ${firstResp.micName}: ${yVal.toFixed(1)} ${meta.yUnit}`;
-      }
-      this.cursorReadout = `${fStr}${valStr}`;
-    } else if (this.plotType === 'arrivals') {
-      this.cursorReadout = `t = ${xVal.toFixed(1)} ms`;
-    } else {
-      this.cursorReadout = `${xVal.toFixed(1)} dB SPL`;
-    }
-
+    this.hoverPx = ev.clientX - rect.left;
     this.requestRepaint();
   }
 
   private handlePointerLeave(): void {
     this.hoverPx = null;
-    this.cursorReadout = '';
     this.requestRepaint();
   }
 
@@ -476,7 +433,6 @@ export class WssChartPanel extends LitElement {
             : ''}
         </div>
         <div class="legend-bar">
-          ${this.cursorReadout ? html`<span>${this.cursorReadout}</span>` : ''}
           ${responses.map(
             (r) => html`
               <span class="legend-item">

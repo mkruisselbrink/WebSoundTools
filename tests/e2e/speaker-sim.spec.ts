@@ -221,9 +221,29 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     const steppedSnap = await readGlCanvasDataUrl();
     expect(steppedSnap).not.toBe(infernoSnap);
 
-    // 4. Verify Magnitude Span selector in <wss-chart-panel>
+    // 4. Verify Magnitude Span selector in <wss-chart-panel> and zero header wrap on hover
     await page.getByTestId('chart-mag-span-select').selectOption('auto-30');
     await expect(page.getByTestId('chart-mag-span-select')).toHaveValue('auto-30');
+
+    const getHeaderHeight = () =>
+      page.evaluate(() => {
+        const app = document.querySelector('web-speaker-sim-app');
+        const chart = app?.shadowRoot?.querySelector('wss-chart-panel');
+        const hdr = chart?.shadowRoot?.querySelector('.chart-header') as HTMLElement | null;
+        return hdr ? hdr.getBoundingClientRect().height : 0;
+      });
+
+    const beforeHoverHeight = await getHeaderHeight();
+    expect(beforeHoverHeight).toBeGreaterThan(20);
+
+    const chartDrawer = page.getByTestId('chart-drawer');
+    const box = await chartDrawer.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.65);
+      await page.waitForTimeout(60);
+    }
+    const duringHoverHeight = await getHeaderHeight();
+    expect(duringHoverHeight).toBe(beforeHoverHeight);
   });
 });
 

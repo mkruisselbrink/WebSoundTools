@@ -32,6 +32,7 @@ import {
   SIM_PLOT_METADATA,
   computeAudienceSplHistogram,
   formatFrequencyLabel,
+  normXToValue,
   valueToNormX,
   valueToNormY,
   type SimPlotType,
@@ -182,13 +183,13 @@ export function paintChartCanvas(
   ctx.lineWidth = 1;
   ctx.strokeRect(box.left, box.top, box.width, box.height);
 
-  // Hover cursor line
+  // Hover cursor line + floating canvas readout tooltip (zero header layout shift)
   if (
     params.hoverPx !== null &&
     params.hoverPx >= box.left &&
     params.hoverPx <= box.left + box.width
   ) {
-    ctx.strokeStyle = 'rgba(248, 250, 252, 0.4)';
+    ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
@@ -196,6 +197,132 @@ export function paintChartCanvas(
     ctx.lineTo(params.hoverPx, box.top + box.height);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    paintHoverReadoutOverlay(ctx, params, micColorMap);
+  }
+
+  ctx.restore();
+}
+
+function paintHoverReadoutOverlay(
+  ctx: CanvasRenderingContext2D,
+  params: ChartPaintParams,
+  micColorMap: ReadonlyMap<string, string>
+): void {
+  const { plotType, box, xMin, xMax, yMin, yMax, hoverPx } = params;
+  if (hoverPx === null) return;
+
+  const meta = SIM_PLOT_METADATA[plotType];
+  const normX = (hoverPx - box.left) / Math.max(1, box.width);
+  const xVal = normXToValue(normX, xMin, xMax, meta.xLog);
+
+  interface ReadoutRow {
+    readonly color?: string;
+    readonly text: string;
+  }
+
+  let headerText = '';
+  const rows: ReadoutRow[] = [];
+
+  if (meta.xLog) {
+    headerText = xVal >= 1000 ? `${(xVal / 1000).toFixed(2)} kHz` : `${xVal.toFixed(1)} Hz`;
+    for (const resp of params.responses) {
+      if (resp.frequenciesHz.length === 0) continue;
+      let bestIdx = 0;
+      let bestDiff = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < resp.frequenciesHz.length; i++) {
+        const d = Math.abs(resp.frequenciesHz[i] - xVal);
+        if (d < bestDiff) {
+          bestDiff = d;
+          bestIdx = i;
+        }
+      }
+      const yVal =
+        plotType === 'magnitude'
+          ? resp.magnitudeDbSpl[bestIdx]
+          : plotType === 'phase'
+            ? resp.phaseDeg[bestIdx]
+            : resp.groupDelayMs[bestIdx];
+      const color = micColorMap.get(resp.micId) ?? '#38bdf8';
+
+      // Highlight tracked point on the curve when inside plot box
+      const ny = valueToNormY(yVal, yMin, yMax);
+      const py = box.top + (1 - ny) * box.height;
+      if (py >= box.top && py <= box.top + box.height) {
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = '#090d16';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(hoverPx, py, 3.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      rows.push({
+        color,
+        text: `${resp.micName}: ${yVal.toFixed(1)} ${meta.yUnit}`,
+      });
+    }
+  } else if (plotType === 'arrivals') {
+    headerText = `t = ${xVal.toFixed(1)} ms`;
+  } else {
+    const bins = computeAudienceSplHistogram(params.planGrid, xMin, xMax, 2);
+    const hitBin = bins.find((b) => xVal >= b.binMinDb && xVal < b.binMaxDb);
+    headerText = hitBin
+      ? `${hitBin.binMinDb.toFixed(0)}–${hitBin.binMaxDb.toFixed(0)} dB · ${hitBin.percentage.toFixed(1)}%`
+      : `${xVal.toFixed(1)} dB SPL`;
+  }
+
+  ctx.save();
+  ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
+
+  let maxW = ctx.measureText(headerText).width;
+  for (const r of rows) {
+    const w = ctx.measureText(r.text).width + (r.color ? 12 : 0);
+    if (w > maxW) maxW = w;
+  }
+
+  const padX = 8;
+  const padY = 5;
+  const lineH = 14;
+  const totalLines = 1 + rows.length;
+  const pillW = Math.ceil(maxW + padX * 2);
+  const pillH = padY * 2 + totalLines * lineH - 2;
+
+  const placeLeft = hoverPx + 10 + pillW > box.left + box.width - 4;
+  const px = placeLeft
+    ? Math.max(box.left + 4, hoverPx - 10 - pillW)
+    : Math.min(box.left + box.width - pillW - 4, hoverPx + 10);
+  const py = box.top + 6;
+
+  ctx.fillStyle = 'rgba(6, 9, 17, 0.90)';
+  ctx.strokeStyle = 'rgba(71, 85, 105, 0.9)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(px, py, pillW, pillH, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillText(headerText, px + padX, py + padY + lineH * 0.45);
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const ry = py + padY + (i + 1) * lineH + lineH * 0.45;
+    let tx = px + padX;
+    if (row.color) {
+      ctx.fillStyle = row.color;
+      ctx.beginPath();
+      ctx.arc(tx + 3.5, ry, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      tx += 11;
+    }
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(row.text, tx, ry);
   }
 
   ctx.restore();
