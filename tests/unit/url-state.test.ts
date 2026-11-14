@@ -106,4 +106,22 @@ describe('url-state', () => {
     );
     expect(replaceState).toHaveBeenCalledWith(null, '', '/?src=stored-99');
   });
+
+  it('serializes and parses Live Show workspaceMode via ?view=show and ?mode=show', () => {
+    const showState: UrlViewState = {
+      ...DEFAULT_URL_VIEW_STATE,
+      workspaceMode: 'show',
+      chartPlotTypes: ['rta', 'spl-history'],
+    };
+    const qs = serializeUrlViewState(showState);
+    expect(qs).toContain('view=show');
+    expect(qs).toContain('plots=rta%2Cspl-history');
+
+    const parsedFromView = parseUrlViewState(qs);
+    expect(parsedFromView.workspaceMode).toBe('show');
+    expect(parsedFromView.chartPlotTypes).toEqual(['rta', 'spl-history']);
+
+    const parsedFromModeAlias = parseUrlViewState('?mode=show');
+    expect(parsedFromModeAlias.workspaceMode).toBe('show');
+  });
 });

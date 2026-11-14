@@ -355,5 +355,240 @@ export const appShellStyles = css`
     border-radius: 4px;
     border-left: 3px solid #38bdf8;
   }
+
+  /* Workspace Mode Segmented Toggle */
+  .mode-toggle-group {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .mode-toggle-group button {
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Show Mode Top Bar SPL Metrics & Alert Badges */
+  .spl-readout.alert-warn {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+  }
+
+  .spl-readout.alert-limit {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.16);
+  }
+
+  .spl-show-metrics {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .spl-metric-chip {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    padding: 1px 4px;
+    border-left: 1px solid #334155;
+  }
+
+  .spl-metric-chip span {
+    font-size: 9px;
+    color: #94a3b8;
+    text-transform: uppercase;
+  }
+
+  .spl-metric-chip strong {
+    color: #f8fafc;
+    font-size: 11px;
+  }
+
+  .spl-alert-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+
+  .spl-alert-badge.ok {
+    background: rgba(16, 185, 129, 0.16);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.4);
+  }
+
+  .spl-alert-badge.warn {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid #f59e0b;
+  }
+
+  .spl-alert-badge.limit {
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    border: 1px solid #ef4444;
+  }
+
+  /* Show Sidebar */
+  .show-mic-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .show-mic-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 5px;
+    font-size: 12px;
+  }
+
+  .show-mic-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .show-mic-spl-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    color: #38bdf8;
+    font-weight: 600;
+  }
+
+  .show-mic-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  .label-muted {
+    color: #94a3b8;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .empty-ring-log {
+    font-size: 11px;
+    color: #64748b;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .ring-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .ring-log-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 5px;
+    font-size: 11px;
+  }
+
+  .ring-log-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .ring-severity-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .ring-severity-badge.crit {
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    border: 1px solid #ef4444;
+  }
+
+  .ring-severity-badge.warn {
+    background: rgba(245, 158, 11, 0.22);
+    color: #fbbf24;
+    border: 1px solid #f59e0b;
+  }
+
+  .ring-severity-badge.hold {
+    background: rgba(148, 163, 184, 0.16);
+    color: #94a3b8;
+    border: 1px solid #475569;
+  }
+
+  .ring-freq-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #f8fafc;
+  }
+
+  .ring-iso-tag {
+    font-size: 10px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #1e293b;
+    color: #38bdf8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .ring-meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  .btn-notch-eq {
+    background: #1e293b;
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-size: 11px;
+    padding: 3px 7px;
+    flex-shrink: 0;
+  }
+
+  .btn-notch-eq:hover {
+    background: #0284c7;
+    color: #ffffff;
+  }
+
+  .btn-primary-action {
+    background: #0284c7;
+    border-color: #38bdf8;
+    color: #ffffff;
+  }
 `;
 

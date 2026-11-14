@@ -19,8 +19,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { html, TemplateResult } from 'lit';
+import { html, nothing, TemplateResult } from 'lit';
 import type { LayoutPreset } from '../app-shell.js';
+import { WorkspaceMode } from '../url-state.js';
 import { GeneratorGroupProps, renderGeneratorGroup } from './generator-group.js';
 import {
   InputRoutingGroupProps,
@@ -32,15 +33,38 @@ export interface TopbarViewProps
   extends InputRoutingGroupProps,
     GeneratorGroupProps,
     SplMeterGroupProps {
+  readonly workspaceMode?: WorkspaceMode;
   readonly layoutPreset: LayoutPreset;
+  readonly onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
   readonly onLayoutPresetChange: (preset: LayoutPreset) => void;
 }
 
 export function renderTopbar(props: TopbarViewProps): TemplateResult {
+  const mode = props.workspaceMode ?? 'tuning';
+
   return html`
     <header class="topbar">
       <div class="brand">
         <span>WebSoundMeter</span>
+        <div class="mode-toggle-group" role="group" aria-label="Workspace Mode">
+          <button
+            class=${mode === 'tuning' ? 'active' : ''}
+            data-testid="btn-mode-tuning"
+            title="System Tuning & Alignment Mode"
+            @click=${() => props.onWorkspaceModeChange?.('tuning')}
+          >
+            🛠 Tuning
+          </button>
+          <button
+            class=${mode === 'show' ? 'active show-active' : ''}
+            data-testid="btn-mode-show"
+            title="Live Show Monitoring Mode (locks out Signal Generator & expands SPL / Feedback Watch)"
+            @click=${() => props.onWorkspaceModeChange?.('show')}
+          >
+            🎚 Show
+          </button>
+        </div>
+
         <select
           aria-label="Chart Layout"
           data-testid="select-layout"
@@ -56,9 +80,8 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
       </div>
 
       ${renderInputRoutingGroup(props)}
-      ${renderGeneratorGroup(props)}
+      ${mode === 'show' ? nothing : renderGeneratorGroup(props)}
       ${renderSplMeterGroup(props)}
     </header>
   `;
 }
-

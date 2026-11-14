@@ -40,6 +40,8 @@ import {
 } from '../dsp/weighting-meters.js';
 import type { LayoutPreset } from './app-shell.js';
 
+export type WorkspaceMode = 'tuning' | 'show';
+
 export interface UrlViewState {
   readonly layoutPreset: LayoutPreset;
   readonly chartPlotTypes: PlotType[];
@@ -48,6 +50,7 @@ export interface UrlViewState {
   readonly splWeighting: WeightingCurve;
   readonly splTime: MeterIntegrationTime;
   readonly selectedSourceId: string;
+  readonly workspaceMode?: WorkspaceMode;
 }
 
 const VALID_LAYOUTS = new Set<LayoutPreset>([
@@ -155,6 +158,14 @@ export function parseUrlViewState(
   const rawSrc = params.get('src')?.trim();
   const selectedSourceId = rawSrc && rawSrc.length > 0 ? rawSrc : base.selectedSourceId;
 
+  const rawView = params.get('view');
+  const workspaceMode: WorkspaceMode | undefined =
+    rawView === 'show' || rawMode === 'show'
+      ? 'show'
+      : rawView === 'tuning'
+        ? 'tuning'
+        : base.workspaceMode;
+
   return {
     layoutPreset,
     chartPlotTypes,
@@ -163,11 +174,16 @@ export function parseUrlViewState(
     splWeighting,
     splTime,
     selectedSourceId,
+    ...(workspaceMode && workspaceMode !== 'tuning' ? { workspaceMode } : {}),
   };
 }
 
 export function serializeUrlViewState(state: UrlViewState): string {
   const params = new URLSearchParams();
+
+  if (state.workspaceMode === 'show') {
+    params.set('view', 'show');
+  }
 
   if (state.layoutPreset !== DEFAULT_URL_VIEW_STATE.layoutPreset) {
     params.set('layout', state.layoutPreset);

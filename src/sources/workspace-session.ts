@@ -38,13 +38,17 @@ import {
   DEFAULT_GENERATOR_CONFIG,
   SignalGeneratorConfig,
 } from '../dsp/signal-generator.js';
+import {
+  DEFAULT_SPL_ALERT_THRESHOLDS,
+  SplAlertThresholds,
+} from '../dsp/spl-history.js';
 import { SimulatorPresetId } from '../dsp/synthetic-rig.js';
 import {
   MeterIntegrationTime,
   WeightingCurve,
 } from '../dsp/weighting-meters.js';
 import type { LayoutPreset } from '../ui/app-shell.js';
-import { DEFAULT_URL_VIEW_STATE } from '../ui/url-state.js';
+import { DEFAULT_URL_VIEW_STATE, WorkspaceMode } from '../ui/url-state.js';
 
 export const WORKSPACE_SESSION_STORAGE_KEY = 'web-sound-meter:workspace:v1';
 
@@ -69,8 +73,11 @@ export interface SerializedLiveSlot {
 
 export interface WorkspaceSessionSnapshot {
   readonly version: 1;
+  readonly workspaceMode?: WorkspaceMode;
   readonly layoutPreset: LayoutPreset;
   readonly chartPlotTypes: PlotType[];
+  readonly showChartPlotTypes?: PlotType[];
+  readonly splAlertThresholds?: SplAlertThresholds;
   readonly audioInputMode: InputSourceMode;
   readonly simulatorPreset: SimulatorPresetId;
   readonly splWeighting: WeightingCurve;
@@ -122,8 +129,11 @@ function hydrateLiveSlot(
 export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
   return {
     version: 1,
+    workspaceMode: 'tuning',
     layoutPreset: DEFAULT_URL_VIEW_STATE.layoutPreset,
     chartPlotTypes: [...DEFAULT_URL_VIEW_STATE.chartPlotTypes],
+    showChartPlotTypes: ['rta', 'spl-history'],
+    splAlertThresholds: { ...DEFAULT_SPL_ALERT_THRESHOLDS },
     audioInputMode: DEFAULT_URL_VIEW_STATE.audioInputMode,
     simulatorPreset: DEFAULT_URL_VIEW_STATE.simulatorPreset,
     splWeighting: DEFAULT_URL_VIEW_STATE.splWeighting,
@@ -176,11 +186,20 @@ export function loadWorkspaceSession(
 
     return {
       version: 1,
+      workspaceMode: parsed.workspaceMode ?? defaults.workspaceMode,
       layoutPreset: parsed.layoutPreset ?? defaults.layoutPreset,
       chartPlotTypes:
         Array.isArray(parsed.chartPlotTypes) && parsed.chartPlotTypes.length > 0
           ? parsed.chartPlotTypes
           : defaults.chartPlotTypes,
+      showChartPlotTypes:
+        Array.isArray(parsed.showChartPlotTypes) && parsed.showChartPlotTypes.length > 0
+          ? parsed.showChartPlotTypes
+          : defaults.showChartPlotTypes,
+      splAlertThresholds: {
+        ...DEFAULT_SPL_ALERT_THRESHOLDS,
+        ...(parsed.splAlertThresholds ?? {}),
+      },
       audioInputMode: parsed.audioInputMode ?? defaults.audioInputMode,
       simulatorPreset: parsed.simulatorPreset ?? hydratedSlots[0].simulatorPreset,
       splWeighting: parsed.splWeighting ?? defaults.splWeighting,

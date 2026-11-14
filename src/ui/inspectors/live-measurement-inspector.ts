@@ -30,6 +30,7 @@ import type {
   InputSourceMode,
   LiveMeasurementSlotConfig,
 } from '../../dsp/dsp.worker.js';
+import { FeedbackSensitivityMode } from '../../dsp/feedback-detector.js';
 import { OctaveSmoothingType } from '../../dsp/smoothing.js';
 import {
   SIMULATOR_PRESETS,
@@ -251,6 +252,25 @@ export function renderLiveMeasurementInspector(
           >
             ${cfg.invertPolarity ? 'Inverted (−180°)' : 'Normal (+)'}
           </button>
+        </div>
+
+        <div class="prop-field full-width">
+          <label>Feedback Watch Mode</label>
+          <select
+            aria-label="Feedback Watch Mode"
+            data-testid="select-feedback-mode"
+            .value=${cfg.feedbackMode ?? 'foh-normal'}
+            @change=${(e: Event) =>
+              handlers.onUpdateConfig({
+                feedbackMode: (e.target as HTMLSelectElement)
+                  .value as FeedbackSensitivityMode,
+              })}
+          >
+            <option value="foh-normal">FOH Normal (Balanced)</option>
+            <option value="monitor-sensitive">Monitor Sensitive (Fast)</option>
+            <option value="custom">Custom Thresholds</option>
+            <option value="off">Off</option>
+          </select>
         </div>
 
         <div class="prop-field full-width">
