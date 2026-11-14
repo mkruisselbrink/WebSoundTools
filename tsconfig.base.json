@@ -8,12 +8,12 @@
     "sourceMap": true,
     "target": "es2022",
     "module": "es2022",
-    "outDir": "dist",
+    "moduleResolution": "bundler",
     "lib": ["es2022"],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "skipLibCheck": true,
+    "noEmit": true,
     "types": []
   }
 }
-

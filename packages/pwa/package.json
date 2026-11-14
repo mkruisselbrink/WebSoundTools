@@ -1,0 +1,19 @@
+{
+  "name": "@foh/pwa",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    "./client": "./src/register-sw.ts",
+    "./sw": "./src/sw-core.ts",
+    "./vite": "./src/vite-pwa-plugin.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "vite": "^5.4.21"
+  }
+}

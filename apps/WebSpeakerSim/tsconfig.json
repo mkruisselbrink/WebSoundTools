@@ -1,9 +1,7 @@
 {
-  "extends": "./tsconfig_base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "es2022"],
-    "moduleResolution": "bundler",
-    "noEmit": true
+    "lib": ["dom", "dom.iterable", "es2022"]
   },
   "include": [
     "main.ts",
@@ -12,4 +10,3 @@
     "vite.config.ts"
   ]
 }
-

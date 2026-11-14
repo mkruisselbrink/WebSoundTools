@@ -1,6 +1,7 @@
 {
   "name": "web-sound-meter",
   "version": "0.1.0",
+  "private": true,
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -20,6 +21,13 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@foh/acoustics": "0.1.0",
+    "@foh/canvas": "0.1.0",
+    "@foh/charts": "0.1.0",
+    "@foh/dsp": "0.1.0",
+    "@foh/pwa": "0.1.0",
+    "@foh/state": "0.1.0",
+    "@foh/ui": "0.1.0",
     "lit": "^3.1.0"
   }
 }

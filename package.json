@@ -1,0 +1,30 @@
+{
+  "name": "web-sound-tools",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:wsm": "npm --workspace web-sound-meter run dev",
+    "dev:wss": "npm --workspace web-speaker-sim run dev",
+    "typecheck": "npm --workspaces --if-present run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm --workspace web-sound-meter run build && npm --workspace web-speaker-sim run build",
+    "test:e2e": "npm --workspace web-sound-meter run test:e2e && npm --workspace web-speaker-sim run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/audioworklet": "^0.0.50",
+    "typescript": "^5.3.2",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "lit": "^3.1.0"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@foh/charts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@foh/acoustics": "0.1.0",
+    "@foh/canvas": "0.1.0",
+    "@foh/dsp": "0.1.0",
+    "@foh/ui": "0.1.0",
+    "lit": "^3.1.0"
+  }
+}
