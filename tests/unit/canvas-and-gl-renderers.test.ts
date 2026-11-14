@@ -25,9 +25,11 @@ import {
   drawCanvasTrace,
   drawCursorCrosshair,
   drawEqHandles,
+  drawFeedbackCalloutFlags,
   drawGridAndAxes,
   drawRtaOctaveBars,
   drawRtaPeakLine,
+  drawSplHistoryPlot,
 } from '../../src/charts/canvas-chart-painter.js';
 import { ChartAxisBounds } from '../../src/charts/chart-interaction.js';
 import {
@@ -35,6 +37,7 @@ import {
   parseCssColorToRgba,
 } from '../../src/charts/gl-trace-renderer.js';
 import { BiquadSpec } from '../../src/dsp/biquad.js';
+import { DEFAULT_SPL_ALERT_THRESHOLDS } from '../../src/dsp/spl-history.js';
 import {
   SourceData,
   createEmptyFrequencyDomainData,
@@ -53,14 +56,19 @@ function createMock2dContext() {
     textBaseline: 'alphabetic',
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
+    rect: vi.fn(),
     beginPath: vi.fn(),
+    closePath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fill: vi.fn(),
     arc: vi.fn(),
     fillText: vi.fn(),
+    measureText: vi.fn(() => ({ width: 52 })),
     setLineDash: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
   } as unknown as CanvasRenderingContext2D;
 }
 
@@ -169,6 +177,65 @@ describe('canvas-chart-painter and gl-trace-renderer', () => {
     drawCursorCrosshair(ctx, 1000, true, freqBounds, box);
     expect(ctx.setLineDash).toHaveBeenCalledWith([4, 4]);
     expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+
+    // Draw SPL History plot & Feedback Callout Flags
+    const splSrc: SourceData = {
+      ...src,
+      splHistory: {
+        epochSeq: 3,
+        length: 3,
+        stepSec: 1.0,
+        timeSec: new Float32Array([-2, -1, 0]),
+        shortTermDbA: new Float32Array([88, 91, 94]),
+        shortTermDbC: new Float32Array([95, 98, 101]),
+        peakDb: new Float32Array([102, 105, 108]),
+        leq1mDbA: new Float32Array([87, 89, 92]),
+        leq1mDbC: new Float32Array([94, 96, 99]),
+        leq15mDbA: new Float32Array([86, 88, 90]),
+        leq60mDbA: new Float32Array([85, 87, 89]),
+      },
+      feedbackTracks: [
+        {
+          id: 'live-measurement:2500',
+          slotId: 'live-measurement',
+          slotName: 'FOH Mic',
+          slotColor: '#38bdf8',
+          state: 'feedback',
+          frequencyHz: 2480,
+          isoBandHz: 2500,
+          isoBandLabel: '2.5 kHz',
+          musicalNote: 'D#7 (-23c)',
+          prominenceDb: 15.2,
+          peakLevelDb: -4.0,
+          estimatedQ: 42,
+          durationMs: 480,
+          firstDetectedAt: new Date().toISOString(),
+          latchRemainingRatio: 1.0,
+        },
+      ],
+    };
+
+    drawGridAndAxes(ctx, 'spl-history', { xMin: -60, xMax: 0, yMin: 40, yMax: 125 }, box);
+    drawSplHistoryPlot(
+      ctx,
+      [splSrc],
+      'dba-fast-leq1m',
+      true,
+      DEFAULT_SPL_ALERT_THRESHOLDS,
+      { xMin: -60, xMax: 0, yMin: 40, yMax: 125 },
+      box
+    );
+    drawFeedbackCalloutFlags(
+      ctx,
+      [splSrc],
+      { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 },
+      box
+    );
+    expect(ctx.fillText).toHaveBeenCalledWith(
+      expect.stringContaining('2.48 kHz'),
+      expect.any(Number),
+      expect.any(Number)
+    );
   });
 
   it('parses CSS hex colors and handles WebGL2 availability and drawing', () => {

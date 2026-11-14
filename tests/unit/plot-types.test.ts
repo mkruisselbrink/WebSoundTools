@@ -21,9 +21,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  buildSplSeriesVertices,
   buildTraceVertices,
   computeCoherenceAlpha,
   computeCursorReadout,
+  formatRelativeTimeLabel,
   normXToValue,
   valueToNormX,
 } from '../../src/charts/plot-types.js';
@@ -137,6 +139,67 @@ describe('Plot Coordinate Mappers, Phase Wrap Break & Cursor Readout', () => {
 
     const stepReadout = computeCursorReadout('step', 2.5, [src]);
     expect(stepReadout.sourceValues[0].formattedValue).toBe('0.450');
+  });
+
+  it('builds SPL history vertices, formats relative time labels, and computes spl-history cursor readout', () => {
+    expect(formatRelativeTimeLabel(0)).toBe('0s');
+    expect(formatRelativeTimeLabel(-45)).toBe('-45s');
+    expect(formatRelativeTimeLabel(-900)).toBe('-15m');
+    expect(formatRelativeTimeLabel(-930)).toBe('-15m30s');
+    expect(formatRelativeTimeLabel(-7200)).toBe('-2h');
+
+    const timeSec = new Float32Array([-3, -2, -1, 0]);
+    const seriesDb = new Float32Array([85, 88, 92, 95]);
+    const vBuf = buildSplSeriesVertices(timeSec, seriesDb, 4, -5, 0, 50, 120);
+    expect(vBuf.vertexCount).toBe(4);
+
+    const src: SourceData = {
+      id: 'live-measurement',
+      name: 'FOH Mic',
+      kind: 'measurement',
+      color: '#38bdf8',
+      visible: true,
+      active: true,
+      gainOffsetDb: 0,
+      delayOffsetMs: 0,
+      invertPolarity: false,
+      notes: '',
+      createdAt: '',
+      sampleRate: 48000,
+      freqData: createEmptyFrequencyDomainData(65, 48000),
+      timeData: createEmptyTimeDomainData(128, 48000),
+      splHistory: {
+        epochSeq: 4,
+        length: 4,
+        stepSec: 1.0,
+        timeSec,
+        shortTermDbA: seriesDb,
+        shortTermDbC: new Float32Array([90, 92, 96, 99]),
+        peakDb: new Float32Array([100, 102, 106, 109]),
+        leq1mDbA: new Float32Array([84, 86, 89, 91]),
+        leq1mDbC: new Float32Array([89, 91, 94, 96]),
+        leq15mDbA: new Float32Array([83, 85, 87, 90]),
+        leq60mDbA: new Float32Array([82, 84, 86, 88]),
+      },
+    };
+
+    const traceVerts = buildTraceVertices(
+      src,
+      'spl-history',
+      -60,
+      0,
+      40,
+      125,
+      false,
+      0.35
+    );
+    expect(traceVerts.vertexCount).toBe(4);
+
+    const splReadout = computeCursorReadout('spl-history', -1.0, [src]);
+    expect(splReadout.isFrequencyDomain).toBe(false);
+    expect(splReadout.sourceValues[0].formattedValue).toContain('LAeq15: 87.0');
+    expect(splReadout.sourceValues[0].formattedValue).toContain('LAeq1: 89.0');
+    expect(splReadout.sourceValues[0].formattedValue).toContain('LAF: 92.0');
   });
 });
 

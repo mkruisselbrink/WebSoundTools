@@ -37,12 +37,13 @@ export type PlotType =
   | 'impulse'
   | 'etc'
   | 'step'
-  | 'group-delay';
+  | 'group-delay'
+  | 'spl-history';
 
 export interface PlotMetadata {
   readonly type: PlotType;
   readonly label: string;
-  readonly xUnit: 'Hz' | 'ms';
+  readonly xUnit: 'Hz' | 'ms' | 's';
   readonly yUnit: string;
   readonly isLogX: boolean;
   readonly defaultXMin: number;
@@ -149,6 +150,18 @@ export const PLOT_METADATA: Record<PlotType, PlotMetadata> = {
     defaultYMax: 20,
     yStep: 5,
   },
+  'spl-history': {
+    type: 'spl-history',
+    label: 'SPL / Leq History',
+    xUnit: 's',
+    yUnit: 'dB',
+    isLogX: false,
+    defaultXMin: -900,
+    defaultXMax: 0,
+    defaultYMin: 50,
+    defaultYMax: 115,
+    yStep: 10,
+  },
 };
 
 export const ISO_FREQUENCY_GRID_LINES = [
@@ -166,6 +179,26 @@ export function formatFrequencyLabel(freqHz: number): string {
     return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
   }
   return Number.isInteger(freqHz) ? `${freqHz}` : `${freqHz.toFixed(1)}`;
+}
+
+export function formatRelativeTimeLabel(sec: number): string {
+  if (Math.abs(sec) < 0.05) {
+    return '0s';
+  }
+  const absSec = Math.abs(sec);
+  const sign = sec < 0 ? '-' : '+';
+  if (absSec >= 3600 && Math.abs(absSec % 3600) < 0.1) {
+    return `${sign}${Math.round(absSec / 3600)}h`;
+  }
+  if (absSec >= 60 && Math.abs(absSec % 60) < 0.1) {
+    return `${sign}${Math.round(absSec / 60)}m`;
+  }
+  if (absSec >= 60) {
+    const m = Math.floor(absSec / 60);
+    const remS = Math.round(absSec - m * 60);
+    return `${sign}${m}m${remS}s`;
+  }
+  return `${sign}${Math.round(absSec)}s`;
 }
 
 /**
@@ -224,6 +257,39 @@ export interface TraceVertexBuffer {
 }
 
 /**
+ * Builds an interleaved `[ndcX, ndcY, alpha]` vertex buffer for an arbitrary time-series `(timeSec, valuesDb)`.
+ */
+export function buildSplSeriesVertices(
+  timeSec: Float32Array,
+  valuesDb: Float32Array,
+  length: number,
+  xMin: number,
+  xMax: number,
+  yMin: number,
+  yMax: number,
+  alpha: number = 1.0
+): TraceVertexBuffer {
+  const n = Math.min(length, timeSec.length, valuesDb.length);
+  const out = new Float32Array(n * 3);
+  let ptr = 0;
+
+  for (let i = 0; i < n; i++) {
+    const t = timeSec[i];
+    if (t < xMin || t > xMax) continue;
+    const nx = valueToNormX(t, xMin, xMax, false) * 2.0 - 1.0;
+    const ny = valueToNormY(valuesDb[i], yMin, yMax) * 2.0 - 1.0;
+    out[ptr++] = nx;
+    out[ptr++] = ny;
+    out[ptr++] = alpha;
+  }
+
+  return {
+    vertices: out.subarray(0, ptr),
+    vertexCount: ptr / 3,
+  };
+}
+
+/**
  * Builds an interleaved `[ndcX, ndcY, alpha]` vertex buffer in Normalized Device Coordinates `[-1, +1]`
  * for a given `SourceData` and `PlotType`.
  *
@@ -241,6 +307,23 @@ export function buildTraceVertices(
   coherenceThreshold: number = 0.35
 ): TraceVertexBuffer {
   const meta = PLOT_METADATA[plotType];
+
+  if (plotType === 'spl-history') {
+    const hist = source.splHistory;
+    if (!hist || hist.length === 0) {
+      return { vertices: new Float32Array(0), vertexCount: 0 };
+    }
+    return buildSplSeriesVertices(
+      hist.timeSec,
+      hist.leq15mDbA,
+      hist.length,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      1.0
+    );
+  }
 
   if (plotType === 'impulse' || plotType === 'etc' || plotType === 'step') {
     const td = source.timeData;
@@ -383,6 +466,48 @@ export function computeCursorReadout(
   const visibleSources = sources.filter((s) => s.visible && s.active);
 
   if (!meta.isLogX) {
+    if (plotType === 'spl-history') {
+      const sourceValues = visibleSources
+        .filter((src) => src.splHistory && src.splHistory.length > 0)
+        .map((src) => {
+          const hist = src.splHistory!;
+          const N = hist.length;
+          let lo = 0;
+          let hi = Math.max(0, N - 1);
+          while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (hist.timeSec[mid] < xValue) {
+              lo = mid + 1;
+            } else {
+              hi = mid;
+            }
+          }
+          let bestIdx = lo;
+          if (
+            lo > 0 &&
+            Math.abs(hist.timeSec[lo - 1] - xValue) <= Math.abs(hist.timeSec[lo] - xValue)
+          ) {
+            bestIdx = lo - 1;
+          }
+          const laeq15 = hist.leq15mDbA[bestIdx];
+          const laeq1 = hist.leq1mDbA[bestIdx];
+          const laf = hist.shortTermDbA[bestIdx];
+          const pk = hist.peakDb[bestIdx];
+          return {
+            sourceId: src.id,
+            name: src.name,
+            color: src.color,
+            formattedValue: `LAeq15: ${laeq15.toFixed(1)} | LAeq1: ${laeq1.toFixed(1)} | LAF: ${laf.toFixed(1)} | Pk: ${pk.toFixed(1)} dB`,
+          };
+        });
+
+      return {
+        isFrequencyDomain: false,
+        xValue,
+        sourceValues,
+      };
+    }
+
     // Time-domain readout
     const sourceValues = visibleSources.map((src) => {
       const td = src.timeData;

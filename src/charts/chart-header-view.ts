@@ -21,7 +21,12 @@
 
 import { html, nothing, TemplateResult } from 'lit';
 import {
+  SplHistoryTraceMode,
+  SplHistoryWindowSec,
+} from '../dsp/spl-history.js';
+import {
   CursorAcousticReadout,
+  formatRelativeTimeLabel,
   PLOT_METADATA,
   PlotType,
 } from './plot-types.js';
@@ -33,11 +38,19 @@ export interface ChartHeaderViewProps {
   readonly rtaMode: RtaDisplayMode;
   readonly showPeakHold: boolean;
   readonly coherenceAlpha: boolean;
+  readonly showFeedbackWatch?: boolean;
+  readonly splWindowSec?: SplHistoryWindowSec;
+  readonly splTraceMode?: SplHistoryTraceMode;
+  readonly showSplThresholds?: boolean;
   readonly cursorReadout: CursorAcousticReadout | null;
   readonly onPlotTypeChange: (e: Event) => void;
   readonly onRtaModeChange: (mode: RtaDisplayMode) => void;
   readonly onTogglePeakHold: (enabled: boolean) => void;
   readonly onToggleCoherenceAlpha: (enabled: boolean) => void;
+  readonly onToggleFeedbackWatch?: (enabled: boolean) => void;
+  readonly onSplWindowChange?: (windowSec: SplHistoryWindowSec) => void;
+  readonly onSplTraceModeChange?: (mode: SplHistoryTraceMode) => void;
+  readonly onToggleSplThresholds?: (enabled: boolean) => void;
   readonly onZoomY: (factor: number) => void;
   readonly onResetZoom: () => void;
 }
@@ -110,6 +123,81 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
               </label>
             `
           : nothing}
+
+        ${(props.plotType === 'rta' || props.plotType === 'magnitude') &&
+        props.onToggleFeedbackWatch
+          ? html`
+              <label
+                class="label-muted"
+                title="Overlay detected acoustic feedback and ringing callout flags"
+                style="display:flex;align-items:center;gap:3px;cursor:pointer;"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="toggle-feedback-watch"
+                  .checked=${props.showFeedbackWatch ?? true}
+                  @change=${(e: Event) =>
+                    props.onToggleFeedbackWatch!(
+                      (e.target as HTMLInputElement).checked
+                    )}
+                />
+                FB Watch
+              </label>
+            `
+          : nothing}
+
+        ${props.plotType === 'spl-history'
+          ? html`
+              <select
+                aria-label="SPL History Window"
+                data-testid="select-spl-window"
+                .value=${String(props.splWindowSec ?? 900)}
+                @change=${(e: Event) =>
+                  props.onSplWindowChange?.(
+                    Number(
+                      (e.target as HTMLSelectElement).value
+                    ) as SplHistoryWindowSec
+                  )}
+              >
+                <option value="60">1 min (4 Hz)</option>
+                <option value="300">5 min (4 Hz)</option>
+                <option value="900">15 min</option>
+                <option value="3600">60 min</option>
+                <option value="14400">4 hours</option>
+              </select>
+
+              <select
+                aria-label="SPL Trace Mode"
+                data-testid="select-spl-trace-mode"
+                .value=${props.splTraceMode ?? 'compliance-15m'}
+                @change=${(e: Event) =>
+                  props.onSplTraceModeChange?.(
+                    (e.target as HTMLSelectElement).value as SplHistoryTraceMode
+                  )}
+              >
+                <option value="compliance-15m">Compliance (LAeq15m + LAeq1m + Pk)</option>
+                <option value="dba-fast-leq1m">dBA (Fast + LAeq1m)</option>
+                <option value="dba-dbc-leq1m">dBA vs dBC (Leq1m)</option>
+                <option value="multi-slot">Multi-Mic Comparison (LAeq15m)</option>
+              </select>
+
+              <label
+                class="label-muted"
+                style="display:flex;align-items:center;gap:3px;cursor:pointer;"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="toggle-spl-thresholds"
+                  .checked=${props.showSplThresholds ?? true}
+                  @change=${(e: Event) =>
+                    props.onToggleSplThresholds?.(
+                      (e.target as HTMLInputElement).checked
+                    )}
+                />
+                Limits
+              </label>
+            `
+          : nothing}
       </div>
 
       ${ro
@@ -124,7 +212,9 @@ export function renderChartHeader(props: ChartHeaderViewProps): TemplateResult {
                       (${ro.wavelengthFeet!.toFixed(1)} ft)</span
                     >
                   `
-                : html`<span><strong>${ro.xValue.toFixed(2)} ms</strong></span>`}
+                : props.plotType === 'spl-history'
+                  ? html`<span><strong>${formatRelativeTimeLabel(ro.xValue)}</strong></span>`
+                  : html`<span><strong>${ro.xValue.toFixed(2)} ms</strong></span>`}
               ${ro.sourceValues.map(
                 (sv) => html`
                   <span class="cursor-source-badge" style="color:${sv.color}">

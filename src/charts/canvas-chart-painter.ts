@@ -28,7 +28,16 @@
  */
 
 import { BiquadSpec } from '../dsp/biquad.js';
+import {
+  DetectedFeedbackTrack,
+  MAX_VISIBLE_CALLOUT_FLAGS,
+} from '../dsp/feedback-detector.js';
 import { OctaveBandData, aggregateFractionalOctaveBands } from '../dsp/smoothing.js';
+import {
+  DEFAULT_SPL_ALERT_THRESHOLDS,
+  SplAlertThresholds,
+  SplHistoryTraceMode,
+} from '../dsp/spl-history.js';
 import { SourceData } from '../sources/source-data.js';
 import { ChartAxisBounds } from './chart-interaction.js';
 import {
@@ -36,7 +45,9 @@ import {
   ISO_MAJOR_FREQUENCIES,
   PLOT_METADATA,
   PlotType,
+  buildSplSeriesVertices,
   formatFrequencyLabel,
+  formatRelativeTimeLabel,
   valueToNormX,
   valueToNormY,
 } from './plot-types.js';
@@ -116,6 +127,34 @@ export function drawGridAndAxes(
         ctx.fillStyle = '#94a3b8';
         ctx.fillText(formatFrequencyLabel(f), px, plotTop + plotH + 5);
       }
+    }
+  } else if (plotType === 'spl-history') {
+    const xSpan = Math.max(10, xMax - xMin);
+    const xStep =
+      xSpan <= 90
+        ? 15
+        : xSpan <= 360
+          ? 60
+          : xSpan <= 1200
+            ? 180
+            : xSpan <= 4000
+              ? 600
+              : 1800;
+    const firstX = Math.ceil(xMin / xStep) * xStep;
+    for (let xVal = firstX; xVal <= xMax + 1e-6; xVal += xStep) {
+      const normX = valueToNormX(xVal, xMin, xMax, false);
+      const px = plotLeft + normX * plotW;
+      const isZero = Math.abs(xVal) < 1e-5;
+
+      ctx.strokeStyle = isZero ? '#475569' : '#1e293b';
+      ctx.lineWidth = isZero ? 1.25 : 1.0;
+      ctx.beginPath();
+      ctx.moveTo(px, plotTop);
+      ctx.lineTo(px, plotTop + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = isZero ? '#f8fafc' : '#94a3b8';
+      ctx.fillText(formatRelativeTimeLabel(xVal), px, plotTop + plotH + 5);
     }
   } else {
     const xSpan = xMax - xMin;
@@ -363,4 +402,336 @@ export function drawCursorCrosshair(
   ctx.stroke();
   ctx.setLineDash([]);
 }
+
+/**
+ * Renders the `'spl-history'` plot traces and accessible compliance threshold lines (`▲ WARN`, `◆ LIMIT`).
+ */
+export function drawSplHistoryPlot(
+  ctx: CanvasRenderingContext2D,
+  sources: readonly SourceData[],
+  traceMode: SplHistoryTraceMode,
+  showThresholds: boolean,
+  thresholds: SplAlertThresholds = DEFAULT_SPL_ALERT_THRESHOLDS,
+  bounds: ChartAxisBounds,
+  box: ChartPlotBox
+): void {
+  const { plotLeft, plotTop, plotW, plotH } = box;
+  const { xMin, xMax, yMin, yMax } = bounds;
+
+  // 1. Draw accessible warning & limit threshold guides
+  if (showThresholds && thresholds.enabled) {
+    const warnY = plotTop + (1.0 - valueToNormY(thresholds.warningDb, yMin, yMax)) * plotH;
+    const limitY = plotTop + (1.0 - valueToNormY(thresholds.limitDb, yMin, yMax)) * plotH;
+
+    // Danger band shading above limitDb
+    if (limitY > plotTop) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.08)';
+      ctx.fillRect(plotLeft, plotTop, plotW, Math.min(plotH, limitY - plotTop));
+    }
+
+    // Warning line (dashed amber + triangle badge)
+    if (warnY >= plotTop && warnY <= plotTop + plotH) {
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(plotLeft, warnY);
+      ctx.lineTo(plotLeft + plotW, warnY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(
+        `▲ WARN ${thresholds.warningDb.toFixed(0)} dB`,
+        plotLeft + 6,
+        Math.max(plotTop + 10, warnY - 3)
+      );
+      ctx.restore();
+    }
+
+    // Limit line (double solid red + diamond badge)
+    if (limitY >= plotTop && limitY <= plotTop + plotH) {
+      ctx.save();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(plotLeft, limitY);
+      ctx.lineTo(plotLeft + plotW, limitY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(
+        `◆ LIMIT ${thresholds.limitDb.toFixed(0)} dB (${thresholds.metric})`,
+        plotLeft + 6,
+        Math.max(plotTop + 10, limitY - 3)
+      );
+      ctx.restore();
+    }
+  }
+
+  const liveSourcesWithHistory = sources.filter(
+    (s) => s.splHistory && s.splHistory.length > 0
+  );
+  if (liveSourcesWithHistory.length === 0) {
+    return;
+  }
+
+  if (traceMode === 'multi-slot') {
+    for (const src of liveSourcesWithHistory) {
+      const hist = src.splHistory!;
+      const vBuf = buildSplSeriesVertices(
+        hist.timeSec,
+        hist.leq15mDbA,
+        hist.length,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        1.0
+      );
+      drawCanvasTrace(ctx, vBuf.vertices, vBuf.vertexCount, src.color, box);
+    }
+    return;
+  }
+
+  const primary = liveSourcesWithHistory[0];
+  const hist = primary.splHistory!;
+
+  if (traceMode === 'dba-dbc-leq1m') {
+    const vC = buildSplSeriesVertices(
+      hist.timeSec,
+      hist.leq1mDbC,
+      hist.length,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      0.85
+    );
+    drawCanvasTrace(ctx, vC.vertices, vC.vertexCount, '#f59e0b', box);
+
+    const vA = buildSplSeriesVertices(
+      hist.timeSec,
+      hist.leq1mDbA,
+      hist.length,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      1.0
+    );
+    drawCanvasTrace(ctx, vA.vertices, vA.vertexCount, primary.color, box);
+    return;
+  }
+
+  // Draw translucent short-term LAF envelope
+  const vFast = buildSplSeriesVertices(
+    hist.timeSec,
+    hist.shortTermDbA,
+    hist.length,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    0.35
+  );
+  drawCanvasTrace(ctx, vFast.vertices, vFast.vertexCount, primary.color, box);
+
+  if (traceMode === 'dba-fast-leq1m') {
+    const vLeq1 = buildSplSeriesVertices(
+      hist.timeSec,
+      hist.leq1mDbA,
+      hist.length,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      1.0
+    );
+    drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, '#10b981', box);
+    return;
+  }
+
+  // Default: 'compliance-15m' (LAeq,15m solid + LAeq,1m dashed + Peak subtle)
+  const vPeak = buildSplSeriesVertices(
+    hist.timeSec,
+    hist.peakDb,
+    hist.length,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    0.28
+  );
+  drawCanvasTrace(ctx, vPeak.vertices, vPeak.vertexCount, '#f43f5e', box);
+
+  ctx.save();
+  ctx.setLineDash([4, 3]);
+  const vLeq1 = buildSplSeriesVertices(
+    hist.timeSec,
+    hist.leq1mDbA,
+    hist.length,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    0.75
+  );
+  drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, '#94a3b8', box);
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  const vLeq15 = buildSplSeriesVertices(
+    hist.timeSec,
+    hist.leq15mDbA,
+    hist.length,
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    1.0
+  );
+  drawCanvasTrace(ctx, vLeq15.vertices, vLeq15.vertexCount, primary.color, box);
+}
+
+/**
+ * Draws collision-avoiding acoustic feedback & ringing callout flags on RTA / Magnitude charts.
+ */
+export function drawFeedbackCalloutFlags(
+  ctx: CanvasRenderingContext2D,
+  sources: readonly SourceData[],
+  bounds: ChartAxisBounds,
+  box: ChartPlotBox
+): void {
+  const { plotLeft, plotTop, plotW, plotH } = box;
+  const { xMin, xMax } = bounds;
+
+  const allTracks: DetectedFeedbackTrack[] = [];
+  for (const src of sources) {
+    if (src.feedbackTracks && src.feedbackTracks.length > 0) {
+      allTracks.push(...src.feedbackTracks);
+    }
+  }
+  if (allTracks.length === 0) return;
+
+  const stateRank = (s: DetectedFeedbackTrack['state']): number =>
+    s === 'feedback' ? 3 : s === 'ringing' ? 2 : 1;
+
+  allTracks.sort((a, b) => {
+    const r = stateRank(b.state) - stateRank(a.state);
+    return r !== 0 ? r : b.prominenceDb - a.prominenceDb;
+  });
+
+  const visibleTracks = allTracks.slice(0, MAX_VISIBLE_CALLOUT_FLAGS);
+  const occupiedBoxes: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+
+  ctx.save();
+  for (const track of visibleTracks) {
+    if (track.frequencyHz < xMin || track.frequencyHz > xMax) continue;
+    const normX = valueToNormX(track.frequencyHz, xMin, xMax, true);
+    const px = plotLeft + normX * plotW;
+
+    const alpha =
+      track.state === 'latched'
+        ? Math.max(0.25, 0.85 * track.latchRemainingRatio)
+        : 0.95;
+    const accentColor =
+      track.state === 'feedback'
+        ? '#ef4444'
+        : track.state === 'ringing'
+          ? '#f59e0b'
+          : '#94a3b8';
+    const icon =
+      track.state === 'feedback' ? '◆' : track.state === 'ringing' ? '▲' : '●';
+
+    // 1. Vertical marker line
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = track.state === 'feedback' ? 1.5 : 1.15;
+    if (track.state === 'ringing') {
+      ctx.setLineDash([5, 3]);
+    } else if (track.state === 'latched') {
+      ctx.setLineDash([2, 3]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(px, plotTop);
+    ctx.lineTo(px, plotTop + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 2. Collision-avoiding top callout pill
+    const freqText =
+      track.frequencyHz >= 1000
+        ? `${(track.frequencyHz / 1000).toFixed(2)} kHz`
+        : `${Math.round(track.frequencyHz)} Hz`;
+    const line1 = `${icon} ${freqText} (ISO ${track.isoBandLabel})`;
+    const line2 = `+${track.prominenceDb.toFixed(1)}dB • Q≈${Math.round(track.estimatedQ)} • ${track.musicalNote.split(' ')[0]} • ${track.slotName}`;
+
+    ctx.font = 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w1 = ctx.measureText(line1).width;
+    ctx.font = '9px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w2 = ctx.measureText(line2).width;
+    const pillW = Math.max(w1, w2) + 14;
+    const pillH = 28;
+
+    let pillLeft = Math.max(
+      plotLeft + 4,
+      Math.min(plotLeft + plotW - pillW - 4, px - pillW * 0.5)
+    );
+    let pillTop = plotTop + 6;
+
+    // Shift downward if overlapping an existing higher-priority pill
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const overlaps = occupiedBoxes.some(
+        (b) =>
+          pillLeft < b.right + 4 &&
+          pillLeft + pillW > b.left - 4 &&
+          pillTop < b.bottom + 3 &&
+          pillTop + pillH > b.top - 3
+      );
+      if (!overlaps) break;
+      pillTop += pillH + 4;
+    }
+
+    occupiedBoxes.push({
+      left: pillLeft,
+      right: pillLeft + pillW,
+      top: pillTop,
+      bottom: pillTop + pillH,
+    });
+
+    ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.rect(pillLeft, pillTop, pillW, pillH);
+    ctx.fill();
+    ctx.stroke();
+
+    // Slot color indicator bar on left edge of pill
+    ctx.fillStyle = track.slotColor;
+    ctx.fillRect(pillLeft, pillTop, 3, pillH);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(line1, pillLeft + 7, pillTop + 3);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '9px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText(line2, pillLeft + 7, pillTop + 15);
+  }
+  ctx.restore();
+}
+
 

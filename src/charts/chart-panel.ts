@@ -30,15 +30,23 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { BiquadSpec } from '../dsp/biquad.js';
+import {
+  DEFAULT_SPL_ALERT_THRESHOLDS,
+  SplAlertThresholds,
+  SplHistoryTraceMode,
+  SplHistoryWindowSec,
+} from '../dsp/spl-history.js';
 import { SourceData } from '../sources/source-data.js';
 import {
   ChartPlotBox,
   drawCanvasTrace,
   drawCursorCrosshair,
   drawEqHandles,
+  drawFeedbackCalloutFlags,
   drawGridAndAxes,
   drawRtaOctaveBars,
   drawRtaPeakLine,
+  drawSplHistoryPlot,
 } from './canvas-chart-painter.js';
 import { RtaDisplayMode, renderChartHeader } from './chart-header-view.js';
 import {
@@ -194,11 +202,26 @@ export class ChartPanelElement extends LitElement {
   @property({ type: Number })
   coherenceThreshold: number = 0.35;
 
+  @property({ attribute: false })
+  splAlertThresholds: SplAlertThresholds = DEFAULT_SPL_ALERT_THRESHOLDS;
+
   @state()
   private rtaMode: RtaDisplayMode = 'bars-3';
 
   @state()
   private showPeakHold: boolean = true;
+
+  @state()
+  private showFeedbackWatch: boolean = true;
+
+  @state()
+  private splWindowSec: SplHistoryWindowSec = 900;
+
+  @state()
+  private splTraceMode: SplHistoryTraceMode = 'compliance-15m';
+
+  @state()
+  private showSplThresholds: boolean = true;
 
   @state()
   private xMin: number = 20;
@@ -294,7 +317,7 @@ export class ChartPanelElement extends LitElement {
 
   private applyDefaultBoundsForPlot(type: PlotType): void {
     const meta = PLOT_METADATA[type];
-    this.xMin = meta.defaultXMin;
+    this.xMin = type === 'spl-history' ? -this.splWindowSec : meta.defaultXMin;
     this.xMax = meta.defaultXMax;
     this.yMin = meta.defaultYMin;
     this.yMax = meta.defaultYMax;
@@ -451,7 +474,17 @@ export class ChartPanelElement extends LitElement {
 
     const visibleSources = this.sources.filter((s) => s.visible && s.active);
 
-    if (this.plotType === 'rta' && this.rtaMode !== 'line') {
+    if (this.plotType === 'spl-history') {
+      drawSplHistoryPlot(
+        ctx,
+        visibleSources,
+        this.splTraceMode,
+        this.showSplThresholds,
+        this.splAlertThresholds,
+        bounds,
+        box
+      );
+    } else if (this.plotType === 'rta' && this.rtaMode !== 'line') {
       const bpo = this.rtaMode === 'bars-3' ? 3 : this.rtaMode === 'bars-6' ? 6 : 12;
       drawRtaOctaveBars(ctx, visibleSources, bpo, this.showPeakHold, bounds, box);
     } else {
@@ -479,6 +512,13 @@ export class ChartPanelElement extends LitElement {
       }
     }
 
+    if (
+      (this.plotType === 'rta' || this.plotType === 'magnitude') &&
+      this.showFeedbackWatch
+    ) {
+      drawFeedbackCalloutFlags(ctx, visibleSources, bounds, box);
+    }
+
     if (this.plotType === 'magnitude' && this.eqBands && this.eqBands.length > 0) {
       drawEqHandles(ctx, this.eqBands, bounds, box);
     }
@@ -499,6 +539,10 @@ export class ChartPanelElement extends LitElement {
         rtaMode: this.rtaMode,
         showPeakHold: this.showPeakHold,
         coherenceAlpha: this.coherenceAlpha,
+        showFeedbackWatch: this.showFeedbackWatch,
+        splWindowSec: this.splWindowSec,
+        splTraceMode: this.splTraceMode,
+        showSplThresholds: this.showSplThresholds,
         cursorReadout: this.cursorReadout,
         onPlotTypeChange: this.onPlotTypeChange,
         onRtaModeChange: (mode) => {
@@ -509,6 +553,31 @@ export class ChartPanelElement extends LitElement {
         },
         onToggleCoherenceAlpha: (enabled) => {
           this.coherenceAlpha = enabled;
+        },
+        onToggleFeedbackWatch: (enabled) => {
+          this.showFeedbackWatch = enabled;
+          this.scheduleDrawFrame();
+        },
+        onSplWindowChange: (windowSec) => {
+          this.splWindowSec = windowSec;
+          this.xMin = -windowSec;
+          this.xMax = 0;
+          this.dispatchEvent(
+            new CustomEvent('spl-window-change', {
+              detail: { windowSec },
+              bubbles: true,
+              composed: true,
+            })
+          );
+          this.scheduleDrawFrame();
+        },
+        onSplTraceModeChange: (mode) => {
+          this.splTraceMode = mode;
+          this.scheduleDrawFrame();
+        },
+        onToggleSplThresholds: (enabled) => {
+          this.showSplThresholds = enabled;
+          this.scheduleDrawFrame();
         },
         onZoomY: this.zoomY,
         onResetZoom: this.resetZoom,
