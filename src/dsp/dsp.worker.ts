@@ -124,6 +124,7 @@ let inputMode: InputSourceMode = 'simulator';
 let isPaused = false;
 let channelTapMap: Record<number, number> = { 0: 0, 1: 1 };
 let globalReferenceChannel = 1;
+let currentSplWindowSec: SplHistoryWindowSec = 900;
 
 const generator = new SignalGenerator(sampleRate);
 let ringBuffer: MultiChannelRingBuffer | null = null;
@@ -157,9 +158,11 @@ function getOrCreateSlotRuntime(slotId: string): LiveSlotRuntime {
       id: slotId,
       config: { ...def.config, ...sharedPartial, sampleRate },
     };
+    const pipeline = new MeasurementPipeline(slotCfg.config);
+    pipeline.setSplHistoryWindowSec(currentSplWindowSec);
     rt = {
       slot: slotCfg,
-      pipeline: new MeasurementPipeline(slotCfg.config),
+      pipeline,
       simulatorRig: new SyntheticAcousticRig(sampleRate, slotCfg.simulatorPreset),
     };
     slots.set(slotCfg.id, rt);
@@ -366,6 +369,7 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
               ...slotCfg.config,
               sampleRate,
             });
+            pipeline.setSplHistoryWindowSec(currentSplWindowSec);
             const simulatorRig = new SyntheticAcousticRig(
               sampleRate,
               slotCfg.simulatorPreset
@@ -508,20 +512,61 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         }
         break;
 
-      case 'set-spl-history-window':
+      case 'set-spl-history-window': {
+        currentSplWindowSec = msg.windowSec;
+        const frames = [];
         for (const rt of slots.values()) {
           rt.pipeline.setSplHistoryWindowSec(msg.windowSec);
+          const snapshot = rt.pipeline.computeTransform(0.04);
+          frames.push({
+            ...snapshot,
+            splHistory: rt.pipeline
+              .getSplHistoryTracker()
+              .exportWindow(msg.windowSec),
+            id: rt.slot.id,
+            name: rt.slot.name,
+            color: rt.slot.color,
+            visible: rt.slot.visible,
+          });
+        }
+        if (frames.length > 0) {
+          self.postMessage({
+            type: 'measurement-frames',
+            frames,
+          });
         }
         break;
+      }
 
-      case 'hydrate-spl-history':
+      case 'hydrate-spl-history': {
+        const frames = [];
         for (const cp of msg.checkpoints) {
           const rt = slots.get(cp.id);
           if (rt) {
             rt.pipeline.getSplHistoryTracker().hydrateCheckpoint(cp);
           }
         }
+        for (const rt of slots.values()) {
+          const snapshot = rt.pipeline.computeTransform(0.04);
+          frames.push({
+            ...snapshot,
+            splHistory: rt.pipeline
+              .getSplHistoryTracker()
+              .exportWindow(currentSplWindowSec),
+            id: rt.slot.id,
+            name: rt.slot.name,
+            color: rt.slot.color,
+            visible: rt.slot.visible,
+          });
+        }
+        if (frames.length > 0) {
+          self.postMessage({
+            type: 'measurement-frames',
+            frames,
+          });
+        }
         break;
+      }
 
       case 'export-spl-csv': {
         const slotTrackers = Array.from(slots.values()).map((rt) => ({

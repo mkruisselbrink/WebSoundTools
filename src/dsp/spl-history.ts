@@ -696,6 +696,26 @@ export class SplHistoryTracker {
       this.tierBLeq15mDbA[head] = rolling.leq15m.A;
       this.tierBLeq60mDbA[head] = rolling.leq60m.A;
       this.tierBPeakDb[head] = checkpoint.peakDb[i] ?? rolling.leq1m.Z;
+
+      // Backfill the most recent 300 seconds (5 minutes) into Tier A (4 x 250 ms epochs per second)
+      // so switching to 1m or 5m windows immediately displays full hydrated history.
+      if (i >= n - 300) {
+        const fastA = this.tierBShortDbA[head];
+        const fastC = this.tierBShortDbC[head];
+        const pkZ = this.tierBPeakDb[head];
+        const leq1A = rolling.leq1m.A;
+        for (let sub = 0; sub < 4; sub++) {
+          const aHead = this.tierAHead;
+          this.tierAFastDbA[aHead] = fastA;
+          this.tierAFastDbC[aHead] = fastC;
+          this.tierAPeakDbZ[aHead] = pkZ;
+          this.tierALeq1mDbA[aHead] = leq1A;
+          this.tierAHead = (this.tierAHead + 1) % SPL_TIER_A_CAPACITY;
+          if (this.tierACount < SPL_TIER_A_CAPACITY) {
+            this.tierACount++;
+          }
+        }
+      }
     }
 
     this.recomputeSlidingSums();

@@ -168,6 +168,8 @@ describe('SplHistoryTracker (Dual-Resolution 4-Hour Ring Buffer & Sliding Leq)',
     const restored = new SplHistoryTracker(48000, 100.0);
     expect(restored.hydrateCheckpoint(cp, nowMs + 5_000)).toBe(true);
     expect(restored.getTierBCount()).toBe(10);
+    expect(restored.getTierACount()).toBe(40);
+    expect(restored.exportWindow(300).length).toBe(40);
     expect(restored.getRollingLeq().leq1m.A).toBeCloseTo(80.0, 2);
 
     // Reject stale checkpoints older than 30 minutes
@@ -187,3 +189,4 @@ describe('SplHistoryTracker (Dual-Resolution 4-Hour Ring Buffer & Sliding Leq)',
     expect(lines[1]).toContain('live-measurement,FOH Mic,80.0,90.0,80.0,90.0,80.0,80.0,80.0,100.0');
   });
 });
+

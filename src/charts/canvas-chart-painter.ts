@@ -483,9 +483,10 @@ export function drawSplHistoryPlot(
     return;
   }
 
-  if (traceMode === 'multi-slot') {
-    for (const src of liveSourcesWithHistory) {
-      const hist = src.splHistory!;
+  for (const src of liveSourcesWithHistory) {
+    const hist = src.splHistory!;
+
+    if (traceMode === 'multi-slot') {
       const vBuf = buildSplSeriesVertices(
         hist.timeSec,
         hist.leq15mDbA,
@@ -497,54 +498,84 @@ export function drawSplHistoryPlot(
         1.0
       );
       drawCanvasTrace(ctx, vBuf.vertices, vBuf.vertexCount, src.color, box);
+      continue;
     }
-    return;
-  }
 
-  const primary = liveSourcesWithHistory[0];
-  const hist = primary.splHistory!;
+    if (traceMode === 'dba-dbc-leq1m') {
+      ctx.save();
+      ctx.setLineDash([5, 3]);
+      const vC = buildSplSeriesVertices(
+        hist.timeSec,
+        hist.leq1mDbC,
+        hist.length,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        0.75
+      );
+      drawCanvasTrace(ctx, vC.vertices, vC.vertexCount, src.color, box);
+      ctx.setLineDash([]);
+      ctx.restore();
 
-  if (traceMode === 'dba-dbc-leq1m') {
-    const vC = buildSplSeriesVertices(
+      const vA = buildSplSeriesVertices(
+        hist.timeSec,
+        hist.leq1mDbA,
+        hist.length,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        1.0
+      );
+      drawCanvasTrace(ctx, vA.vertices, vA.vertexCount, src.color, box);
+      continue;
+    }
+
+    // Draw translucent short-term LAF envelope in src.color
+    const vFast = buildSplSeriesVertices(
       hist.timeSec,
-      hist.leq1mDbC,
+      hist.shortTermDbA,
       hist.length,
       xMin,
       xMax,
       yMin,
       yMax,
-      0.85
+      0.32
     );
-    drawCanvasTrace(ctx, vC.vertices, vC.vertexCount, '#f59e0b', box);
+    drawCanvasTrace(ctx, vFast.vertices, vFast.vertexCount, src.color, box);
 
-    const vA = buildSplSeriesVertices(
+    if (traceMode === 'dba-fast-leq1m') {
+      const vLeq1 = buildSplSeriesVertices(
+        hist.timeSec,
+        hist.leq1mDbA,
+        hist.length,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        1.0
+      );
+      drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, src.color, box);
+      continue;
+    }
+
+    // Default: 'compliance-15m' (LAeq,15m solid + LAeq,1m dashed + Peak dotted, all in src.color)
+    ctx.save();
+    ctx.setLineDash([2, 3]);
+    const vPeak = buildSplSeriesVertices(
       hist.timeSec,
-      hist.leq1mDbA,
+      hist.peakDb,
       hist.length,
       xMin,
       xMax,
       yMin,
       yMax,
-      1.0
+      0.45
     );
-    drawCanvasTrace(ctx, vA.vertices, vA.vertexCount, primary.color, box);
-    return;
-  }
+    drawCanvasTrace(ctx, vPeak.vertices, vPeak.vertexCount, src.color, box);
 
-  // Draw translucent short-term LAF envelope
-  const vFast = buildSplSeriesVertices(
-    hist.timeSec,
-    hist.shortTermDbA,
-    hist.length,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    0.35
-  );
-  drawCanvasTrace(ctx, vFast.vertices, vFast.vertexCount, primary.color, box);
-
-  if (traceMode === 'dba-fast-leq1m') {
+    ctx.setLineDash([5, 3]);
     const vLeq1 = buildSplSeriesVertices(
       hist.timeSec,
       hist.leq1mDbA,
@@ -553,52 +584,24 @@ export function drawSplHistoryPlot(
       xMax,
       yMin,
       yMax,
+      0.75
+    );
+    drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, src.color, box);
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    const vLeq15 = buildSplSeriesVertices(
+      hist.timeSec,
+      hist.leq15mDbA,
+      hist.length,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
       1.0
     );
-    drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, '#10b981', box);
-    return;
+    drawCanvasTrace(ctx, vLeq15.vertices, vLeq15.vertexCount, src.color, box);
   }
-
-  // Default: 'compliance-15m' (LAeq,15m solid + LAeq,1m dashed + Peak subtle)
-  const vPeak = buildSplSeriesVertices(
-    hist.timeSec,
-    hist.peakDb,
-    hist.length,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    0.28
-  );
-  drawCanvasTrace(ctx, vPeak.vertices, vPeak.vertexCount, '#f43f5e', box);
-
-  ctx.save();
-  ctx.setLineDash([4, 3]);
-  const vLeq1 = buildSplSeriesVertices(
-    hist.timeSec,
-    hist.leq1mDbA,
-    hist.length,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    0.75
-  );
-  drawCanvasTrace(ctx, vLeq1.vertices, vLeq1.vertexCount, '#94a3b8', box);
-  ctx.setLineDash([]);
-  ctx.restore();
-
-  const vLeq15 = buildSplSeriesVertices(
-    hist.timeSec,
-    hist.leq15mDbA,
-    hist.length,
-    xMin,
-    xMax,
-    yMin,
-    yMax,
-    1.0
-  );
-  drawCanvasTrace(ctx, vLeq15.vertices, vLeq15.vertexCount, primary.color, box);
 }
 
 /**
