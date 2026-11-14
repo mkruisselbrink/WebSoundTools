@@ -46,7 +46,8 @@ Simulation Worker Thread (src/physics/sim.worker.ts — Pure TypeScript Float32A
   └── High-Resolution Virtual Mic Transfer Function Solver (virtual-mic-solver.ts)
 ```
 
-Detailed engineering and physics documentation is available in [`docs/`](./docs/):
+Detailed user tutorials, engineering guides, and physics documentation are available in [`docs/`](./docs/):
+- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Step-by-Step Illustrated Tutorials (Start Here!)**
 - [`docs/01-overview-and-system-capabilities.md`](./docs/01-overview-and-system-capabilities.md)
 - [`docs/02-acoustic-physics-and-summation-model.md`](./docs/02-acoustic-physics-and-summation-model.md)
 - [`docs/03-codebase-structure-and-rendering.md`](./docs/03-codebase-structure-and-rendering.md)
