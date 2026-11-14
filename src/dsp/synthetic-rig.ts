@@ -50,6 +50,21 @@ export interface ReflectionTap {
   readonly polarity?: 1 | -1;
 }
 
+export interface SimulatedFeedbackRing {
+  /** Center frequency of the simulated feedback howl or program tone in Hz */
+  readonly frequencyHz: number;
+  /** Resonator Q factor (e.g. 20..35) */
+  readonly q: number;
+  /** Prominence / resonator boost in dB (e.g. 14..22 dB) */
+  readonly gainDb: number;
+  /** Absolute tone level in dBFS when self-oscillating (default -18 dBFS) */
+  readonly toneLevelDbFs?: number;
+  /** If true, injects the tone into Reference (R) as well as Measurement (M) to simulate a musical synth/lead note */
+  readonly injectIntoReference?: boolean;
+  /** If true, includes 2nd and 3rd harmonic overtones (2*f0, 3*f0) to simulate a musical instrument */
+  readonly includeHarmonics?: boolean;
+}
+
 export interface SimulatorRigConfig {
   readonly id: SimulatorPresetId;
   readonly name: string;
@@ -74,6 +89,8 @@ export interface SimulatorRigConfig {
   readonly reflections: readonly ReflectionTap[];
   /** Uncorrelated ambient noise level in dBFS (e.g. -60 for quiet, -18 for noisy crowd) */
   readonly ambientNoiseDbFs: number;
+  /** Optional simulated acoustic feedback rings or reference program tones for deterministic testing */
+  readonly simulatedFeedbackRings?: readonly SimulatedFeedbackRing[];
 }
 
 export const SIMULATOR_PRESETS: Record<SimulatorPresetId, SimulatorRigConfig> = {
@@ -205,6 +222,8 @@ export class SyntheticAcousticRig {
   private readonly eqCascade: BiquadCascade;
   private readonly topHighpassCascade: BiquadCascade;
   private readonly subLowpassCascade: BiquadCascade;
+  private readonly feedbackResonatorCascade: BiquadCascade;
+  private ringPhases: Float64Array = new Float64Array(0);
 
   // Independent PRNG state for uncorrelated ambient noise
   private noiseSeed: number = 0x13579bdf;
@@ -221,6 +240,7 @@ export class SyntheticAcousticRig {
     this.eqCascade = new BiquadCascade();
     this.topHighpassCascade = new BiquadCascade();
     this.subLowpassCascade = new BiquadCascade();
+    this.feedbackResonatorCascade = new BiquadCascade();
 
     this.rebuildFilters();
   }
@@ -249,6 +269,8 @@ export class SyntheticAcousticRig {
     this.eqCascade.reset();
     this.topHighpassCascade.reset();
     this.subLowpassCascade.reset();
+    this.feedbackResonatorCascade.reset();
+    this.ringPhases.fill(0);
     this.pinkB0 = 0;
     this.pinkB1 = 0;
     this.pinkB2 = 0;
@@ -258,6 +280,25 @@ export class SyntheticAcousticRig {
     const sr = this.sampleRate;
     const eqCoeffs = this.config.eqFilters.map((spec) => computeBiquadCoefficients(spec, sr));
     this.eqCascade.setCoefficientsList(eqCoeffs);
+
+    const rings = this.config.simulatedFeedbackRings ?? [];
+    const acousticResonators = rings
+      .filter((ring) => !ring.injectIntoReference && ring.gainDb > 0)
+      .map((ring) =>
+        computeBiquadCoefficients(
+          {
+            type: 'peaking',
+            frequency: ring.frequencyHz,
+            q: ring.q,
+            gainDb: ring.gainDb,
+          },
+          sr
+        )
+      );
+    this.feedbackResonatorCascade.setCoefficientsList(acousticResonators);
+    if (this.ringPhases.length !== rings.length) {
+      this.ringPhases = new Float64Array(rings.length);
+    }
 
     if (this.config.subCrossover?.enabled) {
       const fc = this.config.subCrossover.crossoverFreqHz;
@@ -318,8 +359,36 @@ export class SyntheticAcousticRig {
       tapGains[t] = Math.pow(10.0, tap.gainDb / 20.0) * (tap.polarity ?? 1);
     }
 
+    const rings = cfg.simulatedFeedbackRings ?? [];
+    const numRings = rings.length;
+    const twoPiOverSr = (2.0 * Math.PI) / sr;
+
     for (let i = 0; i < length; i++) {
-      const r = inputR[i];
+      let r = inputR[i];
+      let acousticOsc = 0;
+
+      if (numRings > 0) {
+        for (let rIdx = 0; rIdx < numRings; rIdx++) {
+          const ring = rings[rIdx];
+          const phase = this.ringPhases[rIdx];
+          const nextPhase = (phase + ring.frequencyHz * twoPiOverSr) % (2.0 * Math.PI);
+          this.ringPhases[rIdx] = nextPhase;
+
+          const toneDbFs = ring.toneLevelDbFs ?? -18.0;
+          const amp = Math.pow(10.0, toneDbFs / 20.0) * Math.SQRT2;
+          let toneSample = Math.sin(phase) * amp;
+          if (ring.includeHarmonics) {
+            toneSample += Math.sin(2.0 * phase) * (amp * 0.55) + Math.sin(3.0 * phase) * (amp * 0.35);
+          }
+
+          if (ring.injectIntoReference) {
+            r += toneSample;
+            inputR[i] = r;
+          } else {
+            acousticOsc += toneSample;
+          }
+        }
+      }
 
       // Pass through system EQ
       const eqOut = this.eqCascade.processSample(r) * linearGain;
@@ -351,6 +420,11 @@ export class SyntheticAcousticRig {
       // Mix uncorrelated ambient room/crowd noise
       if (noiseGain > 0) {
         totalSample += this.nextAmbientPinkSample() * noiseGain;
+      }
+
+      // Apply simulated acoustic feedback resonators and self-oscillation on M only
+      if (numRings > 0) {
+        totalSample = this.feedbackResonatorCascade.processSample(totalSample) + acousticOsc;
       }
 
       outputM[i] = totalSample;

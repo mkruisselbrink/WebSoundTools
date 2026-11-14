@@ -53,6 +53,7 @@ export class TransferFunctionAnalyzer {
   // Output arrays (length = binCount = fftSize / 2 + 1)
   readonly frequency: Float32Array;
   readonly module: Float32Array;        // RTA linear RMS magnitude of Measurement channel
+  readonly refModule: Float32Array;     // Linear RMS magnitude of Reference channel
   readonly magnitude: Float32Array;     // Linear transfer function |H(f)|
   readonly phaseReal: Float32Array;     // cos(phi)
   readonly phaseImag: Float32Array;     // sin(phi)
@@ -110,6 +111,7 @@ export class TransferFunctionAnalyzer {
 
     this.frequency = new Float32Array(B);
     this.module = new Float32Array(B);
+    this.refModule = new Float32Array(B);
     this.magnitude = new Float32Array(B);
     this.phaseReal = new Float32Array(B);
     this.phaseImag = new Float32Array(B);
@@ -227,6 +229,8 @@ export class TransferFunctionAnalyzer {
 
     this.peakSquared.fill(0);
     this.meanSquared.fill(0);
+    this.module.fill(0);
+    this.refModule.fill(0);
     this.phaseReal.fill(1);
     this.phaseImag.fill(0);
     this.coherence.fill(0);
@@ -382,8 +386,9 @@ export class TransferFunctionAnalyzer {
         this.sumPhaseIm[k] = avgPhIm;
       }
 
-      // Module (RTA RMS amplitude of M)
+      // Module (RTA RMS amplitude of M and Reference R)
       this.module[k] = Math.sqrt(Math.max(0, avgGmm));
+      this.refModule[k] = Math.sqrt(Math.max(0, avgGrr));
 
       // Transfer Function Magnitude & Phase
       if (estimator === 'h1') {
