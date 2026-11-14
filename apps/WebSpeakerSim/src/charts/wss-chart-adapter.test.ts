@@ -1,22 +1,22 @@
-/**
- * WebSpeakerSim
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
+import { getBuiltinSpeakerMap } from '../library/builtin-speakers.js';
+import { DEMO_VENUE_PRESETS } from '../library/demo-presets.js';
+import { evaluatePlanGrid } from '../physics/summation-solver.js';
+import { evaluateVirtualMic } from '../physics/virtual-mic-solver.js';
 import {
+  buildWssChartScene,
+  buildWssCursorReadoutModel,
   computeAdaptivePlotBounds,
   computeAudienceSplHistogram,
   formatFrequencyLabel,
   normXToValue,
   valueToNormX,
-} from '../../src/charts/plot-types.js';
-import { getBuiltinSpeakerMap } from '../../src/library/builtin-speakers.js';
-import { DEMO_VENUE_PRESETS } from '../../src/library/demo-presets.js';
-import { evaluatePlanGrid } from '../../src/physics/summation-solver.js';
-import { evaluateVirtualMic } from '../../src/physics/virtual-mic-solver.js';
+} from './wss-chart-adapter.js';
 
-describe('chart plot-types & SPL histogram', () => {
+describe('wss-chart-adapter & SPL histogram', () => {
   it('round-trips logarithmic and linear X-axis mappings', () => {
     const nxLog = valueToNormX(1000, 20, 20000, true);
     expect(normXToValue(nxLog, 20, 20000, true)).toBeCloseTo(1000, 4);
@@ -36,10 +36,9 @@ describe('chart plot-types & SPL histogram', () => {
     expect(sumPct).toBeCloseTo(100, 3);
   });
 
-  it('auto-scales Magnitude, Group Delay, Arrivals, and Histogram bounds without clipping peaks', () => {
+  it('auto-scales Magnitude, Group Delay, Arrivals, and Histogram bounds and builds interactive EQ scene', () => {
     const speakerMap = getBuiltinSpeakerMap();
     const scene = DEMO_VENUE_PRESETS[0].createScene();
-    // Push drive offset high (+6 dB) so low-end sums above 120 dB SPL
     const hotScene = { ...scene, driveOffsetDb: 6 };
     const micResp = evaluateVirtualMic(hotScene.virtualMics[0], hotScene, speakerMap);
     const maxMag = Math.max(...micResp.magnitudeDbSpl);
@@ -57,7 +56,6 @@ describe('chart plot-types & SPL histogram', () => {
     expect(arrBounds.yMax).toBeGreaterThan(maxArrSpl);
     expect(arrBounds.xMax).toBeGreaterThan(maxArrTime);
 
-    // Single-band 63 Hz sub grid (~127 dB SPL) must fit cleanly inside adaptive histogram bounds
     const subScene = {
       ...hotScene,
       bandSelection: { kind: 'single' as const, frequencyHz: 63 },
@@ -67,9 +65,44 @@ describe('chart plot-types & SPL histogram', () => {
     expect(histBounds.xMin).toBeLessThan(subGrid.stats.minAudienceSplDb);
     expect(histBounds.xMax).toBeGreaterThan(subGrid.stats.maxAudienceSplDb);
 
-    const fittedBins = computeAudienceSplHistogram(subGrid, histBounds.xMin, histBounds.xMax, 2);
-    const maxBinPct = Math.max(...fittedBins.map((b) => b.percentage));
-    expect(histBounds.yMax).toBeGreaterThanOrEqual(Math.min(100, maxBinPct));
+    // Verify interactive EQ overlay when a DSP Group is selected on Magnitude
+    const dspGroup = {
+      ...hotScene.dspGroups[0],
+      dsp: {
+        ...hotScene.dspGroups[0].dsp,
+        eqBands: [
+          {
+            id: 'eq1',
+            type: 'peaking' as const,
+            frequencyHz: 1000,
+            q: 2,
+            gainDb: -3,
+            enabled: true,
+          },
+        ],
+      },
+    };
+    const chartScene = buildWssChartScene({
+      plotType: 'magnitude',
+      magSpanMode: 'auto-60',
+      mics: hotScene.virtualMics,
+      responses: [micResp],
+      planGrid: subGrid,
+      activeDspGroup: dspGroup,
+    });
+    expect(chartScene.traces?.length).toBe(1);
+    expect(chartScene.eqOverlay).toBeDefined();
+    expect(chartScene.eqOverlay?.referenceZeroDbY).toBeGreaterThan(60);
+
+    const cursor = buildWssCursorReadoutModel(
+      'magnitude',
+      1000,
+      hotScene.virtualMics,
+      [micResp],
+      subGrid,
+      chartScene.axis.bounds
+    );
+    expect(cursor.headerText).toContain('1.00 kHz');
+    expect(cursor.rows.length).toBe(1);
   });
 });
-

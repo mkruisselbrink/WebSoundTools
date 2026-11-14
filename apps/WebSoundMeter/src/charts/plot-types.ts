@@ -1,34 +1,34 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Plot Coordinate Mappers, Trace Vertex Builders, Group Delay Computer,
- * and Acoustic Cursor Readout Calculator.
- *
- * Pure TypeScript functions so all coordinate transforms, phase-wrap splitting,
- * coherence alpha mapping, and cursor readouts are 100% unit-testable in Node/Vitest.
+ * WebSoundMeter plot type metadata, SourceData-to-NDC trace builders,
+ * and acoustic cursor readout calculator.
  */
 
+import {
+  buildTraceNdcVertices,
+  computeCoherenceAlpha,
+  formatFrequencyLabel,
+  formatRelativeTimeLabel,
+  normXToValue,
+  valueToNormX,
+  valueToNormY,
+  type TraceVertexBuffer,
+} from '@foh/charts';
 import { computeBinGroupDelayMs } from '@foh/dsp';
-import { SourceData, getEffectiveBinResponse } from '../sources/source-data.js';
+import { type SourceData, getEffectiveBinResponse } from '../sources/source-data.js';
+
+export {
+  computeCoherenceAlpha,
+  formatFrequencyLabel,
+  formatRelativeTimeLabel,
+  normXToValue,
+  valueToNormX,
+  valueToNormY,
+  type TraceVertexBuffer,
+};
 
 export type PlotType =
   | 'magnitude'
@@ -165,101 +165,6 @@ export const PLOT_METADATA: Record<PlotType, PlotMetadata> = {
   },
 };
 
-export const ISO_FREQUENCY_GRID_LINES = [
-  20, 31.5, 50, 63, 100, 125, 200, 250, 400, 500, 800, 1000, 1600, 2000, 3150, 4000, 6300, 8000,
-  10000, 16000, 20000,
-];
-
-export const ISO_MAJOR_FREQUENCIES = [
-  20, 31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
-];
-
-export function formatFrequencyLabel(freqHz: number): string {
-  if (freqHz >= 1000) {
-    const k = freqHz / 1000;
-    return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
-  }
-  return Number.isInteger(freqHz) ? `${freqHz}` : `${freqHz.toFixed(1)}`;
-}
-
-export function formatRelativeTimeLabel(sec: number): string {
-  if (Math.abs(sec) < 0.05) {
-    return '0s';
-  }
-  const absSec = Math.abs(sec);
-  const sign = sec < 0 ? '-' : '+';
-  if (absSec >= 3600 && Math.abs(absSec % 3600) < 0.1) {
-    return `${sign}${Math.round(absSec / 3600)}h`;
-  }
-  if (absSec >= 60 && Math.abs(absSec % 60) < 0.1) {
-    return `${sign}${Math.round(absSec / 60)}m`;
-  }
-  if (absSec >= 60) {
-    const m = Math.floor(absSec / 60);
-    const remS = Math.round(absSec - m * 60);
-    return `${sign}${m}m${remS}s`;
-  }
-  return `${sign}${Math.round(absSec)}s`;
-}
-
-/**
- * Maps a domain X value (Hz or ms) to normalized [0, 1] viewport coordinate.
- */
-export function valueToNormX(value: number, xMin: number, xMax: number, isLogX: boolean): number {
-  if (isLogX) {
-    const safeVal = Math.max(1e-3, value);
-    const safeMin = Math.max(1e-3, xMin);
-    const safeMax = Math.max(safeMin * 1.01, xMax);
-    return Math.log(safeVal / safeMin) / Math.log(safeMax / safeMin);
-  }
-  return (value - xMin) / Math.max(1e-9, xMax - xMin);
-}
-
-/**
- * Maps a normalized [0, 1] viewport X coordinate back to domain X value (Hz or ms).
- */
-export function normXToValue(normX: number, xMin: number, xMax: number, isLogX: boolean): number {
-  const clamped = Math.max(0, Math.min(1, normX));
-  if (isLogX) {
-    const safeMin = Math.max(1e-3, xMin);
-    const safeMax = Math.max(safeMin * 1.01, xMax);
-    return safeMin * Math.pow(safeMax / safeMin, clamped);
-  }
-  return xMin + clamped * (xMax - xMin);
-}
-
-/**
- * Maps a domain Y value to normalized [0, 1] coordinate (0 = bottom, 1 = top).
- */
-export function valueToNormY(value: number, yMin: number, yMax: number): number {
-  return (value - yMin) / Math.max(1e-9, yMax - yMin);
-}
-
-/**
- * Maps coherence gamma^2 in [0, 1] to vertex alpha opacity in [0, 1]
- * using OSM's square-root curve above `threshold`.
- */
-export function computeCoherenceAlpha(
-  coherence: number,
-  threshold: number,
-  enabled: boolean
-): number {
-  if (!enabled) return 1.0;
-  if (coherence >= 1.0) return 1.0;
-  if (coherence < threshold) return 0.05; // Faint ghost trace below coherence threshold
-  const span = Math.max(0.01, 1.0 - threshold);
-  return Math.sqrt(Math.max(0, (coherence - threshold) / span));
-}
-
-export interface TraceVertexBuffer {
-  /** Interleaved [ndcX, ndcY, alpha] floats for WebGL2 / 2D rendering */
-  readonly vertices: Float32Array;
-  readonly vertexCount: number;
-}
-
-/**
- * Builds an interleaved `[ndcX, ndcY, alpha]` vertex buffer for an arbitrary time-series `(timeSec, valuesDb)`.
- */
 export function buildSplSeriesVertices(
   timeSec: Float32Array,
   valuesDb: Float32Array,
@@ -270,33 +175,16 @@ export function buildSplSeriesVertices(
   yMax: number,
   alpha: number = 1.0
 ): TraceVertexBuffer {
-  const n = Math.min(length, timeSec.length, valuesDb.length);
-  const out = new Float32Array(n * 3);
-  let ptr = 0;
-
-  for (let i = 0; i < n; i++) {
-    const t = timeSec[i];
-    if (t < xMin || t > xMax) continue;
-    const nx = valueToNormX(t, xMin, xMax, false) * 2.0 - 1.0;
-    const ny = valueToNormY(valuesDb[i], yMin, yMax) * 2.0 - 1.0;
-    out[ptr++] = nx;
-    out[ptr++] = ny;
-    out[ptr++] = alpha;
-  }
-
-  return {
-    vertices: out.subarray(0, ptr),
-    vertexCount: ptr / 3,
-  };
+  return buildTraceNdcVertices({
+    x: timeSec,
+    y: valuesDb,
+    length,
+    bounds: { xMin, xMax, yMin, yMax },
+    isLogX: false,
+    alpha,
+  });
 }
 
-/**
- * Builds an interleaved `[ndcX, ndcY, alpha]` vertex buffer in Normalized Device Coordinates `[-1, +1]`
- * for a given `SourceData` and `PlotType`.
- *
- * Automatically inserts zero-alpha break vertices on Phase wrap-around jumps (> 180 deg)
- * so vertical wrap lines are never drawn across the chart!
- */
 export function buildTraceVertices(
   source: SourceData,
   plotType: PlotType,
@@ -328,115 +216,90 @@ export function buildTraceVertices(
 
   if (plotType === 'impulse' || plotType === 'etc' || plotType === 'step') {
     const td = source.timeData;
-    const N = td.length;
-    const out = new Float32Array(N * 3);
-    let ptr = 0;
-
+    const n = td.length;
+    const xArr = new Float32Array(n);
+    const yArr = new Float32Array(n);
     const gainLinear =
       source.gainOffsetDb !== 0 ? Math.pow(10.0, source.gainOffsetDb / 20.0) : 1.0;
     const polSign = source.invertPolarity ? -1.0 : 1.0;
     const delayShift = source.delayOffsetMs;
 
-    for (let i = 0; i < N; i++) {
-      const t = td.timeMs[i] + delayShift;
-      if (t < xMin || t > xMax) continue;
-
-      let yVal = 0;
+    for (let i = 0; i < n; i++) {
+      xArr[i] = td.timeMs[i] + delayShift;
       if (plotType === 'impulse') {
-        yVal = td.impulse[i] * gainLinear * polSign;
+        yArr[i] = td.impulse[i] * gainLinear * polSign;
       } else if (plotType === 'etc') {
         const absAmp = Math.abs(td.impulse[i] * gainLinear);
-        yVal = absAmp > 1e-10 ? 20.0 * Math.log10(absAmp) : -120.0;
+        yArr[i] = absAmp > 1e-10 ? 20.0 * Math.log10(absAmp) : -120.0;
       } else {
-        yVal = td.stepResponse[i] * gainLinear * polSign;
+        yArr[i] = td.stepResponse[i] * gainLinear * polSign;
       }
-
-      const nx = valueToNormX(t, xMin, xMax, false) * 2.0 - 1.0;
-      const ny = valueToNormY(yVal, yMin, yMax) * 2.0 - 1.0;
-
-      out[ptr++] = nx;
-      out[ptr++] = ny;
-      out[ptr++] = 1.0;
     }
 
-    return {
-      vertices: out.subarray(0, ptr),
-      vertexCount: ptr / 3,
-    };
+    return buildTraceNdcVertices({
+      x: xArr,
+      y: yArr,
+      length: n,
+      bounds: { xMin, xMax, yMin, yMax },
+      isLogX: false,
+      alpha: 1.0,
+    });
   }
 
-  // Frequency-domain plots
   const fd = source.freqData;
-  const B = fd.length;
-  // Allocate extra room for phase wrap-around break vertices
-  const out = new Float32Array(B * 6);
-  let ptr = 0;
+  const bCount = Math.max(0, fd.length - 1);
+  if (bCount === 0) {
+    return { vertices: new Float32Array(0), vertexCount: 0 };
+  }
 
-  let prevPhaseDeg: number | null = null;
-  let prevNx = 0;
-  let prevNy = 0;
+  const xArr = new Float32Array(bCount);
+  const yArr = new Float32Array(bCount);
+  const alphaArr = new Float32Array(bCount);
+  const useCoh =
+    coherenceAlphaEnabled &&
+    (plotType === 'magnitude' || plotType === 'phase' || plotType === 'group-delay');
 
-  for (let i = 1; i < B; i++) {
+  for (let i = 1; i < fd.length; i++) {
+    const k = i - 1;
     const bin = getEffectiveBinResponse(source, i);
     const f = bin.frequency;
-    if (f < xMin * 0.9 || f > xMax * 1.05) continue;
-
-    let yVal = 0;
-    const useCoh =
-      coherenceAlphaEnabled &&
-      (plotType === 'magnitude' || plotType === 'phase' || plotType === 'group-delay');
-    const alpha = computeCoherenceAlpha(bin.coherence, coherenceThreshold, useCoh);
+    xArr[k] = f;
+    alphaArr[k] = computeCoherenceAlpha(bin.coherence, coherenceThreshold, useCoh);
 
     if (plotType === 'magnitude') {
-      yVal = bin.magnitude > 1e-10 ? 20.0 * Math.log10(bin.magnitude) : -120.0;
+      yArr[k] = bin.magnitude > 1e-10 ? 20.0 * Math.log10(bin.magnitude) : -120.0;
     } else if (plotType === 'rta') {
-      yVal = bin.module > 1e-10 ? 20.0 * Math.log10(bin.module) : -140.0;
+      yArr[k] = bin.module > 1e-10 ? 20.0 * Math.log10(bin.module) : -140.0;
     } else if (plotType === 'coherence') {
-      yVal = bin.coherence * 100.0;
+      yArr[k] = bin.coherence * 100.0;
     } else if (plotType === 'phase') {
-      yVal = (Math.atan2(bin.phaseIm, bin.phaseRe) * 180.0) / Math.PI;
+      yArr[k] = (Math.atan2(bin.phaseIm, bin.phaseRe) * 180.0) / Math.PI;
     } else if (plotType === 'group-delay') {
       const prevBin = getEffectiveBinResponse(source, i - 1);
       const df = f - prevBin.frequency;
-      if (df > 0) {
-        yVal = computeBinGroupDelayMs(
-          df,
-          bin.phaseRe,
-          bin.phaseIm,
-          prevBin.phaseRe,
-          prevBin.phaseIm
-        );
-      }
+      yArr[k] =
+        df > 0
+          ? computeBinGroupDelayMs(
+              df,
+              bin.phaseRe,
+              bin.phaseIm,
+              prevBin.phaseRe,
+              prevBin.phaseIm
+            )
+          : 0;
     }
-
-    const nx = valueToNormX(f, xMin, xMax, meta.isLogX) * 2.0 - 1.0;
-    const ny = valueToNormY(yVal, yMin, yMax) * 2.0 - 1.0;
-
-    // Suppress vertical jump lines when phase wraps across +/-180 degrees
-    if (plotType === 'phase' && prevPhaseDeg !== null && Math.abs(yVal - prevPhaseDeg) > 170.0) {
-      // Emit zero-alpha break vertices at end of old segment and start of new segment
-      out[ptr++] = prevNx;
-      out[ptr++] = prevNy;
-      out[ptr++] = 0.0;
-
-      out[ptr++] = nx;
-      out[ptr++] = ny;
-      out[ptr++] = 0.0;
-    }
-
-    out[ptr++] = nx;
-    out[ptr++] = ny;
-    out[ptr++] = alpha;
-
-    prevPhaseDeg = yVal;
-    prevNx = nx;
-    prevNy = ny;
   }
 
-  return {
-    vertices: out.subarray(0, ptr),
-    vertexCount: ptr / 3,
-  };
+  return buildTraceNdcVertices({
+    x: xArr,
+    y: yArr,
+    length: bCount,
+    bounds: { xMin, xMax, yMin, yMax },
+    isLogX: meta.isLogX,
+    alpha: alphaArr,
+    unwrapPhaseBreaks: plotType === 'phase',
+    phaseBreakThresholdDeg: 170.0,
+  });
 }
 
 export interface CursorAcousticReadout {
@@ -451,14 +314,11 @@ export interface CursorAcousticReadout {
     readonly name: string;
     readonly color: string;
     readonly formattedValue: string;
+    readonly yValue?: number;
     readonly coherencePct?: number;
   }>;
 }
 
-/**
- * Computes acoustic cursor readout (Frequency, Period, Wavelength in m/ft, and per-source values)
- * at a given domain X position (`xValue` in Hz or ms).
- */
 export function computeCursorReadout(
   plotType: PlotType,
   xValue: number,
@@ -473,16 +333,13 @@ export function computeCursorReadout(
         .filter((src) => src.splHistory && src.splHistory.length > 0)
         .map((src) => {
           const hist = src.splHistory!;
-          const N = hist.length;
+          const n = hist.length;
           let lo = 0;
-          let hi = Math.max(0, N - 1);
+          let hi = Math.max(0, n - 1);
           while (lo < hi) {
             const mid = (lo + hi) >>> 1;
-            if (hist.timeSec[mid] < xValue) {
-              lo = mid + 1;
-            } else {
-              hi = mid;
-            }
+            if (hist.timeSec[mid] < xValue) lo = mid + 1;
+            else hi = mid;
           }
           let bestIdx = lo;
           if (
@@ -499,47 +356,41 @@ export function computeCursorReadout(
             sourceId: src.id,
             name: src.name,
             color: src.color,
+            yValue: laeq15,
             formattedValue: `LAeq15: ${laeq15.toFixed(1)} | LAeq1: ${laeq1.toFixed(1)} | LAF: ${laf.toFixed(1)} | Pk: ${pk.toFixed(1)} dB`,
           };
         });
 
-      return {
-        isFrequencyDomain: false,
-        xValue,
-        sourceValues,
-      };
+      return { isFrequencyDomain: false, xValue, sourceValues };
     }
 
-    // Time-domain readout
     const sourceValues = visibleSources.map((src) => {
       const td = src.timeData;
-      const N = td.length;
+      const n = td.length;
       const targetTimeMs = xValue - src.delayOffsetMs;
       let lo = 0;
-      let hi = Math.max(0, N - 1);
+      let hi = Math.max(0, n - 1);
       while (lo < hi) {
         const mid = (lo + hi) >>> 1;
-        if (td.timeMs[mid] < targetTimeMs) {
-          lo = mid + 1;
-        } else {
-          hi = mid;
-        }
+        if (td.timeMs[mid] < targetTimeMs) lo = mid + 1;
+        else hi = mid;
       }
       let bestIdx = lo;
       if (
         lo > 0 &&
-        Math.abs(td.timeMs[lo - 1] - targetTimeMs) <=
-          Math.abs(td.timeMs[lo] - targetTimeMs)
+        Math.abs(td.timeMs[lo - 1] - targetTimeMs) <= Math.abs(td.timeMs[lo] - targetTimeMs)
       ) {
         bestIdx = lo - 1;
       }
       const amp = td.impulse[bestIdx];
+      let yValue = amp;
       let formattedValue = '';
       if (plotType === 'etc') {
-        const db = Math.abs(amp) > 1e-10 ? 20 * Math.log10(Math.abs(amp)) : -120;
-        formattedValue = `${db.toFixed(1)} dB`;
+        yValue = Math.abs(amp) > 1e-10 ? 20 * Math.log10(Math.abs(amp)) : -120;
+        formattedValue = `${yValue.toFixed(1)} dB`;
       } else if (plotType === 'step') {
-        formattedValue = `${td.stepResponse[bestIdx].toFixed(3)}`;
+        yValue = td.stepResponse[bestIdx];
+        formattedValue = `${yValue.toFixed(3)}`;
       } else {
         formattedValue = `${amp.toFixed(3)}`;
       }
@@ -547,56 +398,59 @@ export function computeCursorReadout(
         sourceId: src.id,
         name: src.name,
         color: src.color,
+        yValue,
         formattedValue,
       };
     });
 
-    return {
-      isFrequencyDomain: false,
-      xValue,
-      sourceValues,
-    };
+    return { isFrequencyDomain: false, xValue, sourceValues };
   }
 
-  // Frequency-domain readout with acoustic wavelength & period
   const freqHz = Math.max(1, xValue);
   const periodMs = 1000.0 / freqHz;
-  const wavelengthMeters = 343.0 / freqHz; // Speed of sound @ 20°C = 343 m/s
+  const wavelengthMeters = 343.0 / freqHz;
   const wavelengthFeet = 1125.33 / freqHz;
 
   const sourceValues = visibleSources.map((src) => {
     const fd = src.freqData;
-    const B = fd.length;
-    const df = B > 1 ? fd.frequency[1] - fd.frequency[0] : 1;
-    const idx = Math.max(1, Math.min(B - 1, Math.round(freqHz / Math.max(1e-6, df))));
+    const bCount = fd.length;
+    const df = bCount > 1 ? fd.frequency[1] - fd.frequency[0] : 1;
+    const idx = Math.max(1, Math.min(bCount - 1, Math.round(freqHz / Math.max(1e-6, df))));
     const bin = getEffectiveBinResponse(src, idx);
     const cohPct = Math.round(bin.coherence * 100);
 
+    let yValue = 0;
     let formattedValue = '';
     if (plotType === 'magnitude') {
-      const db = bin.magnitude > 1e-10 ? 20 * Math.log10(bin.magnitude) : -120;
-      formattedValue = `${db >= 0 ? '+' : ''}${db.toFixed(1)} dB`;
+      yValue = bin.magnitude > 1e-10 ? 20 * Math.log10(bin.magnitude) : -120;
+      formattedValue = `${yValue >= 0 ? '+' : ''}${yValue.toFixed(1)} dB`;
     } else if (plotType === 'rta') {
-      const db = bin.module > 1e-10 ? 20 * Math.log10(bin.module) : -140;
-      formattedValue = `${db.toFixed(1)} dBFS`;
+      yValue = bin.module > 1e-10 ? 20 * Math.log10(bin.module) : -140;
+      formattedValue = `${yValue.toFixed(1)} dBFS`;
     } else if (plotType === 'phase') {
-      const deg = (Math.atan2(bin.phaseIm, bin.phaseRe) * 180) / Math.PI;
-      formattedValue = `${deg >= 0 ? '+' : ''}${deg.toFixed(0)}°`;
+      yValue = (Math.atan2(bin.phaseIm, bin.phaseRe) * 180) / Math.PI;
+      formattedValue = `${yValue >= 0 ? '+' : ''}${yValue.toFixed(0)}°`;
     } else if (plotType === 'coherence') {
+      yValue = cohPct;
       formattedValue = `${cohPct}%`;
     } else if (plotType === 'group-delay') {
       const prevBin = getEffectiveBinResponse(src, Math.max(1, idx - 1));
       const stepF = Math.max(1e-3, bin.frequency - prevBin.frequency);
-      const dRe = bin.phaseRe * prevBin.phaseRe + bin.phaseIm * prevBin.phaseIm;
-      const dIm = bin.phaseIm * prevBin.phaseRe - bin.phaseRe * prevBin.phaseIm;
-      const gdMs = (-1000.0 * Math.atan2(dIm, dRe)) / (2.0 * Math.PI * stepF);
-      formattedValue = `${gdMs.toFixed(2)} ms`;
+      yValue = computeBinGroupDelayMs(
+        stepF,
+        bin.phaseRe,
+        bin.phaseIm,
+        prevBin.phaseRe,
+        prevBin.phaseIm
+      );
+      formattedValue = `${yValue.toFixed(2)} ms`;
     }
 
     return {
       sourceId: src.id,
       name: src.name,
       color: src.color,
+      yValue,
       formattedValue,
       coherencePct: cohPct,
     };
@@ -612,4 +466,3 @@ export function computeCursorReadout(
     sourceValues,
   };
 }
-
