@@ -1,29 +1,12 @@
-/**
- * WebSpeakerSim
- * Copyright (C) 2026 WebSpeakerSim Contributors
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSpeakerSim Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Tier-3 `IndexedDB` persistence (`web-speaker-sim-db` v1) for saved projects and
- * custom/imported loudspeakers + portable `.wss-project.json` project bundle I/O
- * (`src/model/session-storage.ts`).
+ * Tier-3 `IndexedDB` persistence (`web-speaker-sim-db` v1) backed by `@foh/state`
+ * + portable `.wss-project.json` project bundle I/O (`src/model/session-storage.ts`).
  */
 
+import { IdbRepository } from '@foh/state';
 import {
   deserializeSpeakerFromJson,
   serializeSpeakerToJson,
@@ -99,87 +82,25 @@ export function deserializeProjectBundle(jsonText: string): ProjectFileBundle {
   };
 }
 
-/**
- * Persistent library & project repository backed by browser `IndexedDB`, with an automatic
- * in-memory Map fallback for headless Node test environments or private-browsing restrictions.
- */
 export class SessionStorageRepository {
-  private dbPromise: Promise<IDBDatabase | null> | null = null;
-  private readonly memProjects = new Map<string, SavedProjectRecord>();
-  private readonly memSpeakers = new Map<string, string>(); // id -> serialized JSON
-
-  private openDatabase(): Promise<IDBDatabase | null> {
-    if (this.dbPromise) return this.dbPromise;
-    if (typeof indexedDB === 'undefined') {
-      this.dbPromise = Promise.resolve(null);
-      return this.dbPromise;
-    }
-
-    this.dbPromise = new Promise<IDBDatabase | null>((resolve) => {
-      try {
-        const req = indexedDB.open(IDB_DATABASE_NAME, IDB_DATABASE_VERSION);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(IDB_STORE_PROJECTS)) {
-            db.createObjectStore(IDB_STORE_PROJECTS, { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains(IDB_STORE_SPEAKERS)) {
-            db.createObjectStore(IDB_STORE_SPEAKERS, { keyPath: 'id' });
-          }
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-      } catch {
-        resolve(null);
-      }
-    });
-    return this.dbPromise;
-  }
+  private readonly repo = new IdbRepository({
+    dbName: IDB_DATABASE_NAME,
+    dbVersion: IDB_DATABASE_VERSION,
+    storeNames: [IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS],
+    fallbackMode: 'memory',
+  });
 
   public async saveSpeaker(speaker: SpeakerDefinition): Promise<void> {
     const json = serializeSpeakerToJson(speaker);
-    const db = await this.openDatabase();
-    if (!db) {
-      this.memSpeakers.set(speaker.id, json);
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_SPEAKERS, 'readwrite');
-      tx.objectStore(IDB_STORE_SPEAKERS).put({ id: speaker.id, json });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await this.repo.put(IDB_STORE_SPEAKERS, { id: speaker.id, json });
   }
 
   public async deleteSpeaker(speakerId: string): Promise<void> {
-    const db = await this.openDatabase();
-    if (!db) {
-      this.memSpeakers.delete(speakerId);
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_SPEAKERS, 'readwrite');
-      tx.objectStore(IDB_STORE_SPEAKERS).delete(speakerId);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await this.repo.delete(IDB_STORE_SPEAKERS, speakerId);
   }
 
   public async listSpeakers(): Promise<SpeakerDefinition[]> {
-    const db = await this.openDatabase();
-    if (!db) {
-      return Array.from(this.memSpeakers.values()).map((j) => deserializeSpeakerFromJson(j, true));
-    }
-
-    const rows = await new Promise<Array<{ id: string; json: string }>>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_SPEAKERS, 'readonly');
-      const req = tx.objectStore(IDB_STORE_SPEAKERS).getAll();
-      req.onsuccess = () => resolve((req.result as Array<{ id: string; json: string }>) ?? []);
-      req.onerror = () => reject(req.error);
-    });
-
+    const rows = await this.repo.getAll<{ id: string; json: string }>(IDB_STORE_SPEAKERS);
     const out: SpeakerDefinition[] = [];
     for (const row of rows) {
       try {
@@ -192,51 +113,15 @@ export class SessionStorageRepository {
   }
 
   public async saveProject(record: SavedProjectRecord): Promise<void> {
-    const db = await this.openDatabase();
-    if (!db) {
-      this.memProjects.set(record.id, record);
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_PROJECTS, 'readwrite');
-      tx.objectStore(IDB_STORE_PROJECTS).put(record);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await this.repo.put(IDB_STORE_PROJECTS, record);
   }
 
   public async deleteProject(projectId: string): Promise<void> {
-    const db = await this.openDatabase();
-    if (!db) {
-      this.memProjects.delete(projectId);
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_PROJECTS, 'readwrite');
-      tx.objectStore(IDB_STORE_PROJECTS).delete(projectId);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await this.repo.delete(IDB_STORE_PROJECTS, projectId);
   }
 
   public async listProjects(): Promise<SavedProjectRecord[]> {
-    const db = await this.openDatabase();
-    if (!db) {
-      return Array.from(this.memProjects.values()).sort((a, b) =>
-        b.updatedAtIso.localeCompare(a.updatedAtIso)
-      );
-    }
-
-    const rows = await new Promise<SavedProjectRecord[]>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE_PROJECTS, 'readonly');
-      const req = tx.objectStore(IDB_STORE_PROJECTS).getAll();
-      req.onsuccess = () => resolve((req.result as SavedProjectRecord[]) ?? []);
-      req.onerror = () => reject(req.error);
-    });
-
+    const rows = await this.repo.getAll<SavedProjectRecord>(IDB_STORE_PROJECTS);
     return rows.sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso));
   }
 }
-

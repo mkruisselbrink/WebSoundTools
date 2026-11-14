@@ -10,12 +10,17 @@ import { getDemoPresetById } from '../../src/library/demo-presets.js';
 import { buildSpeakerFromSpec } from '../../src/library/spec-builder.js';
 import { DEFAULT_COLORMAP_CONFIG } from '../../src/model/project-store.js';
 import {
+  IDB_DATABASE_NAME,
+  IDB_DATABASE_VERSION,
+  IDB_STORE_PROJECTS,
+  IDB_STORE_SPEAKERS,
   SessionStorageRepository,
   deserializeProjectBundle,
   serializeProjectBundle,
 } from '../../src/model/session-storage.js';
 import { parseUrlState, serializeUrlState } from '../../src/model/url-state.js';
 import {
+  WORKSPACE_STORAGE_KEY,
   clearWorkspaceSession,
   loadWorkspaceSession,
   saveWorkspaceSession,
@@ -26,7 +31,7 @@ import {
   selectObsoleteCaches,
   shouldInterceptSameOriginGet,
   withCrossOriginIsolationHeaders,
-} from '../../src/pwa/sw-core.js';
+} from '@foh/pwa/sw';
 
 class MemoryStorage implements StorageLike {
   private readonly map = new Map<string, string>();
@@ -143,11 +148,17 @@ describe('3-Tier Persistence & Offline PWA Core', () => {
     expect(await repo.listProjects()).toHaveLength(0);
   });
 
-  it('enforces PWA cache pruning and COOP/COEP headers in sw-core', () => {
-    const active = buildCacheName('abc12345');
+  it('enforces exact browser storage keys and PWA cache pruning in sw-core', () => {
+    expect(IDB_DATABASE_NAME).toBe('web-speaker-sim-db');
+    expect(IDB_DATABASE_VERSION).toBe(1);
+    expect([IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS]).toEqual(['projects', 'speakers']);
+    expect(WORKSPACE_STORAGE_KEY).toBe('wss.workspace.v1');
+
+    const active = buildCacheName('web-speaker-sim-', 'abc12345');
     const obsolete = selectObsoleteCaches(
       ['web-speaker-sim-old1', 'web-speaker-sim-abc12345', 'other-app-cache'],
-      active
+      active,
+      'web-speaker-sim-'
     );
     expect(obsolete).toEqual(['web-speaker-sim-old1']);
 

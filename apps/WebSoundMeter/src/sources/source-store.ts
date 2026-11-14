@@ -1,32 +1,8 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-/**
- * Pure reactive store managing the acoustic source graph:
- *  - One or more simultaneous Live Measurement frames + per-slot persistent visibility state
- *  - Stored trace snapshots + IndexedDB persistence
- *  - Virtual Parametric EQ sources with memoized frequency/impulse evaluation + IndexedDB persistence
- *  - Math / Union sources with memoized vector/power evaluation + IndexedDB persistence
- */
-
+import { ReactiveUndoStore } from '@foh/state';
 import { BiquadSpec } from '../dsp/biquad.js';
 import {
   DetectedFeedbackTrack,
@@ -68,6 +44,12 @@ export interface SourcePersistenceAdapter {
   readonly removeUnion?: (id: string) => void | Promise<void>;
 }
 
+interface AuthoredSourcesState {
+  readonly storedSources: readonly SourceData[];
+  readonly eqSources: readonly EqualizerSourceConfig[];
+  readonly unionSources: readonly UnionSourceConfig[];
+}
+
 const defaultPersistenceAdapter: SourcePersistenceAdapter = {
   loadAll: loadAllStoredTracesFromDb,
   save: saveStoredTraceToDb,
@@ -93,7 +75,7 @@ export function isLiveSourceId(id: string): boolean {
 }
 
 function updateInList<T extends { id: string }>(
-  list: T[],
+  list: readonly T[],
   id: string,
   updater: (item: T) => T,
   onPersist?: (updated: T) => void | Promise<void>
@@ -107,15 +89,20 @@ function updateInList<T extends { id: string }>(
 }
 
 export class SourceStore {
+  // Ephemeral 25 FPS telemetry kept strictly outside ReactiveUndoStore
   private liveSources: SourceData[] = [];
   private readonly liveVisibility = new Map<string, boolean>([
     ['live-measurement', true],
   ]);
-  private storedSources: SourceData[] = [];
-  private eqSources: EqualizerSourceConfig[] = [];
-  private unionSources: UnionSourceConfig[] = [];
   private feedbackRingLog: DetectedFeedbackTrack[] = [];
   private selectedSourceId = 'live-measurement';
+
+  // User-authored state backed by 60-deep Undo/Redo history
+  private readonly authoredStore = new ReactiveUndoStore<AuthoredSourcesState>({
+    storedSources: [],
+    eqSources: [],
+    unionSources: [],
+  });
 
   private readonly persistence: SourcePersistenceAdapter;
   private readonly listeners = new Set<() => void>();
@@ -132,14 +119,88 @@ export class SourceStore {
   >();
   private lastAllSourcesRef: {
     live: SourceData[];
-    stored: SourceData[];
-    eq: EqualizerSourceConfig[];
-    union: UnionSourceConfig[];
+    stored: readonly SourceData[];
+    eq: readonly EqualizerSourceConfig[];
+    union: readonly UnionSourceConfig[];
     result: SourceData[];
   } | null = null;
 
   constructor(persistence: SourcePersistenceAdapter = defaultPersistenceAdapter) {
     this.persistence = persistence;
+  }
+
+  private get storedSources(): readonly SourceData[] {
+    return this.authoredStore.state.storedSources;
+  }
+
+  private get eqSources(): readonly EqualizerSourceConfig[] {
+    return this.authoredStore.state.eqSources;
+  }
+
+  private get unionSources(): readonly UnionSourceConfig[] {
+    return this.authoredStore.state.unionSources;
+  }
+
+  get canUndo(): boolean {
+    return this.authoredStore.canUndo;
+  }
+
+  get canRedo(): boolean {
+    return this.authoredStore.canRedo;
+  }
+
+  endTransaction(): void {
+    this.authoredStore.endTransaction();
+  }
+
+  undo(): boolean {
+    const prev = this.authoredStore.state;
+    if (!this.authoredStore.undo()) return false;
+    this.syncAuthoredDiffToPersistence(prev, this.authoredStore.state);
+    this.ensureValidSelectedSourceId();
+    this.notify();
+    return true;
+  }
+
+  redo(): boolean {
+    const prev = this.authoredStore.state;
+    if (!this.authoredStore.redo()) return false;
+    this.syncAuthoredDiffToPersistence(prev, this.authoredStore.state);
+    this.ensureValidSelectedSourceId();
+    this.notify();
+    return true;
+  }
+
+  private syncAuthoredDiffToPersistence(
+    prev: AuthoredSourcesState,
+    next: AuthoredSourcesState
+  ): void {
+    const nextStoredIds = new Set(next.storedSources.map((s) => s.id));
+    for (const s of prev.storedSources) {
+      if (!nextStoredIds.has(s.id)) void this.persistence.remove(s.id);
+    }
+    const prevStoredMap = new Map(prev.storedSources.map((s) => [s.id, s]));
+    for (const s of next.storedSources) {
+      if (prevStoredMap.get(s.id) !== s) void this.persistence.save(s);
+    }
+
+    const nextEqIds = new Set(next.eqSources.map((e) => e.id));
+    for (const e of prev.eqSources) {
+      if (!nextEqIds.has(e.id)) void this.persistence.removeEq?.(e.id);
+    }
+    const prevEqMap = new Map(prev.eqSources.map((e) => [e.id, e]));
+    for (const e of next.eqSources) {
+      if (prevEqMap.get(e.id) !== e) void this.persistence.saveEq?.(e);
+    }
+
+    const nextUnionIds = new Set(next.unionSources.map((u) => u.id));
+    for (const u of prev.unionSources) {
+      if (!nextUnionIds.has(u.id)) void this.persistence.removeUnion?.(u.id);
+    }
+    const prevUnionMap = new Map(prev.unionSources.map((u) => [u.id, u]));
+    for (const u of next.unionSources) {
+      if (prevUnionMap.get(u.id) !== u) void this.persistence.saveUnion?.(u);
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -163,16 +224,15 @@ export class SourceStore {
     ]);
 
     let changed = false;
-    if (loadedStored.length > 0) {
-      this.storedSources = loadedStored;
-      changed = true;
-    }
-    if (loadedEq.length > 0) {
-      this.eqSources = loadedEq;
-      changed = true;
-    }
-    if (loadedUnion.length > 0) {
-      this.unionSources = loadedUnion;
+    if (loadedStored.length > 0 || loadedEq.length > 0 || loadedUnion.length > 0) {
+      this.authoredStore.replace(
+        {
+          storedSources: loadedStored.length > 0 ? loadedStored : this.storedSources,
+          eqSources: loadedEq.length > 0 ? loadedEq : this.eqSources,
+          unionSources: loadedUnion.length > 0 ? loadedUnion : this.unionSources,
+        },
+        false
+      );
       changed = true;
     }
 
@@ -323,10 +383,6 @@ export class SourceStore {
     this.notify();
   }
 
-  /**
-   * Inserts or deepens a surgical peaking notch filter on a Virtual Parametric EQ
-   * targeting `track.slotId`. Returns the ID of the updated or created EQ source.
-   */
   applyFeedbackNotchToEq(track: DetectedFeedbackTrack): string {
     const freqHz = Math.max(20, Math.min(20000, Math.round(track.frequencyHz)));
     const qVal = Math.min(24, Math.max(8, Math.round(track.estimatedQ)));
@@ -335,7 +391,7 @@ export class SourceStore {
         ? Math.max(-15, Math.min(-6, -Math.round(track.prominenceDb * 0.75)))
         : Math.max(-9, Math.min(-3, -Math.round(track.prominenceDb * 0.5)));
 
-    let targetEq =
+    const targetEq =
       this.eqSources.find((eq) => eq.targetSourceId === track.slotId) ?? null;
 
     if (!targetEq) {
@@ -357,13 +413,15 @@ export class SourceStore {
         targetSourceId: track.slotId,
         createdAt: new Date().toISOString(),
       };
-      this.eqSources = [...this.eqSources, createdEq];
+      this.authoredStore.update((s) => ({
+        ...s,
+        eqSources: [...s.eqSources, createdEq],
+      }));
       void this.persistence.saveEq?.(createdEq);
       this.notify();
       return id;
     }
 
-    // Check if an enabled peaking band already exists within +/- 2.5% of track.frequencyHz
     const existingBandIdx = targetEq.bands.findIndex(
       (b) =>
         b.enabled !== false &&
@@ -376,18 +434,15 @@ export class SourceStore {
     let nextGainDb = initialCutDb;
 
     if (existingBandIdx >= 0) {
-      // Repeated click: deepen existing notch by -3 dB (clamped at -18 dB)
       const currentGain = targetEq.bands[existingBandIdx]?.gainDb ?? 0;
       nextGainDb = Math.max(-18, currentGain - 3.0);
     } else {
-      // Find first unused / flat band (gainDb === 0 or disabled)
       const unusedIdx = targetEq.bands.findIndex(
         (b) => b.enabled === false || Math.abs(b.gainDb ?? 0) < 0.1
       );
       if (unusedIdx >= 0) {
         bandIdxToUpdate = unusedIdx;
       } else {
-        // Otherwise pick the band closest in log-frequency
         let bestIdx = 0;
         let bestDist = Infinity;
         for (let i = 0; i < targetEq.bands.length; i++) {
@@ -401,27 +456,30 @@ export class SourceStore {
       }
     }
 
-    this.eqSources = updateInList(
-      this.eqSources,
-      targetEq.id,
-      (eq) => ({
-        ...eq,
-        visible: true,
-        bands: eq.bands.map((b, idx) =>
-          idx === bandIdxToUpdate
-            ? {
-                ...b,
-                type: 'peaking',
-                frequency: freqHz,
-                q: qVal,
-                gainDb: nextGainDb,
-                enabled: true,
-              }
-            : b
-        ),
-      }),
-      this.persistence.saveEq
-    );
+    this.authoredStore.update((s) => ({
+      ...s,
+      eqSources: updateInList(
+        s.eqSources,
+        targetEq.id,
+        (eq) => ({
+          ...eq,
+          visible: true,
+          bands: eq.bands.map((b, idx) =>
+            idx === bandIdxToUpdate
+              ? {
+                  ...b,
+                  type: 'peaking',
+                  frequency: freqHz,
+                  q: qVal,
+                  gainDb: nextGainDb,
+                  enabled: true,
+                }
+              : b
+          ),
+        }),
+        this.persistence.saveEq
+      ),
+    }));
     this.notify();
     return targetEq.id;
   }
@@ -502,7 +560,6 @@ export class SourceStore {
     const target = candidate ?? this.getLiveSource();
     if (!target) return null;
 
-    // Do not capture an unpopulated skeleton frame before any DSP transform has run
     const hasSignal =
       target.levels !== undefined ||
       target.freqData.magnitude.some((v) => v !== 0);
@@ -522,15 +579,26 @@ export class SourceStore {
       DEFAULT_SOURCE_PALETTE[paletteIdx]
     );
 
-    this.storedSources = [...this.storedSources, captured];
-    this.selectedSourceId = captured.id;
-    void this.persistence.save(captured);
-    this.notify();
+    this.addStoredSource(captured);
     return captured;
   }
 
+  addStoredSource(source: SourceData): SourceData {
+    this.authoredStore.update((s) => ({
+      ...s,
+      storedSources: [...s.storedSources, source],
+    }));
+    this.selectedSourceId = source.id;
+    void this.persistence.save(source);
+    this.notify();
+    return source;
+  }
+
   deleteStoredSource(id: string): void {
-    this.storedSources = this.storedSources.filter((s) => s.id !== id);
+    this.authoredStore.update((s) => ({
+      ...s,
+      storedSources: s.storedSources.filter((item) => item.id !== id),
+    }));
     void this.persistence.remove(id);
     if (this.selectedSourceId === id) {
       this.selectedSourceId = this.getActiveLiveSourceId();
@@ -540,13 +608,20 @@ export class SourceStore {
 
   updateStoredSource(
     id: string,
-    partial: Partial<Pick<SourceData, 'name' | 'gainOffsetDb' | 'delayOffsetMs'>>
+    partial: Partial<Pick<SourceData, 'name' | 'gainOffsetDb' | 'delayOffsetMs'>>,
+    txKey?: string
   ): void {
-    this.storedSources = updateInList(
-      this.storedSources,
-      id,
-      (s) => ({ ...s, ...partial }),
-      this.persistence.save
+    this.authoredStore.update(
+      (s) => ({
+        ...s,
+        storedSources: updateInList(
+          s.storedSources,
+          id,
+          (item) => ({ ...item, ...partial }),
+          this.persistence.save
+        ),
+      }),
+      txKey
     );
     this.notify();
   }
@@ -556,26 +631,35 @@ export class SourceStore {
       this.liveVisibility.set(id, visible);
       this.liveSources = updateInList(this.liveSources, id, (s) => ({ ...s, visible }));
     } else if (id.startsWith('stored-')) {
-      this.storedSources = updateInList(
-        this.storedSources,
-        id,
-        (s) => ({ ...s, visible }),
-        this.persistence.save
-      );
+      this.authoredStore.update((s) => ({
+        ...s,
+        storedSources: updateInList(
+          s.storedSources,
+          id,
+          (item) => ({ ...item, visible }),
+          this.persistence.save
+        ),
+      }));
     } else if (id.startsWith('eq-')) {
-      this.eqSources = updateInList(
-        this.eqSources,
-        id,
-        (s) => ({ ...s, visible }),
-        this.persistence.saveEq
-      );
+      this.authoredStore.update((s) => ({
+        ...s,
+        eqSources: updateInList(
+          s.eqSources,
+          id,
+          (item) => ({ ...item, visible }),
+          this.persistence.saveEq
+        ),
+      }));
     } else if (id.startsWith('union-')) {
-      this.unionSources = updateInList(
-        this.unionSources,
-        id,
-        (s) => ({ ...s, visible }),
-        this.persistence.saveUnion
-      );
+      this.authoredStore.update((s) => ({
+        ...s,
+        unionSources: updateInList(
+          s.unionSources,
+          id,
+          (item) => ({ ...item, visible }),
+          this.persistence.saveUnion
+        ),
+      }));
     }
     this.notify();
   }
@@ -591,7 +675,10 @@ export class SourceStore {
       targetSourceId: this.getActiveLiveSourceId(),
       createdAt: new Date().toISOString(),
     };
-    this.eqSources = [...this.eqSources, newEq];
+    this.authoredStore.update((s) => ({
+      ...s,
+      eqSources: [...s.eqSources, newEq],
+    }));
     this.selectedSourceId = id;
     void this.persistence.saveEq?.(newEq);
     this.notify();
@@ -606,7 +693,10 @@ export class SourceStore {
       }
       this.pendingDraggedEq = null;
     }
-    this.eqSources = this.eqSources.filter((s) => s.id !== id);
+    this.authoredStore.update((s) => ({
+      ...s,
+      eqSources: s.eqSources.filter((item) => item.id !== id),
+    }));
     this.eqEvalCache.delete(id);
     void this.persistence.removeEq?.(id);
     if (this.selectedSourceId === id) {
@@ -616,34 +706,51 @@ export class SourceStore {
   }
 
   autoFlattenRoomModesWithEq(eqId: string): void {
-    this.eqSources = updateInList(
-      this.eqSources,
-      eqId,
-      (eq) => ({ ...eq, bands: createRoomModeFlattenEqBands() }),
-      this.persistence.saveEq
-    );
+    this.authoredStore.update((s) => ({
+      ...s,
+      eqSources: updateInList(
+        s.eqSources,
+        eqId,
+        (eq) => ({ ...eq, bands: createRoomModeFlattenEqBands() }),
+        this.persistence.saveEq
+      ),
+    }));
     this.notify();
   }
 
   setEqTargetSource(eqId: string, targetSourceId: string | null): void {
-    this.eqSources = updateInList(
-      this.eqSources,
-      eqId,
-      (item) => ({ ...item, targetSourceId }),
-      this.persistence.saveEq
-    );
+    this.authoredStore.update((s) => ({
+      ...s,
+      eqSources: updateInList(
+        s.eqSources,
+        eqId,
+        (item) => ({ ...item, targetSourceId }),
+        this.persistence.saveEq
+      ),
+    }));
     this.notify();
   }
 
-  updateEqBand(eqId: string, bandIdx: number, partial: Partial<BiquadSpec>): void {
-    this.eqSources = updateInList(
-      this.eqSources,
-      eqId,
-      (eq) => ({
-        ...eq,
-        bands: eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b)),
+  updateEqBand(
+    eqId: string,
+    bandIdx: number,
+    partial: Partial<BiquadSpec>,
+    txKey?: string
+  ): void {
+    this.authoredStore.update(
+      (s) => ({
+        ...s,
+        eqSources: updateInList(
+          s.eqSources,
+          eqId,
+          (eq) => ({
+            ...eq,
+            bands: eq.bands.map((b, i) => (i === bandIdx ? { ...b, ...partial } : b)),
+          }),
+          this.persistence.saveEq
+        ),
       }),
-      this.persistence.saveEq
+      txKey
     );
     this.notify();
   }
@@ -653,21 +760,26 @@ export class SourceStore {
       this.eqSources.find((eq) => eq.id === this.selectedSourceId) ?? this.eqSources[0];
     if (!activeEq) return;
 
-    this.eqSources = this.eqSources.map((eq) => {
-      if (eq.id !== activeEq.id) return eq;
-      const bands = eq.bands.map((b, i) =>
-        i === bandIndex ? { ...b, frequency, gainDb } : b
-      );
-      const updated = { ...eq, bands };
-      this.scheduleDebouncedEqSave(updated);
-      return updated;
-    });
+    this.authoredStore.update(
+      (s) => ({
+        ...s,
+        eqSources: s.eqSources.map((eq) => {
+          if (eq.id !== activeEq.id) return eq;
+          const bands = eq.bands.map((b, i) =>
+            i === bandIndex ? { ...b, frequency, gainDb } : b
+          );
+          const updated = { ...eq, bands };
+          this.scheduleDebouncedEqSave(updated);
+          return updated;
+        }),
+      }),
+      `drag-eq-${activeEq.id}-${bandIndex}`
+    );
     this.notify();
   }
 
   private scheduleDebouncedEqSave(updated: EqualizerSourceConfig): void {
     if (this.eqDragSaveTimer === null) {
-      // Leading edge: persist immediately and open a 150ms throttle window
       void this.persistence.saveEq?.(updated);
       this.pendingDraggedEq = null;
       this.eqDragSaveTimer = setTimeout(() => {
@@ -679,7 +791,6 @@ export class SourceStore {
         }
       }, 150);
     } else {
-      // Within throttle window: coalesce for trailing-edge save
       this.pendingDraggedEq = updated;
     }
   }
@@ -700,7 +811,10 @@ export class SourceStore {
       sourceIds: [allIds[0], allIds[1] ?? allIds[0]],
       createdAt: new Date().toISOString(),
     };
-    this.unionSources = [...this.unionSources, newUnion];
+    this.authoredStore.update((s) => ({
+      ...s,
+      unionSources: [...s.unionSources, newUnion],
+    }));
     this.selectedSourceId = id;
     void this.persistence.saveUnion?.(newUnion);
     this.notify();
@@ -708,7 +822,10 @@ export class SourceStore {
   }
 
   deleteUnionSource(id: string): void {
-    this.unionSources = this.unionSources.filter((s) => s.id !== id);
+    this.authoredStore.update((s) => ({
+      ...s,
+      unionSources: s.unionSources.filter((item) => item.id !== id),
+    }));
     this.unionEvalCache.delete(id);
     void this.persistence.removeUnion?.(id);
     if (this.selectedSourceId === id) {
@@ -721,12 +838,15 @@ export class SourceStore {
     unionId: string,
     partial: Partial<Pick<UnionSourceConfig, 'operation' | 'sourceIds'>>
   ): void {
-    this.unionSources = updateInList(
-      this.unionSources,
-      unionId,
-      (u) => ({ ...u, ...partial }),
-      this.persistence.saveUnion
-    );
+    this.authoredStore.update((s) => ({
+      ...s,
+      unionSources: updateInList(
+        s.unionSources,
+        unionId,
+        (u) => ({ ...u, ...partial }),
+        this.persistence.saveUnion
+      ),
+    }));
     this.notify();
   }
 }

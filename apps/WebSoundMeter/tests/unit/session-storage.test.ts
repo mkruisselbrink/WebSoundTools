@@ -22,6 +22,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultEqBands } from '../../src/sources/eq-source.js';
 import {
+  ALL_STORES,
+  DB_NAME,
+  DB_VERSION,
   StoredCalibrationFile,
   clearSplShowCheckpointsFromDb,
   deleteCalibrationFileFromDb,
@@ -77,6 +80,18 @@ describe('session-storage (IndexedDB v2)', () => {
       configurable: true,
       writable: true,
     });
+  });
+
+  it('preserves exact IndexedDB database name, version, and object store names', () => {
+    expect(DB_NAME).toBe('web-sound-meter-db');
+    expect(DB_VERSION).toBe(3);
+    expect(ALL_STORES).toEqual([
+      'stored-traces',
+      'eq-sources',
+      'union-sources',
+      'calibration-curves',
+      'spl-show-logs',
+    ]);
   });
 
   it('gracefully falls back when indexedDB is unavailable', async () => {

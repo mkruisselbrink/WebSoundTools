@@ -1,32 +1,8 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-/**
- * Lightweight Synchronous Workspace Session Snapshot (`localStorage`).
- *
- * Stores multi-slot Live Measurement configurations (channel routing, simulator preset,
- * DSP settings, calibration curve ID, visibility), generator preferences, hardware device
- * selection, and fallback view state so the application hydrates synchronously on frame 1.
- */
-
+import { type StorageLike, readStorageJson, writeStorageJson } from '@foh/state';
 import { createDefaultLiveSlot } from '../audio/audio-engine.js';
 import { PlotType } from '../charts/plot-types.js';
 import {
@@ -155,79 +131,59 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
   };
 }
 
-function getDefaultStorage(): Storage | null {
-  try {
-    return typeof localStorage !== 'undefined' ? localStorage : null;
-  } catch {
-    return null;
-  }
-}
-
 export function loadWorkspaceSession(
-  storage: Pick<Storage, 'getItem'> | null = getDefaultStorage()
+  storage?: Pick<StorageLike, 'getItem'> | null
 ): WorkspaceSessionSnapshot {
   const defaults = createDefaultWorkspaceSession();
-  if (!storage) return defaults;
+  const parsed = readStorageJson<
+    Partial<WorkspaceSessionSnapshot> & { liveSlots?: Partial<SerializedLiveSlot>[] }
+  >(WORKSPACE_SESSION_STORAGE_KEY, storage);
 
-  try {
-    const raw = storage.getItem(WORKSPACE_SESSION_STORAGE_KEY);
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as Partial<WorkspaceSessionSnapshot> & {
-      liveSlots?: Partial<SerializedLiveSlot>[];
-    };
-    if (!parsed || parsed.version !== 1) {
-      return defaults;
-    }
-
-    const hydratedSlots =
-      Array.isArray(parsed.liveSlots) && parsed.liveSlots.length > 0
-        ? parsed.liveSlots.map((s, idx) => hydrateLiveSlot(s, idx))
-        : defaults.liveSlots;
-
-    return {
-      version: 1,
-      workspaceMode: parsed.workspaceMode ?? defaults.workspaceMode,
-      layoutPreset: parsed.layoutPreset ?? defaults.layoutPreset,
-      chartPlotTypes:
-        Array.isArray(parsed.chartPlotTypes) && parsed.chartPlotTypes.length > 0
-          ? parsed.chartPlotTypes
-          : defaults.chartPlotTypes,
-      showChartPlotTypes:
-        Array.isArray(parsed.showChartPlotTypes) && parsed.showChartPlotTypes.length > 0
-          ? parsed.showChartPlotTypes
-          : defaults.showChartPlotTypes,
-      splAlertThresholds: {
-        ...DEFAULT_SPL_ALERT_THRESHOLDS,
-        ...(parsed.splAlertThresholds ?? {}),
-      },
-      audioInputMode: parsed.audioInputMode ?? defaults.audioInputMode,
-      simulatorPreset: parsed.simulatorPreset ?? hydratedSlots[0].simulatorPreset,
-      splWeighting: parsed.splWeighting ?? defaults.splWeighting,
-      splTime: parsed.splTime ?? defaults.splTime,
-      selectedSourceId: parsed.selectedSourceId ?? defaults.selectedSourceId,
-      liveSlots: hydratedSlots,
-      genConfig: {
-        ...defaults.genConfig,
-        ...(parsed.genConfig ?? {}),
-      },
-      hardwareRouting: {
-        ...defaults.hardwareRouting,
-        ...(parsed.hardwareRouting ?? {}),
-      },
-    };
-  } catch {
+  if (!parsed || parsed.version !== 1) {
     return defaults;
   }
+
+  const hydratedSlots =
+    Array.isArray(parsed.liveSlots) && parsed.liveSlots.length > 0
+      ? parsed.liveSlots.map((s, idx) => hydrateLiveSlot(s, idx))
+      : defaults.liveSlots;
+
+  return {
+    version: 1,
+    workspaceMode: parsed.workspaceMode ?? defaults.workspaceMode,
+    layoutPreset: parsed.layoutPreset ?? defaults.layoutPreset,
+    chartPlotTypes:
+      Array.isArray(parsed.chartPlotTypes) && parsed.chartPlotTypes.length > 0
+        ? parsed.chartPlotTypes
+        : defaults.chartPlotTypes,
+    showChartPlotTypes:
+      Array.isArray(parsed.showChartPlotTypes) && parsed.showChartPlotTypes.length > 0
+        ? parsed.showChartPlotTypes
+        : defaults.showChartPlotTypes,
+    splAlertThresholds: {
+      ...DEFAULT_SPL_ALERT_THRESHOLDS,
+      ...(parsed.splAlertThresholds ?? {}),
+    },
+    audioInputMode: parsed.audioInputMode ?? defaults.audioInputMode,
+    simulatorPreset: parsed.simulatorPreset ?? hydratedSlots[0].simulatorPreset,
+    splWeighting: parsed.splWeighting ?? defaults.splWeighting,
+    splTime: parsed.splTime ?? defaults.splTime,
+    selectedSourceId: parsed.selectedSourceId ?? defaults.selectedSourceId,
+    liveSlots: hydratedSlots,
+    genConfig: {
+      ...defaults.genConfig,
+      ...(parsed.genConfig ?? {}),
+    },
+    hardwareRouting: {
+      ...defaults.hardwareRouting,
+      ...(parsed.hardwareRouting ?? {}),
+    },
+  };
 }
 
 export function saveWorkspaceSession(
   snapshot: WorkspaceSessionSnapshot,
-  storage: Pick<Storage, 'setItem'> | null = getDefaultStorage()
+  storage?: Pick<StorageLike, 'setItem'> | null
 ): void {
-  if (!storage) return;
-  try {
-    storage.setItem(WORKSPACE_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {
-    // Ignore quota or private-mode errors
-  }
+  writeStorageJson(WORKSPACE_SESSION_STORAGE_KEY, snapshot, storage);
 }

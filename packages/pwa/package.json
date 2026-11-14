@@ -7,7 +7,10 @@
   "exports": {
     "./client": "./src/register-sw.ts",
     "./sw": "./src/sw-core.ts",
-    "./vite": "./src/vite-pwa-plugin.ts"
+    "./vite": {
+      "types": "./src/vite-pwa-plugin.d.ts",
+      "default": "./src/vite-pwa-plugin.js"
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

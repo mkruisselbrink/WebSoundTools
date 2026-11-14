@@ -23,6 +23,7 @@
  * selection state, colormap settings, and merged speaker library (`src/model/project-store.ts`).
  */
 
+import { ReactiveUndoStore } from '@foh/state';
 import { getBuiltinSpeakerMap } from '../library/builtin-speakers.js';
 import { getDemoPresetById } from '../library/demo-presets.js';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
@@ -123,13 +124,7 @@ export type ProjectStoreListener = (changeKind: StoreChangeKind, isInteractive: 
 const GROUP_PALETTE = ['#38bdf8', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#eab308'];
 
 export class ProjectStore {
-  private sceneState: ProjectScene;
-  private undoStack: ProjectScene[] = [];
-  private redoStack: ProjectScene[] = [];
-  private readonly maxHistory: number;
-
-  private activeTransactionKey: string | null = null;
-  private lastTransactionTimeMs = 0;
+  private readonly sceneStore: ReactiveUndoStore<ProjectScene>;
 
   private selected: SelectedEntity | null = null;
   private colormapState: ColormapConfig = { ...DEFAULT_COLORMAP_CONFIG };
@@ -138,15 +133,18 @@ export class ProjectStore {
   private idCounter = 1;
 
   constructor(initialScene?: ProjectScene, maxHistory: number = 60) {
-    this.sceneState = initialScene ?? getDemoPresetById('club-cardioid-pa').createScene();
-    this.maxHistory = maxHistory;
-    if (this.sceneState.pointSources.length > 0) {
-      this.selected = { kind: 'point-source', id: this.sceneState.pointSources[0].id };
+    const startScene = initialScene ?? getDemoPresetById('club-cardioid-pa').createScene();
+    this.sceneStore = new ReactiveUndoStore<ProjectScene>(startScene, { maxHistory });
+    this.sceneStore.subscribe((_state, isInteractive) => {
+      this.emit('scene', isInteractive);
+    });
+    if (startScene.pointSources.length > 0) {
+      this.selected = { kind: 'point-source', id: startScene.pointSources[0].id };
     }
   }
 
   public get scene(): ProjectScene {
-    return this.sceneState;
+    return this.sceneStore.state;
   }
 
   public get selectedEntity(): SelectedEntity | null {
@@ -158,11 +156,11 @@ export class ProjectStore {
   }
 
   public get canUndo(): boolean {
-    return this.undoStack.length > 0;
+    return this.sceneStore.canUndo;
   }
 
   public get canRedo(): boolean {
-    return this.redoStack.length > 0;
+    return this.sceneStore.canRedo;
   }
 
   public subscribe(listener: ProjectStoreListener): () => void {
@@ -239,7 +237,7 @@ export class ProjectStore {
   }
 
   public endTransaction(): void {
-    this.activeTransactionKey = null;
+    this.sceneStore.endTransaction();
   }
 
   /**
@@ -250,43 +248,11 @@ export class ProjectStore {
     updater: (prev: ProjectScene) => ProjectScene,
     transactionKey?: string
   ): void {
-    const next = updater(this.sceneState);
-    if (next === this.sceneState) return;
-
-    const now = performance.now();
-    const isCoalesced =
-      Boolean(transactionKey) &&
-      transactionKey === this.activeTransactionKey &&
-      now - this.lastTransactionTimeMs < 800;
-
-    if (!isCoalesced) {
-      this.undoStack.push(this.sceneState);
-      if (this.undoStack.length > this.maxHistory) {
-        this.undoStack.shift();
-      }
-      this.redoStack.length = 0;
-      this.activeTransactionKey = transactionKey ?? null;
-    }
-
-    if (transactionKey) {
-      this.lastTransactionTimeMs = now;
-    }
-
-    this.sceneState = next;
-    this.emit('scene', Boolean(transactionKey));
+    this.sceneStore.update(updater, transactionKey);
   }
 
   /** Replaces the entire active project (e.g. preset load or file open) and clears undo history. */
   public replaceProject(scene: ProjectScene, recordUndo: boolean = false): void {
-    if (recordUndo) {
-      this.undoStack.push(this.sceneState);
-      if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
-    } else {
-      this.undoStack.length = 0;
-    }
-    this.redoStack.length = 0;
-    this.activeTransactionKey = null;
-    this.sceneState = scene;
     if (scene.pointSources.length > 0) {
       this.selected = { kind: 'point-source', id: scene.pointSources[0].id };
     } else if (scene.subArrays.length > 0) {
@@ -294,7 +260,7 @@ export class ProjectStore {
     } else {
       this.selected = null;
     }
-    this.emit('scene', false);
+    this.sceneStore.replace(scene, recordUndo);
   }
 
   public loadPreset(presetId: string): void {
@@ -303,23 +269,11 @@ export class ProjectStore {
   }
 
   public undo(): boolean {
-    const prev = this.undoStack.pop();
-    if (!prev) return false;
-    this.redoStack.push(this.sceneState);
-    this.activeTransactionKey = null;
-    this.sceneState = prev;
-    this.emit('scene', false);
-    return true;
+    return this.sceneStore.undo();
   }
 
   public redo(): boolean {
-    const next = this.redoStack.pop();
-    if (!next) return false;
-    this.undoStack.push(this.sceneState);
-    this.activeTransactionKey = null;
-    this.sceneState = next;
-    this.emit('scene', false);
-    return true;
+    return this.sceneStore.redo();
   }
 
   // --- Domain Convenience Mutators ---
@@ -375,7 +329,7 @@ export class ProjectStore {
   }
 
   public addDspGroup(partial?: Partial<DspGroup>): DspGroup {
-    const idx = this.sceneState.dspGroups.length;
+    const idx = this.scene.dspGroups.length;
     const group: DspGroup = {
       id: partial?.id ?? this.nextId('grp'),
       name: partial?.name ?? `DSP Group ${idx + 1}`,
@@ -411,9 +365,9 @@ export class ProjectStore {
   }
 
   public removeDspGroup(groupId: string): void {
-    if (this.sceneState.dspGroups.length <= 1) return;
+    if (this.scene.dspGroups.length <= 1) return;
     const fallbackGroupId =
-      this.sceneState.dspGroups.find((g) => g.id !== groupId)?.id ?? groupId;
+      this.scene.dspGroups.find((g) => g.id !== groupId)?.id ?? groupId;
     this.updateScene((s) => ({
       ...s,
       dspGroups: s.dspGroups.filter((g) => g.id !== groupId),
@@ -431,8 +385,8 @@ export class ProjectStore {
   }
 
   public addPointSource(partial?: Partial<PointSourceInstance>): PointSourceInstance {
-    const defaultGroup = this.sceneState.dspGroups[0]?.id ?? this.addDspGroup().id;
-    const idx = this.sceneState.pointSources.length + 1;
+    const defaultGroup = this.scene.dspGroups[0]?.id ?? this.addDspGroup().id;
+    const idx = this.scene.pointSources.length + 1;
     const ps: PointSourceInstance = {
       id: partial?.id ?? this.nextId('ps'),
       name: partial?.name ?? `Point Source ${idx}`,
@@ -479,10 +433,10 @@ export class ProjectStore {
 
   public addSubArray(partial?: Partial<SubArrayInstance>): SubArrayInstance {
     const defaultGroup =
-      this.sceneState.dspGroups.find((g) => g.dsp.lowPass.topology !== 'off')?.id ??
-      this.sceneState.dspGroups[0]?.id ??
+      this.scene.dspGroups.find((g) => g.dsp.lowPass.topology !== 'off')?.id ??
+      this.scene.dspGroups[0]?.id ??
       this.addDspGroup().id;
-    const idx = this.sceneState.subArrays.length + 1;
+    const idx = this.scene.subArrays.length + 1;
     const sa: SubArrayInstance = {
       id: partial?.id ?? this.nextId('sa'),
       name: partial?.name ?? `Sub Array ${idx}`,
@@ -530,7 +484,7 @@ export class ProjectStore {
   }
 
   public addSurface(partial?: Partial<AudienceSurface>): AudienceSurface {
-    const idx = this.sceneState.surfaces.length + 1;
+    const idx = this.scene.surfaces.length + 1;
     const surf: AudienceSurface = {
       id: partial?.id ?? this.nextId('surf'),
       name: partial?.name ?? `Audience Zone ${idx}`,
@@ -577,7 +531,7 @@ export class ProjectStore {
   }
 
   public addVirtualMic(partial?: Partial<VirtualMicInstance>): VirtualMicInstance {
-    const idx = this.sceneState.virtualMics.length + 1;
+    const idx = this.scene.virtualMics.length + 1;
     const mic: VirtualMicInstance = {
       id: partial?.id ?? this.nextId('mic'),
       name: partial?.name ?? `Virtual Mic ${idx}`,

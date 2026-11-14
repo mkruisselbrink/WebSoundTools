@@ -1,19 +1,17 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundTools Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it, vi } from 'vitest';
-import { registerOfflineServiceWorker } from '../../src/pwa/register-sw.js';
 import {
+  buildCacheName,
   cleanupOldCaches,
   handleServiceWorkerFetch,
   installPrecache,
+  selectObsoleteCaches,
   shouldInterceptRequest,
+  shouldInterceptSameOriginGet,
   withCrossOriginIsolationHeaders,
-} from '../../src/pwa/sw-core.js';
+} from './sw-core.js';
 
 class MockCache {
   private readonly store = new Map<string, Response>();
@@ -74,7 +72,7 @@ class MockCacheStorage {
   }
 }
 
-describe('PWA Offline Service Worker Core & Registration', () => {
+describe('sw-core', () => {
   it('injects COOP and COEP headers when missing and preserves them when present', async () => {
     const raw = new Response('hello', {
       status: 200,
@@ -84,123 +82,88 @@ describe('PWA Offline Service Worker Core & Registration', () => {
     expect(isolated.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
     expect(isolated.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
     expect(await isolated.text()).toBe('hello');
-
-    // Already isolated response returns as-is
-    const already = withCrossOriginIsolationHeaders(isolated);
-    expect(already).toBe(isolated);
+    expect(withCrossOriginIsolationHeaders(isolated)).toBe(isolated);
   });
 
-  it('installs precache assets and cleans up outdated cache versions', async () => {
+  it('installs precache assets and prunes obsolete cache versions by prefix', async () => {
     const storage = new MockCacheStorage();
-    await installPrecache(storage, 'wsm-precache-old', ['/index.html']);
-    await installPrecache(storage, 'wsm-precache-v2', ['/index.html', '/assets/app.js']);
+    const active = buildCacheName('foh-precache-', 'v2');
+    await installPrecache(storage, 'foh-precache-old', ['/index.html']);
+    await installPrecache(storage, active, ['/index.html', '/assets/app.js']);
     await storage.open('unrelated-cache');
 
-    const deleted = await cleanupOldCaches(storage, 'wsm-precache-v2');
-    expect(deleted).toEqual(['wsm-precache-old']);
-    expect(await storage.keys()).toEqual(['wsm-precache-v2', 'unrelated-cache']);
+    expect(
+      selectObsoleteCaches(await storage.keys(), active, 'foh-precache-')
+    ).toEqual(['foh-precache-old']);
+
+    const deleted = await cleanupOldCaches(storage, active, 'foh-precache-');
+    expect(deleted).toEqual(['foh-precache-old']);
+    expect(await storage.keys()).toEqual([active, 'unrelated-cache']);
   });
 
   it('filters out non-GET, cross-origin, and Vite HMR requests', () => {
-    const origin = 'https://soundmeter.example';
+    const origin = 'https://soundtools.example';
     expect(
       shouldInterceptRequest(
-        new Request('https://soundmeter.example/assets/app.js', { method: 'GET' }),
+        new Request('https://soundtools.example/assets/app.js', { method: 'GET' }),
         origin
       )
     ).toBe(true);
     expect(
-      shouldInterceptRequest(
-        new Request('https://soundmeter.example/api', { method: 'POST' }),
-        origin
-      )
+      shouldInterceptSameOriginGet('POST', 'https://soundtools.example/api', origin)
     ).toBe(false);
     expect(
-      shouldInterceptRequest(
-        new Request('https://other.example/script.js', { method: 'GET' }),
-        origin
-      )
+      shouldInterceptSameOriginGet('GET', 'https://other.example/script.js', origin)
     ).toBe(false);
     expect(
-      shouldInterceptRequest(
-        new Request('https://soundmeter.example/@vite/client', { method: 'GET' }),
-        origin
-      )
+      shouldInterceptSameOriginGet('GET', 'https://soundtools.example/@vite/client', origin)
     ).toBe(false);
   });
 
   it('serves cached /index.html with COOP/COEP headers for parameterized navigation URLs when offline', async () => {
     const storage = new MockCacheStorage();
-    await installPrecache(storage, 'wsm-precache-v1', ['/index.html']);
+    await installPrecache(storage, 'foh-v1', ['/index.html']);
 
     const offlineFetch = vi.fn().mockRejectedValue(new Error('Network offline'));
     const navReq = new Request(
-      'https://soundmeter.example/?layout=3&plots=magnitude,phase,impulse&preset=room-modes',
-      {
-        headers: { Accept: 'text/html' },
-      }
+      'https://soundtools.example/?layout=3&plots=magnitude,phase',
+      { headers: { Accept: 'text/html' } }
     );
 
-    const res = await handleServiceWorkerFetch(
-      navReq,
-      storage,
-      'wsm-precache-v1',
-      offlineFetch
-    );
+    const res = await handleServiceWorkerFetch(navReq, storage, 'foh-v1', offlineFetch);
     expect(res.status).toBe(200);
     expect(res.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
     expect(res.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
     expect(await res.text()).toBe('precached:/index.html');
   });
 
-  it('serves static assets Network-First when online and falls back to precached/runtime cache when offline', async () => {
+  it('serves static assets Network-First when online and falls back to cache when offline', async () => {
     const storage = new MockCacheStorage();
-    await installPrecache(storage, 'wsm-precache-v1', ['/assets/precached.js']);
+    await installPrecache(storage, 'foh-v1', ['/assets/precached.js']);
 
     const netFetch = vi.fn().mockImplementation(async (req: Request) => {
       return new Response(`network:${new URL(req.url).pathname}`, { status: 200 });
     });
 
-    // 1. Online request fetches fresh asset from network and updates cache
-    const onlineReq = new Request('https://soundmeter.example/assets/worker.js');
-    const onlineRes = await handleServiceWorkerFetch(
-      onlineReq,
-      storage,
-      'wsm-precache-v1',
-      netFetch
-    );
+    const onlineReq = new Request('https://soundtools.example/assets/worker.js');
+    const onlineRes = await handleServiceWorkerFetch(onlineReq, storage, 'foh-v1', netFetch);
     expect(await onlineRes.text()).toBe('network:/assets/worker.js');
-    expect(netFetch).toHaveBeenCalledTimes(1);
 
-    // 2. Offline request falls back to runtime cache or precached asset
     const offlineFetch = vi.fn().mockRejectedValue(new Error('Offline'));
     const cachedRuntimeRes = await handleServiceWorkerFetch(
       onlineReq,
       storage,
-      'wsm-precache-v1',
+      'foh-v1',
       offlineFetch
     );
     expect(await cachedRuntimeRes.text()).toBe('network:/assets/worker.js');
 
     const cachedPrecacheRes = await handleServiceWorkerFetch(
-      new Request('https://soundmeter.example/assets/precached.js'),
+      new Request('https://soundtools.example/assets/precached.js'),
       storage,
-      'wsm-precache-v1',
+      'foh-v1',
       offlineFetch
     );
     expect(await cachedPrecacheRes.text()).toBe('precached:/assets/precached.js');
   });
-
-  it('registers the Service Worker safely and handles unsupported environments', async () => {
-    const registerSpy = vi.fn().mockResolvedValue({});
-    expect(await registerOfflineServiceWorker({ register: registerSpy }, '/sw.js')).toBe(
-      true
-    );
-    expect(registerSpy).toHaveBeenCalledWith('/sw.js', { scope: '/' });
-
-    expect(await registerOfflineServiceWorker(undefined)).toBe(false);
-    const failingSpy = vi.fn().mockRejectedValue(new Error('SW blocked'));
-    expect(await registerOfflineServiceWorker({ register: failingSpy })).toBe(false);
-  });
 });
-

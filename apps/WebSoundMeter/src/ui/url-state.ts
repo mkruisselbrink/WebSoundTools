@@ -1,36 +1,8 @@
-/**
- * WebSoundMeter
- * Copyright (C) 2026 WebSoundMeter Contributors
- * Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+// Copyright (C) 2026 WebSoundMeter Contributors
+// Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-/**
- * URL Query State Parser, Serializer & Browser History Synchronizer (`src/ui/url-state.ts`).
- *
- * Encodes shareable view & routing state in `window.location.search`:
- *  - `layout`: `'pa-triple' | 'tf-dual' | 'rta-mix' | 'single'`
- *  - `plots`: comma-separated `PlotType` list (1..3 charts)
- *  - `mode`: `'simulator' | 'hardware'`
- *  - `preset`: `SimulatorPresetId`
- *  - `spl`: `<WeightingCurve>,<MeterIntegrationTime>` (e.g. `C,Slow`)
- *  - `src`: selected source ID
- */
-
+import { formatQueryString, parseSearchParams, syncBrowserQueryString } from '@foh/state';
 import { PLOT_METADATA, PlotType } from '../charts/plot-types.js';
 import { InputSourceMode } from '../dsp/dsp.worker.js';
 import { SIMULATOR_PRESETS, SimulatorPresetId } from '../dsp/synthetic-rig.js';
@@ -111,7 +83,7 @@ export function parseUrlViewState(
     ...DEFAULT_URL_VIEW_STATE,
     ...fallback,
   };
-  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const params = parseSearchParams(search);
 
   const rawLayout = params.get('layout');
   const layoutPreset: LayoutPreset =
@@ -222,27 +194,12 @@ export function serializeUrlViewState(state: UrlViewState): string {
     params.set('src', state.selectedSourceId);
   }
 
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
+  return formatQueryString(params);
 }
 
 export function syncBrowserUrlState(
   state: UrlViewState,
   mode: 'push' | 'replace' = 'replace'
 ): void {
-  if (typeof window === 'undefined' || !window.history || !window.location) {
-    return;
-  }
-  const search = serializeUrlViewState(state);
-  const currentSearch = window.location.search || '';
-  if (search === currentSearch) {
-    return;
-  }
-  const nextUrl = `${window.location.pathname}${search}${window.location.hash || ''}`;
-  if (mode === 'push') {
-    window.history.pushState(null, '', nextUrl);
-  } else {
-    window.history.replaceState(null, '', nextUrl);
-  }
+  syncBrowserQueryString(serializeUrlViewState(state), mode);
 }
-
