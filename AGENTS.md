@@ -29,6 +29,7 @@ Imports must strictly flow top-down—never introduce cycles or pull DOM/Lit int
 ## Code, Testing & Header Conventions
 
 - **File Size Target:** Keep modules focused and cohesive (~100–300 lines). Split pure math/algorithms from stateful controllers and Lit views.
+- **Current-State Code Comments:** Write JSDoc and inline comments that document the current contract and invariants cleanly—never leave transitional comments ("Upgraded to...", "for legacy compatibility", "extracted from...").
 - **Co-Located Unit Tests:** Place unit tests right beside the module under test (`src/foo.test.ts` next to `src/foo.ts`). Reserve `apps/*/tests/` strictly for multi-module `integration/` and Playwright `e2e/` specs.
 - **Package Exports:** Never expose wildcard `./src/*` exports in `packages/*/package.json`—export explicit entrypoints (`./src/index.ts`) so `.test.ts` files stay internal.
 - **Compact SPDX Copyright Headers (`GPL-3.0-or-later`):** Every `.ts` file starts with the compact per-layer SPDX header:

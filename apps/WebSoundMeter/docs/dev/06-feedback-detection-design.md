@@ -1,7 +1,6 @@
-# 07. Real-Time Acoustic Feedback & Ringing Detection Design
+# 06. Real-Time Acoustic Feedback & Ringing Detection Design
 
-> **Status**: Proposed Design Specification  
-> **Related Modules**: `src/dsp/feedback-detector.ts` (new), `src/dsp/analyzer-pipeline.ts`, `src/dsp/transfer-function.ts`, `src/dsp/synthetic-rig.ts`, `src/charts/canvas-chart-painter.ts`, `src/ui/inspectors/live-measurement-inspector.ts`
+> **Related Modules**: `src/dsp/feedback-discriminators.ts`, `src/dsp/feedback-detector.ts`, `@foh/acoustics` (`pitch-notes.ts`), `src/dsp/analyzer-pipeline.ts`, `src/charts/wsm-chart-adapter.ts`, `src/ui/show-sidebar-view.ts`
 
 ---
 

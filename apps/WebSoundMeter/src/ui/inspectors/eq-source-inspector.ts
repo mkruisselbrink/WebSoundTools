@@ -70,9 +70,14 @@ export function renderEqInspector(
             handlers.onTargetSourceChange(eq.id, targetSourceId);
           }}
         >
-          <option value="">None (Show Filter Curve Only)</option>
+          <option value="" ?selected=${!eq.targetSourceId}>
+            None (Show Filter Curve Only)
+          </option>
           ${candidateTargets.map(
-            (s) => html`<option value=${s.id}>${s.name}</option>`
+            (s) =>
+              html`<option value=${s.id} ?selected=${s.id === eq.targetSourceId}>
+                ${s.name}
+              </option>`
           )}
         </select>
       </div>

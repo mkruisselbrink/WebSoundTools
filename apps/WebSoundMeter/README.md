@@ -49,14 +49,16 @@ Main Thread (Lit 3 UI + Charts) ◄────┘
   └── ChartPanel (src/charts/* — WebGL2 + HiDPI Canvas2D, rAF-debounced)
 ```
 
-Detailed architecture and design documentation is available in [`docs/`](./docs/):
-- [`docs/01-overview-and-comparison.md`](./docs/01-overview-and-comparison.md)
-- [`docs/02-architecture-and-dsp-design.md`](./docs/02-architecture-and-dsp-design.md)
-- [`docs/03-roadmap-and-implementation-plan.md`](./docs/03-roadmap-and-implementation-plan.md)
-- [`docs/04-testing-and-simulation-design.md`](./docs/04-testing-and-simulation-design.md)
-- [`docs/05-persistence-and-state-management.md`](./docs/05-persistence-and-state-management.md)
-- [`docs/06-spl-history-and-logging.md`](./docs/06-spl-history-and-logging.md)
-- [`docs/07-feedback-detection-design.md`](./docs/07-feedback-detection-design.md)
+Detailed user tutorials and engineering documentation are available in [`docs/`](./docs/):
+- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Step-by-Step Illustrated Tutorials (Start Here!)**
+- [`../../docs/predict-to-measure-workflow.md`](../../docs/predict-to-measure-workflow.md) — Predict-to-Measure `.FRD` Workflow (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
+- [`docs/dev/01-overview-and-comparison.md`](./docs/dev/01-overview-and-comparison.md)
+- [`docs/dev/02-architecture-and-dsp-design.md`](./docs/dev/02-architecture-and-dsp-design.md)
+- [`docs/dev/03-codebase-structure-and-modules.md`](./docs/dev/03-codebase-structure-and-modules.md)
+- [`docs/dev/04-testing-and-simulation-design.md`](./docs/dev/04-testing-and-simulation-design.md)
+- [`docs/dev/05-spl-history-and-logging.md`](./docs/dev/05-spl-history-and-logging.md)
+- [`docs/dev/06-feedback-detection-design.md`](./docs/dev/06-feedback-detection-design.md)
+- [`../../docs/architecture/01-monorepo-and-packages.md`](../../docs/architecture/01-monorepo-and-packages.md) & [`../../docs/architecture/02-persistence-and-pwa.md`](../../docs/architecture/02-persistence-and-pwa.md)
 
 ---
 
@@ -64,10 +66,17 @@ Detailed architecture and design documentation is available in [`docs/`](./docs/
 
 | Key | Action |
 | :--- | :--- |
+| `Cmd / Ctrl + Z` | Undo last authored source, EQ, or slot configuration edit |
+| `Cmd / Ctrl + Shift + Z` / `Ctrl + Y` | Redo edit |
 | `Space` | Pause / Resume live measurement and hardware signal generator |
 | `C` | Capture current active trace to Stored Sources |
 | `D` | Run Auto Delay Finder and apply estimated delay to active Live Measurement |
 | `M` | Add a new simultaneous Live Measurement source (`+ Meas`) |
+| `R` | Reset averaging buffers and peak hold accumulators |
+| `E` | Create a new Virtual Parametric EQ source |
+| `U` | Create a new Math Union source |
+| `1` / `2` / `3` / `4` | Switch between 1, 2, 3, or 4 stacked charts |
+| `Escape` | Close open modal or clear active selection |
 
 ---
 
@@ -94,7 +103,7 @@ npm run test:e2e
 
 ## License & Acknowledgements
 
-This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see the [`LICENSE`](./LICENSE) file for details.
+This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see the [`LICENSE`](../../LICENSE) file for details.
 
 Inspired by [Open Sound Meter (OSM)](https://opensoundmeter.com/) by Pavel Smokotnin (also licensed under GPLv3).
 

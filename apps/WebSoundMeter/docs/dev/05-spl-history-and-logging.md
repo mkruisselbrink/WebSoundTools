@@ -1,7 +1,6 @@
-# 06. Live Show Mode & SPL / Rolling Leq History Design
+# 05. Live Show Mode & SPL / Rolling Leq History Design
 
-> **Status**: Proposed Design Specification  
-> **Related Modules**: `src/dsp/weighting-meters.ts`, `src/dsp/spl-history.ts` (new), `src/dsp/analyzer-pipeline.ts`, `src/sources/source-data.ts`, `src/charts/plot-types.ts`, `src/charts/canvas-chart-painter.ts`, `src/ui/topbar/`
+> **Related Modules**: `src/dsp/weighting-meters.ts`, `src/dsp/spl-history.ts`, `src/dsp/spl-ring-buffers.ts`, `src/dsp/spl-compliance.ts`, `src/dsp/spl-csv-export.ts`, `src/dsp/analyzer-pipeline.ts`, `src/charts/wsm-chart-adapter.ts`, `src/ui/show-sidebar-view.ts`
 
 ---
 
@@ -12,7 +11,7 @@ Acoustic analyzers are used in two distinct phases of a live production:
 2. **Live Show Monitoring**: Once the audience is in the venue and the performance begins, priorities shift to:
    - **Preventing accidental Signal Generator activation** over the live PA.
    - **Monitoring broadband SPL exposure and low-end balance over time** ($L_{\text{AF}}$, $L_{\text{AS}}$, $L_{\text{Aeq,1m}}$, $L_{\text{Aeq,5m}}$, $L_{\text{Aeq,15m}}$, $L_{\text{Aeq,60m}}$, $L_{\text{Ceq,1m}} - L_{\text{Aeq,1m}}$, and True Peak) against venue or municipal limits.
-   - **Catching acoustic feedback and narrowband ringing** across FOH and stage monitor microphones (detailed in [`docs/07-feedback-detection-design.md`](./07-feedback-detection-design.md)).
+   - **Catching acoustic feedback and narrowband ringing** across FOH and stage monitor microphones (detailed in [`06-feedback-detection-design.md`](./06-feedback-detection-design.md)).
 
 ### 1.1 Top-Level `[ 🛠 Tuning | 🎚 Show ]` Workspace Mode Toggle
 
@@ -151,7 +150,7 @@ export interface SplHistoryData {
    - `SingleCurveMeter` adds a lightweight `consumeEpochEnergy(): { sumSq: number; sampleCount: number; maxPeakSq: number }` helper so `SplHistoryTracker` can harvest exact linear squared energy every `250 ms` (`4 Hz`) without duplicating the IEC 61672-1 biquad filtering.
    - `BroadbandLevelsSnapshot` is extended with `readonly rollingLeq?: RollingLeqSnapshot`.
 2. **Unified Pipeline Execution Order (`src/dsp/analyzer-pipeline.ts`)**:
-   - Each `MeasurementPipeline` instance owns one `BroadbandMeterBank`, one `SplHistoryTracker`, and one `FeedbackDetector` (see [`docs/07-feedback-detection-design.md`](./07-feedback-detection-design.md)).
+   - Each `MeasurementPipeline` instance owns one `BroadbandMeterBank`, one `SplHistoryTracker`, and one `FeedbackDetector` (see [`06-feedback-detection-design.md`](./06-feedback-detection-design.md)).
    - On `pushSamples(samplesM, samplesR)` (sample-rate clock): `BroadbandMeterBank` filters samples and `SplHistoryTracker.advanceSamples(count)` commits a `250 ms` Tier A bucket every $0.25 F_s$ samples and a `1,000 ms` Tier B bucket every $1.0 F_s$ samples.
    - On `computeFrame()` (25 Hz worker tick): `TransferFunctionAnalyzer` updates FFT magnitudes, `FeedbackDetector.processFrame(...)` updates active feedback tracks, and `SplHistoryTracker` attaches `rollingLeq` to `broadbandLevels`.
 3. **Decoupled 4 Hz Worker → UI Transport (`src/dsp/dsp.worker.ts`)**:

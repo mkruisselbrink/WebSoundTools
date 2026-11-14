@@ -48,11 +48,12 @@ Simulation Worker Thread (src/physics/sim.worker.ts — Pure TypeScript Float32A
 
 Detailed user tutorials, engineering guides, and physics documentation are available in [`docs/`](./docs/):
 - **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Step-by-Step Illustrated Tutorials (Start Here!)**
-- [`docs/01-overview-and-system-capabilities.md`](./docs/01-overview-and-system-capabilities.md)
-- [`docs/02-acoustic-physics-and-summation-model.md`](./docs/02-acoustic-physics-and-summation-model.md)
-- [`docs/03-codebase-structure-and-rendering.md`](./docs/03-codebase-structure-and-rendering.md)
-- [`docs/04-loudspeaker-models-and-importers.md`](./docs/04-loudspeaker-models-and-importers.md)
-- [`docs/05-persistence-and-state-management.md`](./docs/05-persistence-and-state-management.md)
+- [`../../docs/predict-to-measure-workflow.md`](../../docs/predict-to-measure-workflow.md) — Predict-to-Measure `.FRD` Workflow (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
+- [`docs/dev/01-overview-and-system-capabilities.md`](./docs/dev/01-overview-and-system-capabilities.md)
+- [`docs/dev/02-acoustic-physics-and-summation-model.md`](./docs/dev/02-acoustic-physics-and-summation-model.md)
+- [`docs/dev/03-codebase-structure-and-rendering.md`](./docs/dev/03-codebase-structure-and-rendering.md)
+- [`docs/dev/04-loudspeaker-models-and-importers.md`](./docs/dev/04-loudspeaker-models-and-importers.md)
+- [`../../docs/architecture/01-monorepo-and-packages.md`](../../docs/architecture/01-monorepo-and-packages.md) & [`../../docs/architecture/02-persistence-and-pwa.md`](../../docs/architecture/02-persistence-and-pwa.md)
 
 ---
 
@@ -95,5 +96,5 @@ npm run test:e2e
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see [`LICENSE`](./LICENSE) for details.
+This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see [`LICENSE`](../../LICENSE) for details.
 

@@ -13,14 +13,14 @@ Welcome to **WebSpeakerSim**! This guide walks you from the basics of navigating
 
 ## 1. Getting Started & Workspace Tour
 
-Start the local web app from the project folder:
+Start the local web app from the `WebSoundTools` workspace root:
 
 ```bash
 npm install
-npm run dev
+npm run dev:wss
 ```
 
-Open the local URL printed in your terminal (typically `http://localhost:5173`). WebSpeakerSim opens immediately with the **Live Club — 12" Mains + Cardioid Subs + Front Fills** venue loaded and simulated.
+Open `http://localhost:5174` in your browser. WebSpeakerSim opens immediately with the **Live Club — 12" Mains + Cardioid Subs + Front Fills** venue loaded and simulated.
 
 ![WebSpeakerSim Workspace Overview](./images/01-workspace-overview.png)
 
@@ -160,12 +160,17 @@ With **`Balcony Row D (20 m)`** selected, look at the **Virtual Measurement Mic*
 
 WebSpeakerSim automatically writes **`40.73 ms`** (and optimal polarity) directly into the **`Balcony Delay Fills`** DSP Group!
 
-### Step 3: Fine-Tune Crossovers & EQ on Any DSP Group
+### Step 3: Fine-Tune Crossovers & Drag On-Chart EQ Handles
 
 To shape crossovers or room/voicing EQ for any speaker group:
 1. Click a group under **DSP Groups** in the scene tree (for example, `Proscenium Mains` or `Cardioid Sub Array`).
 2. Choose **HPF Slope** / **LPF Slope** (`LR24`, `LR48`, `BW24`, etc.) and cutoff frequencies (such as `80 Hz LR24` high-pass on Tops and `80 Hz LR24` low-pass on Subs).
-3. Click **`+ Add Band`** under **Parametric EQ** to add up to 8 bell, low-shelf, high-shelf, notch, or 2nd-order all-pass phase filters—watching the Virtual Mic **Magnitude** and **Phase** traces update live!
+3. Click **`+ Add Band`** under **Parametric EQ** to add bell, low-shelf, high-shelf, bandpass, notch, or 2nd-order all-pass phase filters.
+4. With the **DSP Group** selected and the bottom chart set to **`Magnitude (dB SPL)`**, numbered **on-chart EQ handles** appear directly over the Virtual Mic traces—drag any handle left/right to sweep frequency or up/down to boost/cut gain while watching the room response update live! (`Cmd/Ctrl + Z` undoes any drag in one step.)
+
+### Step 4: Export Predicted `.FRD` Curves for On-Site Verification
+
+Once your venue alignment and group voicing look right, click any **Virtual Mic** (such as `FOH Mix Position`) and click **`Export Predicted .FRD`** in the inspector. You can import that `.frd` file directly into **[WebSoundMeter](../../WebSoundMeter/docs/user-guide.md)** as a stored target trace when you arrive at the venue—see the **[Predict-to-Measure `.FRD` Workflow](../../../docs/predict-to-measure-workflow.md)** guide for a full walkthrough.
 
 ---
 
@@ -216,6 +221,7 @@ Even if you only have a manufacturer's 1-page spec sheet, you can build a calibr
 | **Scroll wheel / two-finger pinch** | Zoom viewport in/out around the cursor |
 | **Middle-drag** / **`Space` + drag** / **drag empty space** | Pan viewport camera |
 | **`Ruler` button + drag** | Measure exact distance (`m`) and acoustic flight time (`ms`) between any two points |
+| **Drag numbered EQ handle (`Magnitude` chart)** | Adjust selected DSP Group EQ band frequency (`Hz`) and gain (`dB`) directly on the plot |
 | **`Fit` button** | Re-center and zoom viewport to fit the whole venue |
 
 ### Keyboard Shortcuts

@@ -40,7 +40,10 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
           @change=${props.onPlotTypeChange}
         >
           ${Object.values(PLOT_METADATA).map(
-            (m) => html`<option value=${m.type}>${m.label}</option>`
+            (m) =>
+              html`<option value=${m.type} ?selected=${m.type === props.plotType}>
+                ${m.label}
+              </option>`
           )}
         </select>
 
@@ -54,10 +57,10 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
                     (e.target as HTMLSelectElement).value as RtaDisplayMode
                   )}
               >
-                <option value="bars-3">1/3 Oct Bars</option>
-                <option value="bars-6">1/6 Oct Bars</option>
-                <option value="bars-12">1/12 Oct Bars</option>
-                <option value="line">Narrowband Line</option>
+                <option value="bars-3" ?selected=${props.rtaMode === 'bars-3'}>1/3 Oct Bars</option>
+                <option value="bars-6" ?selected=${props.rtaMode === 'bars-6'}>1/6 Oct Bars</option>
+                <option value="bars-12" ?selected=${props.rtaMode === 'bars-12'}>1/12 Oct Bars</option>
+                <option value="line" ?selected=${props.rtaMode === 'line'}>Narrowband Line</option>
               </select>
               <label
                 class="label-muted"
@@ -128,11 +131,11 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
                     Number((e.target as HTMLSelectElement).value) as SplHistoryWindowSec
                   )}
               >
-                <option value="60">1 min (4 Hz)</option>
-                <option value="300">5 min (4 Hz)</option>
-                <option value="900">15 min</option>
-                <option value="3600">60 min</option>
-                <option value="14400">4 hours</option>
+                <option value="60" ?selected=${props.splWindowSec === 60}>1 min (4 Hz)</option>
+                <option value="300" ?selected=${props.splWindowSec === 300}>5 min (4 Hz)</option>
+                <option value="900" ?selected=${props.splWindowSec === 900}>15 min</option>
+                <option value="3600" ?selected=${props.splWindowSec === 3600}>60 min</option>
+                <option value="14400" ?selected=${props.splWindowSec === 14400}>4 hours</option>
               </select>
 
               <select
@@ -144,10 +147,10 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
                     (e.target as HTMLSelectElement).value as SplHistoryTraceMode
                   )}
               >
-                <option value="compliance-15m">Compliance (LAeq15m + LAeq1m + Pk)</option>
-                <option value="dba-fast-leq1m">dBA (Fast + LAeq1m)</option>
-                <option value="dba-dbc-leq1m">dBA vs dBC (Leq1m)</option>
-                <option value="multi-slot">Multi-Mic Comparison (LAeq15m)</option>
+                <option value="compliance-15m" ?selected=${props.splTraceMode === 'compliance-15m'}>Compliance (LAeq15m + LAeq1m + Pk)</option>
+                <option value="dba-fast-leq1m" ?selected=${props.splTraceMode === 'dba-fast-leq1m'}>dBA (Fast + LAeq1m)</option>
+                <option value="dba-dbc-leq1m" ?selected=${props.splTraceMode === 'dba-dbc-leq1m'}>dBA vs dBC (Leq1m)</option>
+                <option value="multi-slot" ?selected=${props.splTraceMode === 'multi-slot'}>Multi-Mic Comparison (LAeq15m)</option>
               </select>
 
               <label
@@ -181,3 +184,4 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
     </div>
   `;
 }
+
