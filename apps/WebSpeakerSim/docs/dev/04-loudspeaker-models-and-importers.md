@@ -69,10 +69,11 @@ Ships with calibrated generic active PA enclosures ready for simulation:
 
 All file imports run 100% locally in the browser and persist imported `SpeakerDefinition` entries into `IndexedDB`—noproprietary manufacturer files are bundled in the repository.
 
-### 4.1 Binary `.gll` Importer (`gll-importer.ts`)
-- Reads the `EGLL` magic header, length-prefixed metadata strings, zlib-compressed streams, balloon symmetry flags, and directivity response tables via `DataView` and the native Web Streams API (`DecompressionStream('deflate')`) with zero external runtime libraries.
-- Binary `EGLL` format structure and field encodings are informed by the clean-room specification in [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) (Copyright (c) Christian-W. Budde, MIT License).
-- Converts extracted balloon records (or cabinet metadata fallback) into a `SpeakerDefinition`.
+### 4.1 Binary `.gll` Importer (`gll-importer.ts` & `gll/*`)
+- Ported from the clean-room `EASE_GLL` parser in [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) (Copyright (c) Christian-W. Budde, MIT License — see [`src/library/importers/gll/LICENSE.gll-tools.md`](../../src/library/importers/gll/LICENSE.gll-tools.md)).
+- **`gll-binary-reader.ts`:** Little-endian `GllByteReader`, block-bounded `ObjectLSCBuffer` iterator, AFMG 8-sample group `BitCompression` delta decompressor (`decompressBitArray`), and Web Streams `DecompressionStream('deflate')` zlib inflator.
+- **`gll-spectrum-parser.ts`:** Decodes both `CLogSpectrumLP` (`v0`) and `TransferFunctionLsPs` (`v1`) `ComplexSequence` records, maps GLL balloon symmetry codes (`Axial`, `Quarter`, `Vertical`, `Horizontal`, `None`) and North/South pole-deduplicated meridian indices, and performs complex-pressure bilinear interpolation mapped from GLL's meridian frame (`0° = +Z` top, `90° = +Y` right) into `WebSpeakerSim`'s local cabinet frame (`0° = +y_L` left, `90° = +z_L` top).
+- **`gll-container-parser.ts` & `gll-speaker-builder.ts`:** Parses `EASE_GLL` v3–v6 `Header` $\rightarrow$ `GenSystem` $\rightarrow$ `Database` (`BoxTypes`, `CaseGeometry` bounding-box dimensions, `BoxInputConfig` source-to-filter links, `SourceDefinitions` with `BalloonData` + `OnAxisSpectrum`, and `FilterGroups` with `LogSpectrum` & `IIR` crossovers evaluated via `@foh/dsp`), coherently summing multi-way driver placements (`LF` + `HF` with geometric offset phase) into ready-to-simulate `SpeakerDefinition` models.
 
 ### 4.2 Polar Text `.clf` & `.frd` / CSV Importers (`clf-importer.ts`, `frd-importer.ts`)
 - **`.clf` Tab-Delimited Text:** Parses metadata headers (`<CABINET>`, `<SENSITIVITY>`, `<MAXSPL>`, `<SYMMETRY>`) and horizontal/vertical/spherical band attenuation tables.

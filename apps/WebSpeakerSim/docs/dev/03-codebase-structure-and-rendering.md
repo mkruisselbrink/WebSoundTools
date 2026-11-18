@@ -58,8 +58,13 @@ apps/WebSpeakerSim/
 │   │   ├── builtin-speakers.ts                # Built-in tops & subwoofers
 │   │   ├── demo-presets.ts                    # Club, Festival, Auditorium & Arena demo venues
 │   │   └── importers/
-│   │       ├── index.ts                       # Unified file-drop dispatcher
-│   │       ├── gll-importer.ts                # Binary .gll container parser (zlib inflate + balloon extraction)
+│   │       ├── index.ts                       # Loudspeaker file-drop dispatcher
+│   │       ├── gll-importer.ts                # Binary .gll importer entry point + fallback adapter
+│   │       ├── gll/                           # Structured EASE_GLL v3-v6 parser (ported from cwBudde/gll-tools, MIT)
+│   │       │   ├── gll-binary-reader.ts       # Little-endian ByteReader, BitCompression & zlib inflator
+│   │       │   ├── gll-spectrum-parser.ts     # CLogSpectrumLP / TransferFunctionLsPs & pole-deduped balloon lookup
+│   │       │   ├── gll-container-parser.ts    # Header, GenSystem, BoxTypes, CaseGeometry, Sources & FilterGroups
+│   │       │   └── gll-speaker-builder.ts     # Coherent multi-driver BoxType summation & -6 dB beamwidth solver
 │   │       ├── clf-importer.ts                # Tab-delimited .clf / .tab polar importer
 │   │       └── frd-importer.ts                # .frd curve (@foh/acoustics) -> 3D speaker & JSON serializer
 │   ├── model/                                 # Project Scene State, Undo/Redo & Persistence

@@ -100,5 +100,5 @@ npm run test:e2e
 
 This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see [`LICENSE`](../../LICENSE) for details.
 
-Binary `.gll` (`EGLL`) format specifications in [`src/library/importers/gll-importer.ts`](./src/library/importers/gll-importer.ts) were informed by [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) by Christian-W. Budde (MIT License).
+Binary `.gll` (`EASE_GLL`) container parsing and `BitCompression` spectrum decoding in [`src/library/importers/gll/`](./src/library/importers/gll/) are ported from [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) by Christian-W. Budde (MIT License — see [`src/library/importers/gll/LICENSE.gll-tools.md`](./src/library/importers/gll/LICENSE.gll-tools.md)).
 
