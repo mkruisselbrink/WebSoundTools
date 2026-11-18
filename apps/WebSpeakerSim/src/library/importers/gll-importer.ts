@@ -1,4 +1,6 @@
 // Copyright (C) 2026 WebSpeakerSim Contributors
+// EGLL binary format specifications informed by gll-tools (https://github.com/cwBudde/gll-tools),
+// Copyright (c) Christian-W. Budde (MIT License).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Unified Robert Bristow-Johnson (RBJ) Audio EQ Cookbook biquad filters,
+ * Robert Bristow-Johnson (RBJ) Audio EQ Cookbook biquad filters,
  * 1st-order bilinear sections, analytical complex frequency response evaluation H(e^{jw}),
  * and stateful Transposed Direct Form II time-domain processors.
  */

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Unified `SourceData` Model (inspired by Open Sound Meter's `Abstract::Data` & `Abstract::Source`).
+ * `SourceData` Model (inspired by Open Sound Meter's `Abstract::Data` & `Abstract::Source`).
  *
  * Every source in WebSoundMeter — Live Measurement, Stored Trace, Math Union,
  * Virtual Parametric EQ, or Target Curve — produces this exact same data structure,

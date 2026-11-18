@@ -52,7 +52,8 @@ export function renderUnionInspector(
               })}
           >
             ${Object.entries(UNION_OPERATION_LABELS).map(
-              ([k, label]) => html`<option value=${k}>${label}</option>`
+              ([k, label]) =>
+                html`<option value=${k} ?selected=${k === union.operation}>${label}</option>`
             )}
           </select>
         </div>

@@ -70,9 +70,9 @@ Ships with calibrated generic active PA enclosures ready for simulation:
 All file imports run 100% locally in the browser and persist imported `SpeakerDefinition` entries into `IndexedDB`—noproprietary manufacturer files are bundled in the repository.
 
 ### 4.1 Binary `.gll` Importer (`gll-importer.ts`)
-- Reads the `EGLL` magic header, binary block directory, cabinet geometry/metadata records, acoustic source definitions, preset filter groups, balloon symmetry flags, and frequency/phase response tables via `DataView`.
-- Decompresses embedded `zlib`-compressed streams natively via the Web Streams API (`DecompressionStream('deflate')` with raw-deflate header handling) with zero external libraries.
-- Converts multi-source cabinet definitions (e.g., LF woofer + HF compression driver acoustic centers and internal crossover presets, or single combined balloon sources) into a unified `SpeakerDefinition`.
+- Reads the `EGLL` magic header, length-prefixed metadata strings, zlib-compressed streams, balloon symmetry flags, and directivity response tables via `DataView` and the native Web Streams API (`DecompressionStream('deflate')`) with zero external runtime libraries.
+- Binary `EGLL` format structure and field encodings are informed by the clean-room specification in [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) (Copyright (c) Christian-W. Budde, MIT License).
+- Converts extracted balloon records (or cabinet metadata fallback) into a `SpeakerDefinition`.
 
 ### 4.2 Polar Text `.clf` & `.frd` / CSV Importers (`clf-importer.ts`, `frd-importer.ts`)
 - **`.clf` Tab-Delimited Text:** Parses metadata headers (`<CABINET>`, `<SENSITIVITY>`, `<MAXSPL>`, `<SYMMETRY>`) and horizontal/vertical/spherical band attenuation tables.

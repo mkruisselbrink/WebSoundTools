@@ -46,9 +46,11 @@ Simulation Worker Thread (src/physics/sim.worker.ts — Pure TypeScript Float32A
   └── High-Resolution Virtual Mic Transfer Function Solver (virtual-mic-solver.ts)
 ```
 
-Detailed user tutorials, engineering guides, and physics documentation are available in [`docs/`](./docs/):
-- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Step-by-Step Illustrated Tutorials (Start Here!)**
-- [`../../docs/predict-to-measure-workflow.md`](../../docs/predict-to-measure-workflow.md) — Predict-to-Measure `.FRD` Workflow (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
+Detailed user tutorials, engineering guides, and physics documentation are available in [`docs/`](./docs/) and [`../../docs/tutorials/`](../../docs/tutorials/README.md):
+- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Quick Reference**
+- **[`../../docs/tutorials/`](../../docs/tutorials/README.md) — Detailed Step-by-Step FOH Tutorials:**
+  - [`02-venue-prediction-and-sub-alignment-in-wss.md`](../../docs/tutorials/02-venue-prediction-and-sub-alignment-in-wss.md)
+  - [`04-predict-to-measure-field-verification.md`](../../docs/tutorials/04-predict-to-measure-field-verification.md)
 - [`docs/dev/01-overview-and-system-capabilities.md`](./docs/dev/01-overview-and-system-capabilities.md)
 - [`docs/dev/02-acoustic-physics-and-summation-model.md`](./docs/dev/02-acoustic-physics-and-summation-model.md)
 - [`docs/dev/03-codebase-structure-and-rendering.md`](./docs/dev/03-codebase-structure-and-rendering.md)
@@ -94,7 +96,9 @@ npm run test:e2e
 
 ---
 
-## License
+## License & Acknowledgements
 
 This project is licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — see [`LICENSE`](../../LICENSE) for details.
+
+Binary `.gll` (`EGLL`) format specifications in [`src/library/importers/gll-importer.ts`](./src/library/importers/gll-importer.ts) were informed by [`cwBudde/gll-tools`](https://github.com/cwBudde/gll-tools) by Christian-W. Budde (MIT License).
 

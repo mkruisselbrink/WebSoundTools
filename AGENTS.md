@@ -42,4 +42,4 @@ Imports must strictly flow top-down—never introduce cycles or pull DOM/Lit int
 - App-specific invariants (storage keys, threads, coordinate systems): `apps/WebSoundMeter/AGENTS.md` and `apps/WebSpeakerSim/AGENTS.md`
 - Package API contracts: `packages/*/README.md`
 - Cross-cutting architecture: `docs/architecture/`
-- End-user tutorials (keep free of TypeScript implementation details): `apps/*/docs/user-guide.md` and `docs/predict-to-measure-workflow.md`
+- End-user guides & step-by-step tutorials (keep free of TypeScript implementation details): `apps/*/docs/user-guide.md` and `docs/tutorials/`

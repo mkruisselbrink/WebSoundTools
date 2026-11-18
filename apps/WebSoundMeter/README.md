@@ -49,9 +49,13 @@ Main Thread (Lit 3 UI + Charts) ◄────┘
   └── ChartPanel (src/charts/* — WebGL2 + HiDPI Canvas2D, rAF-debounced)
 ```
 
-Detailed user tutorials and engineering documentation are available in [`docs/`](./docs/):
-- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Step-by-Step Illustrated Tutorials (Start Here!)**
-- [`../../docs/predict-to-measure-workflow.md`](../../docs/predict-to-measure-workflow.md) — Predict-to-Measure `.FRD` Workflow (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
+Detailed user tutorials and engineering documentation are available in [`docs/`](./docs/) and [`../../docs/tutorials/`](../../docs/tutorials/README.md):
+- **[`docs/user-guide.md`](./docs/user-guide.md) — User Guide & Quick Reference**
+- **[`../../docs/tutorials/`](../../docs/tutorials/README.md) — Detailed Step-by-Step Hardware & FOH Tutorials:**
+  - [`01-hardware-setup-and-mic-calibration.md`](../../docs/tutorials/01-hardware-setup-and-mic-calibration.md)
+  - [`03-pa-time-alignment-and-eq-in-wsm.md`](../../docs/tutorials/03-pa-time-alignment-and-eq-in-wsm.md)
+  - [`04-predict-to-measure-field-verification.md`](../../docs/tutorials/04-predict-to-measure-field-verification.md)
+  - [`05-live-show-spl-compliance-and-feedback.md`](../../docs/tutorials/05-live-show-spl-compliance-and-feedback.md)
 - [`docs/dev/01-overview-and-comparison.md`](./docs/dev/01-overview-and-comparison.md)
 - [`docs/dev/02-architecture-and-dsp-design.md`](./docs/dev/02-architecture-and-dsp-design.md)
 - [`docs/dev/03-codebase-structure-and-modules.md`](./docs/dev/03-codebase-structure-and-modules.md)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Unified loudspeaker file import dispatcher (`src/library/importers/index.ts`).
+ * Loudspeaker file import dispatcher (`src/library/importers/index.ts`).
  */
 
 import type { SpeakerDefinition } from '../speaker-schema.js';

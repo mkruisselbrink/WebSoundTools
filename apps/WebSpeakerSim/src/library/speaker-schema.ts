@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Unified loudspeaker data structures (`src/library/speaker-schema.ts`).
+ * Loudspeaker data structures (`src/library/speaker-schema.ts`).
  */
 
 import type { SourceDspConfig } from '@foh/dsp';

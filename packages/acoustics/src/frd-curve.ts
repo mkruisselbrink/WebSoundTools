@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Unified `.FRD` / `.CAL` / `.TXT` / `.CSV` Frequency Response & Microphone Calibration
+ * `.FRD` / `.CAL` / `.TXT` / `.CSV` Frequency Response & Microphone Calibration
  * Parser, Serializer, and Phase-Unwrap-Aware Log-Frequency Interpolator.
  *
- * Powers the direct Predict-to-Measure `.FRD` bridge between WebSpeakerSim and WebSoundMeter.
+ * Powers Predict-to-Measure `.FRD` exchange between WebSpeakerSim and WebSoundMeter.
  */
 
 export interface CalibrationPoint {

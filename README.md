@@ -37,10 +37,15 @@ npm run test:e2e
 
 ## Documentation
 
-- **End-User Tutorials:**
+- **End-User Guides & Step-by-Step Tutorials:**
+  - **[Step-by-Step FOH Tutorial Series (`docs/tutorials/`)](docs/tutorials/README.md)**
+    1. [Hardware Setup, Cabling & Mic Calibration](docs/tutorials/01-hardware-setup-and-mic-calibration.md)
+    2. [3D Venue Prediction, Cardioid Subs & Alignment (`WebSpeakerSim`)](docs/tutorials/02-venue-prediction-and-sub-alignment-in-wss.md)
+    3. [PA Time Alignment, Sub/Top Crossover & Virtual EQ (`WebSoundMeter`)](docs/tutorials/03-pa-time-alignment-and-eq-in-wsm.md)
+    4. [Predict-to-Measure Field Verification (`WebSpeakerSim` → `WebSoundMeter`)](docs/tutorials/04-predict-to-measure-field-verification.md)
+    5. [Live Show SPL Compliance & Feedback Ring-Out (`WebSoundMeter`)](docs/tutorials/05-live-show-spl-compliance-and-feedback.md)
   - [WebSoundMeter User Guide](apps/WebSoundMeter/docs/user-guide.md)
   - [WebSpeakerSim User Guide](apps/WebSpeakerSim/docs/user-guide.md)
-  - [Predict-to-Measure `.FRD` Workflow](docs/predict-to-measure-workflow.md)
 - **Developer Architecture:**
   - [Monorepo & Package Boundaries](docs/architecture/01-monorepo-and-packages.md)
   - [Persistence & Offline PWA](docs/architecture/02-persistence-and-pwa.md)

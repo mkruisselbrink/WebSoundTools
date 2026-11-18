@@ -121,20 +121,19 @@ For each frequency bin $k$ at frame $t$, given complex spectra $M_t(k)$ and $R_t
 - **Sub-Sample Auto Delay Finder**:
   Locates the peak index $n_{\text{peak}} = \arg\max_n |h[n]|$ and applies 3-point parabolic interpolation over $(|h[n_{\text{peak}}-1]|, |h[n_{\text{peak}}]|, |h[n_{\text{peak}}+1]|)$ to estimate propagation delay with sub-sample accuracy (`delayMs` and `delaySamples`).
 
-### 3.4 $O(1)$ Prefix-Sum Fractional-Octave Smoothing (`src/dsp/smoothing.ts`)
+### 3.4 $O(1)$ Prefix-Sum Fractional-Octave Smoothing (`@foh/dsp`)
 - Builds a cumulative prefix-sum array $P[i] = \sum_{m=0}^{i} X[m]$ in $O(K)$ time.
 - For each bin $i$ and fractional bandwidth $1/B$ octave (`1/1` through `1/48`), computes lower and upper bin bounds $i_{\text{low}} = \lfloor i \cdot 2^{-1/(2B)} \rfloor$ and $i_{\text{high}} = \lceil i \cdot 2^{+1/(2B)} \rceil$ and evaluates the smoothed value in $O(1)$ time per bin. Phase vectors $(\cos\phi, \sin\phi)$ are smoothed as unit complex vectors and re-normalized so $\pm 180^\circ$ wrap boundaries never average toward $0^\circ$.
 
-### 3.5 Broadband Weighting & SPL/Leq Metering (`src/dsp/weighting-meters.ts`)
-- Implements bilinear-transformed IEC 61672-1 Class 1 **A-weighting** and **C-weighting** IIR biquad cascades alongside flat **Z-weighting**.
+### 3.5 Broadband Weighting & SPL/Leq Metering (`src/dsp/weighting-meters.ts` & `@foh/acoustics`)
+- Designs bilinear-transformed IEC 61672-1 Class 1 **A-weighting** and **C-weighting** IIR biquad cascades alongside flat **Z-weighting**.
 - Tracks exponential time-weighted **Fast** ($\tau = 125\text{ ms}$), **Slow** ($\tau = 1000\text{ ms}$), **Impulse** ($\tau_{\text{attack}} = 35\text{ ms}$, $\tau_{\text{decay}} = 1500\text{ ms}$), true energy-equivalent **$L_{\text{eq}}$**, and instantaneous **Peak** across all three weightings simultaneously.
 
 ---
 
-## 4. Hybrid WebGL2 + 2D Canvas Chart Engine (`src/charts/`)
+## 4. Hybrid WebGL2 + 2D Canvas Chart Engine (`src/charts/` & `@foh/charts`)
 
-Each `<wsm-chart-panel>` (`src/charts/chart-panel.ts`) delegates responsibilities across four focused modules:
-1. **`plot-types.ts`**: Coordinate transforms (logarithmic frequency X-axis, linear ms X-axis, dB/degree/percent Y-axis), wavelength/period calculations, and derived plot extractors (Group Delay $-\frac{d\phi}{d\omega}$ and Crest Factor $\text{Peak}/\text{RMS}$).
-2. **`gl-trace-renderer.ts`**: GPU-accelerated WebGL2 line renderer that uploads trace vertices with per-bin coherence alpha (`smoothstep` opacity fade) and suppresses vertical wrap-around artifacts when Phase jumps across $\pm 180^\circ$.
-3. **`canvas-chart-painter.ts`**: Renders crisp logarithmic/linear grid lines, axis labels, trace legends, hover crosshair readouts, RTA peak-hold overlays, and interactive Parametric EQ node handles.
-4. **`chart-interaction.ts`**: Pure state and math controller for cursor hover readouts, Y-axis scroll-wheel zoom, Y-axis drag pan, and direct dragging of Virtual EQ bands (frequency on X, gain dB on Y, and $Q$ factor via `Shift`+wheel).
+Each `<wsm-chart-panel>` (`src/charts/chart-panel.ts`) maps `SourceData[]` onto `@foh/charts`'s `<foh-chart-panel>`:
+1. **`plot-types.ts` & `wsm-chart-adapter.ts`**: Plot type metadata, `SourceData`-to-NDC trace builders, Group Delay ($-\frac{d\phi}{d\omega}$) and Crest Factor ($\text{Peak}/\text{RMS}$) extractors, SPL history timelines, and RTA peak-hold state.
+2. **`wsm-chart-controls.ts`**: Plot-mode selector, fractional-octave smoothing dropdown, Y-span controls, RTA scale/peak-hold toggles, and SPL compliance span/trace selectors.
+3. **`@foh/charts` (`<foh-chart-panel>`)**: Zero-GC `Float32Array` WebGL2 trace renderer (`gl-trace-renderer.ts`) with per-bin coherence alpha and $\pm 180^\circ$ phase-wrap splitting, `WeakMap`-cached RTA bars, HiDPI 2D Canvas grids/legends/cursor HUD (`canvas-grid-painter.ts`, `canvas-overlays.ts`), and draggable EQ handles (`Shift`+drag / wheel for $Q$).

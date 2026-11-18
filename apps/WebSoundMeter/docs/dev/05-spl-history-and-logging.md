@@ -145,48 +145,47 @@ export interface SplHistoryData {
 }
 ```
 
-### 3.1 Migration, Lifecycle & Worker → UI Transport Throttling
-1. **`BroadbandMeterBank` & `BroadbandLevelsSnapshot` Migration (`src/dsp/weighting-meters.ts`)**:
-   - `SingleCurveMeter` adds a lightweight `consumeEpochEnergy(): { sumSq: number; sampleCount: number; maxPeakSq: number }` helper so `SplHistoryTracker` can harvest exact linear squared energy every `250 ms` (`4 Hz`) without duplicating the IEC 61672-1 biquad filtering.
-   - `BroadbandLevelsSnapshot` is extended with `readonly rollingLeq?: RollingLeqSnapshot`.
-2. **Unified Pipeline Execution Order (`src/dsp/analyzer-pipeline.ts`)**:
-   - Each `MeasurementPipeline` instance owns one `BroadbandMeterBank`, one `SplHistoryTracker`, and one `FeedbackDetector` (see [`06-feedback-detection-design.md`](./06-feedback-detection-design.md)).
+### 3.1 Lifecycle & Worker → UI Transport Throttling
+1. **`BroadbandMeterBank` & `BroadbandLevelsSnapshot` (`src/dsp/weighting-meters.ts`)**:
+   - `SingleCurveMeter` exposes `consumeEpochEnergy(): { sumSq: number; sampleCount: number; maxPeakSq: number }` so `SplHistoryTracker` harvests exact linear squared energy every `250 ms` (`4 Hz`) without duplicating IEC 61672-1 biquad filtering.
+   - `BroadbandLevelsSnapshot` includes `readonly rollingLeq?: RollingLeqSnapshot`.
+2. **Pipeline Execution Order (`src/dsp/analyzer-pipeline.ts`)**:
+   - Each `AnalyzerPipeline` instance owns one `BroadbandMeterBank`, one `SplHistoryTracker`, and one `FeedbackDetector` (see [`06-feedback-detection-design.md`](./06-feedback-detection-design.md)).
    - On `pushSamples(samplesM, samplesR)` (sample-rate clock): `BroadbandMeterBank` filters samples and `SplHistoryTracker.advanceSamples(count)` commits a `250 ms` Tier A bucket every $0.25 F_s$ samples and a `1,000 ms` Tier B bucket every $1.0 F_s$ samples.
    - On `computeFrame()` (25 Hz worker tick): `TransferFunctionAnalyzer` updates FFT magnitudes, `FeedbackDetector.processFrame(...)` updates active feedback tracks, and `SplHistoryTracker` attaches `rollingLeq` to `broadbandLevels`.
 3. **Decoupled 4 Hz Worker → UI Transport (`src/dsp/dsp.worker.ts`)**:
    - While FFT `measurement-frames` are posted to the main thread at **25 Hz** (`40 ms`), `SplHistoryTracker` only produces new history points at **4 Hz** (`250 ms`).
    - To avoid structured-cloning `SplHistoryData` (`~48 KB` per slot) on every `40 ms` tick, the worker sets `data.splHistory` **only on frames where `epochSeq` advanced** (every `250 ms`, cutting structured-clone bandwidth by **$6.25\times$** to `~192 KB/s` per slot).
-   - On intermediate `40 ms` frames where `frame.data.splHistory === undefined`, `SourceStore.updateLiveMeasurementSlot()` preserves the slot's previously received `SplHistoryData` reference in-place.
+   - On intermediate `40 ms` frames where `frame.data.splHistory === undefined`, `SourceStore.updateLiveMeasurementSlot()` retains the slot's current `SplHistoryData` reference in-place.
 
 ---
 
 ## 4. Charting, Accessibility & Persistence Specification
 
-### 4.1 `'spl-history'` Plot Type in `<chart-panel>`
-Adding `'spl-history'` to `PlotType` (`src/charts/plot-types.ts`) allows any `<chart-panel>` to render the time-series level chart:
+### 4.1 `'spl-history'` Plot Type in `<wsm-chart-panel>`
+`'spl-history'` in `PlotType` (`src/charts/plot-types.ts`) renders the time-series level chart via `<foh-chart-panel>`:
 - **Coordinate Mapping**:
   - Linear X-axis in relative time (`xUnit: 's'`, formatted as `-15m`, `-10m`, `-5m`, `0s` on major gridlines).
   - Linear Y-axis in `dB` (`defaultYMin: 50`, `defaultYMax: 115`, `yStep: 10`).
-- **Chart Header Controls (`src/charts/chart-header-view.ts`)**:
+- **Chart Header Controls (`src/charts/wsm-chart-controls.ts`)**:
   - **Time Span Dropdown**: `1 min (4 Hz)` | `5 min (4 Hz)` | `15 min` | `60 min` | `4 hours`
   - **Trace Mode Dropdown**: `dBA (Fast + Leq1m)` | `dBA vs dBC (Leq1m)` | `Compliance (Leq15m + Leq60m + Peak)` | `Multi-Mic Comparison`
   - **Threshold Guides Toggle**: `[✓ Limits (98 / 102 dB)]`
-- **2D Canvas & WebGL2 Rendering (`src/charts/canvas-chart-painter.ts` & `gl-trace-renderer.ts`)**:
-  - Uses `GlTraceRenderer` + `drawCanvasTrace` for the primary curves.
-  - Draws shaded fill under the short-term `LAF` envelope and horizontal threshold guides across the plot box.
+- **2D Canvas & WebGL2 Rendering (`@foh/charts`)**:
+  - Renders primary traces via WebGL2 `GlTraceRenderer` (`solid`, `dashed`, `area` fill styles) and draws horizontal warning/limit threshold guides on the 2D Canvas overlay.
 - **Accessibility & Touch Ergonomics**:
   - **Color-Deficient Vision Support**: Threshold lines and Topbar compliance badges never rely on color alone:
     - **Warning (`warningDb`)**: Dashed line (`[6, 4]`) + `▲ WARN` triangle prefix badge.
     - **Limit (`limitDb`)**: Solid double-weight line + diagonal hatch band above limit + `◆ LIMIT` diamond prefix badge.
   - **FOH Tablet Touch Targets**: All interactive controls in Show Mode (`[ 🛠 Tuning | 🎚 Show ]` toggle, `[Pause]`, `[Notch EQ]`, and Feedback Watch dropdowns) enforce a minimum hit target height of `36–44 px` with `8 px` spacing to prevent mis-taps on touchscreens in low-light venues.
-- **Acoustic Cursor Readout (`computeCursorReadout`)**:
+- **Acoustic Cursor Readout**:
   - Hovering at any point on the timeline displays:
     - Relative time (`-12m 34s`) and wall-clock time (`21:18:42`)
     - Exact `LAF`, `LAeq,1m`, `LAeq,15m`, `LAeq,60m`, `LCeq,1m`, and `Peak` values at that second (or per-microphone values in `Multi-Mic Comparison` mode).
 
 ### 4.2 Crash-Resilient Show Log Persistence & CSV Export
 1. **Batched IndexedDB Checkpointing (`src/sources/session-storage.ts`)**:
-   - Adds an `spl-show-logs` object store in `web-sound-meter-db` (schema version bumped to `v3` with non-destructive upgrade).
+   - Persists show logs in the `spl-show-logs` object store of `web-sound-meter-db` (`v3`).
    - Every **10 seconds** during unpaused measurement, all active slots' 1 Hz energy ring buffers (`up to MAX_LIVE_SLOTS = 8`, `~2.7 MB` total linear energy data) are written in a **single batched IndexedDB `readwrite` transaction**.
    - If the engineer accidentally refreshes the browser tab mid-show (and within 30 minutes of the last checkpoint), `SplHistoryTracker` hydrates the prior 1 Hz energy buckets so rolling $L_{\text{Aeq,15m}}$ and $L_{\text{Aeq,60m}}$ continue seamlessly without losing show history.
    - An explicit **`[Reset Show Log]`** button clears both the in-memory ring buffers and the IndexedDB checkpoint.

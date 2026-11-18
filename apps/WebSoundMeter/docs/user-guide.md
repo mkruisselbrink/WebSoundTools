@@ -2,6 +2,12 @@
 
 Welcome to **WebSoundMeter**! Whether you are time-aligning a main PA to subwoofers before doors open or monitoring `LAeq15` SPL limits and vocal mic feedback during a live show, this guide walks you through five practical Front-of-House workflows—all runnable right now using the built-in **Acoustic Demo Simulator** or with your multi-channel audio interface:
 
+> **Looking for physical audio interface cabling diagrams, preamp gain-staging, and deep step-by-step walkthroughs?** Check out the dedicated **[FOH Tutorial Series (`docs/tutorials/`)](../../../docs/tutorials/README.md)**:
+> - **[Tutorial 01: Hardware Setup, Cabling & Mic Calibration](../../../docs/tutorials/01-hardware-setup-and-mic-calibration.md)**
+> - **[Tutorial 03: PA Time Alignment, Sub/Top Crossover & Virtual EQ](../../../docs/tutorials/03-pa-time-alignment-and-eq-in-wsm.md)**
+> - **[Tutorial 04: Predict-to-Measure Field Verification](../../../docs/tutorials/04-predict-to-measure-field-verification.md)**
+> - **[Tutorial 05: Live Show SPL Compliance & Feedback Ring-Out](../../../docs/tutorials/05-live-show-spl-compliance-and-feedback.md)**
+
 1. **[Getting Started & Workspace Tour](#1-getting-started--workspace-tour)** — Launching the analyzer, switching between **🛠 Tuning** and **🎚 Show** modes, and connecting audio hardware.
 2. **[Tutorial 1: Time-Aligning a PA & Capturing Reference Traces](#2-tutorial-1-time-aligning-a-pa--capturing-reference-traces)** — Locking measurement delay with the Auto Delay Finder, flattening phase, and saving Stored Traces.
 3. **[Tutorial 2: Virtual Parametric EQ, Crossovers & Room Matching](#3-tutorial-2-virtual-parametric-eq-crossovers--room-matching)** — Modeling Linkwitz-Riley crossovers and dragging on-chart EQ handles before touching your system processor.
@@ -123,7 +129,7 @@ Watch all three charts snap into alignment immediately:
 
 - **Microphone Calibration Curves (`.cal` / `.frd` / `.txt`):** Select any **Live Measurement**, expand **Microphone Calibration**, and upload your mic's calibration file. It is saved in your browser's offline `IndexedDB` library so you can assign different calibration curves to each measurement mic channel anytime.
 - **Import & Export `.FRD` Traces:**
-  - Click **`+ .FRD`** in the **Sources** header to import any standard 2-column or 3-column `.frd` curve (including predicted Virtual Mic curves exported from **[WebSpeakerSim](../../WebSpeakerSim/docs/user-guide.md)**—see the **[Predict-to-Measure `.FRD` Workflow](../../../docs/predict-to-measure-workflow.md)**!).
+  - Click **`+ .FRD`** in the **Sources** header to import any standard 2-column or 3-column `.frd` curve (including predicted Virtual Mic curves exported from **[WebSpeakerSim](../../WebSpeakerSim/docs/user-guide.md)**—see **[Tutorial 04: Predict-to-Measure Field Verification](../../../docs/tutorials/04-predict-to-measure-field-verification.md)**!).
   - Select any **Stored Trace** and click **`Export .FRD`** to save its Magnitude + Phase response to disk.
 
 ### Keyboard Shortcuts

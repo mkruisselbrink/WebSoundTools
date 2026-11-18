@@ -170,7 +170,7 @@ To shape crossovers or room/voicing EQ for any speaker group:
 
 ### Step 4: Export Predicted `.FRD` Curves for On-Site Verification
 
-Once your venue alignment and group voicing look right, click any **Virtual Mic** (such as `FOH Mix Position`) and click **`Export Predicted .FRD`** in the inspector. You can import that `.frd` file directly into **[WebSoundMeter](../../WebSoundMeter/docs/user-guide.md)** as a stored target trace when you arrive at the venue—see the **[Predict-to-Measure `.FRD` Workflow](../../../docs/predict-to-measure-workflow.md)** guide for a full walkthrough.
+Once your venue alignment and group voicing look right, click any **Virtual Mic** (such as `FOH Mix Position`) and click **`Export Predicted .FRD`** in the inspector. You can import that `.frd` file directly into **[WebSoundMeter](../../WebSoundMeter/docs/user-guide.md)** as a stored target trace when you arrive at the venue—see **[Tutorial 04: Predict-to-Measure Field Verification](../../../docs/tutorials/04-predict-to-measure-field-verification.md)** and **[All Step-by-Step Tutorials](../../../docs/tutorials/README.md)** for full walkthroughs.
 
 ---
 
