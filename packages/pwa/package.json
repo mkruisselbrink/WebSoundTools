@@ -15,8 +15,5 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "peerDependencies": {
-    "vite": "^5.4.21"
   }
 }

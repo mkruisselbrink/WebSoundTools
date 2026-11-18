@@ -13,13 +13,6 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.65.0",
-    "@types/audioworklet": "^0.0.50",
-    "typescript": "^5.3.2",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.9"
-  },
   "dependencies": {
     "@foh/acoustics": "0.1.0",
     "@foh/canvas": "0.1.0",
@@ -28,6 +21,6 @@
     "@foh/pwa": "0.1.0",
     "@foh/state": "0.1.0",
     "@foh/ui": "0.1.0",
-    "lit": "^3.1.0"
+    "lit": "^3.3.3"
   }
 }
