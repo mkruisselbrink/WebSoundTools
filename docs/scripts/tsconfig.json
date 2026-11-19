@@ -7,6 +7,7 @@
   },
   "include": [
     "./**/*.ts",
+    "../*.ts",
     "../../apps/WebSoundMeter/src/vite-env.d.ts",
     "../../apps/WebSpeakerSim/src/vite-env.d.ts"
   ]

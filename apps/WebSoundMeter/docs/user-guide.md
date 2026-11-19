@@ -1,150 +1,176 @@
-# WebSoundMeter — User Guide & Step-by-Step Tutorials
+# WebSoundMeter — UI & Measurement Reference
 
-Welcome to **WebSoundMeter**! Whether you are time-aligning a main PA to subwoofers before doors open or monitoring `LAeq15` SPL limits and vocal mic feedback during a live show, this guide walks you through five practical Front-of-House workflows—all runnable right now using the built-in **Acoustic Demo Simulator** or with your multi-channel audio interface:
+**WebSoundMeter** is a browser-native multi-channel dual-FFT acoustic analyzer, virtual crossover/EQ modeler, and concert SPL compliance & feedback monitor. It runs offline as an installable Progressive Web App (PWA) or locally via `npm run dev:wsm` (`http://localhost:5173`).
 
-> **Looking for physical audio interface cabling diagrams, preamp gain-staging, and deep step-by-step walkthroughs?** Check out the dedicated **[FOH Tutorial Series (`docs/tutorials/`)](../../../docs/tutorials/README.md)**:
-> - **[Tutorial 01: Hardware Setup, Cabling & Mic Calibration](../../../docs/tutorials/01-hardware-setup-and-mic-calibration.md)**
-> - **[Tutorial 03: PA Time Alignment, Sub/Top Crossover & Virtual EQ](../../../docs/tutorials/03-pa-time-alignment-and-eq-in-wsm.md)**
-> - **[Tutorial 04: Predict-to-Measure Field Verification](../../../docs/tutorials/04-predict-to-measure-field-verification.md)**
-> - **[Tutorial 05: Live Show SPL Compliance & Feedback Ring-Out](../../../docs/tutorials/05-live-show-spl-compliance-and-feedback.md)**
-
-1. **[Getting Started & Workspace Tour](#1-getting-started--workspace-tour)** — Launching the analyzer, switching between **🛠 Tuning** and **🎚 Show** modes, and connecting audio hardware.
-2. **[Tutorial 1: Time-Aligning a PA & Capturing Reference Traces](#2-tutorial-1-time-aligning-a-pa--capturing-reference-traces)** — Locking measurement delay with the Auto Delay Finder, flattening phase, and saving Stored Traces.
-3. **[Tutorial 2: Virtual Parametric EQ, Crossovers & Room Matching](#3-tutorial-2-virtual-parametric-eq-crossovers--room-matching)** — Modeling Linkwitz-Riley crossovers and dragging on-chart EQ handles before touching your system processor.
-4. **[Tutorial 3: Multi-Mic Spatial Averaging & Trace Math](#4-tutorial-3-multi-mic-spatial-averaging--trace-math)** — Running simultaneous measurement mics and combining them into a `Vector` or `Power` spatial average.
-5. **[Tutorial 4: Live Show SPL Compliance & Feedback Watch](#5-tutorial-4-live-show-spl-compliance--feedback-watch)** — Tracking rolling `LAeq15` / `LCeq` limits, logging CSV show reports, and catching narrowband feedback rings by musical note and `Hz`.
-6. **[Quick Reference: Calibration, `.FRD` I/O & Keyboard Shortcuts](#6-quick-reference-calibration-frd-io--keyboard-shortcuts)**
-
----
-
-## 1. Getting Started & Workspace Tour
-
-Start the local web app from the `WebSoundTools` workspace root:
-
-```bash
-npm install
-npm run dev:wsm
-```
-
-Open `http://localhost:5173` in your browser. **WebSoundMeter** boots immediately in **Demo Simulator Mode**, feeding synthetic pink noise through a virtual loudspeaker and room model so you can explore every chart, alignment tool, and EQ workflow without plugging in an audio interface.
+> **Looking for step-by-step field workflows?** See the **[FOH Tutorial Series (`docs/tutorials/`)](../../../docs/tutorials/README.md)** for physical cabling diagrams, preamp gain staging, PA time alignment, Predict-to-Measure verification, Show SPL compliance, and troubleshooting.
 
 ![WebSoundMeter Tuning Workspace Overview](./images/01-tuning-workspace-overview.png)
 
-### The Three Main Areas
+---
 
-1. **Top Control Bar:**
-   - **Mode Switcher (`🛠 Tuning` / `🎚 Show`):**
-     - **🛠 Tuning:** Full dual-FFT transfer function workflow with the Signal Generator, Auto Delay Finder, Stored Traces, Virtual EQ/Crossovers, and Math Union sources.
-     - **🎚 Show:** Concert monitoring layout that locks out the hardware Signal Generator (so pink noise can never fire accidentally mid-show!) and switches the right dock to **Live Mics & SPL Watch**, **SPL Compliance**, and **Feedback Watch**.
-   - **Chart Layout Selector:** Quickly switch between **`PA Alignment 3x (Mag + Phase + Impulse)`**, **`Transfer Function 2x (Mag + Phase)`**, **`Live Mixing 2x (RTA + Magnitude)`**, **`Live Show 2x (RTA + SPL History)`**, **`Live Show 3x`**, or **`Single Chart 1x`**.
-   - **Input & Reference Routing:** Switch seamlessly between **Built-in Acoustic Simulator** and **Hardware Audio Interface** (`Ch 1..64`), choose your **Global Reference (`Internal Gen` loopback or physical `In Ch 1..N`)**, and **Pause / Resume** (`Space`).
-   - **Signal Generator:** Built-in **Pink Noise**, **White Noise**, **Sine**, or **Log Sweep** generator with output level (`dBFS`) and physical output channel routing.
-   - **Live Broadband SPL Meter:** Real-time **IEC 61672** readout (`A`, `C`, or `Z` weighting; `Fast`, `Slow`, `Impulse`, or `Leq`) with live Peak and Crest Factor indicators.
+## 1. Workspace Modes & Persistence
 
-2. **Center Chart Stack:**
-   - Each chart panel can independently display **Magnitude (dB)**, **Phase (°)**, **Impulse Response**, **Step Response**, **Group Delay (ms)**, **Coherence ($\gamma^2$)**, **RTA Spectrum** (continuous line or `1/3`, `1/6`, `1/12` octave bars), or **SPL / Leq History**.
-   - Hover anywhere inside a plot to inspect exact **Frequency (`Hz`), Period (`ms`), Acoustic Wavelength (`m` / `ft`), Level (`dB`), Phase (`°`), and Coherence (`%`)** in the floating cursor HUD. Each Transfer Function panel (`Magnitude`, `Phase`, `Group Delay`) lets you switch coherence masking between **`Coh: Alpha Fade`**, **`Coh: Hard Cutoff`** (completely blanking bins below your selected `γ² ≥ 20%..95%` threshold), or **`Coh: Off`**.
+The segmented switch at the top left toggles between two operational modes:
 
-3. **Right Dock (Sources Tree + Property Inspector):**
-   - Lists all active **Live Measurements**, **Stored Traces**, **Virtual EQs**, and **Math / Union** sources with visibility checkboxes and color swatches, plus quick action buttons (`+ Meas`, `+ EQ`, `+ Math`, `+ .FRD`).
+| Mode | Purpose | Active Panels & Safety Rules |
+| :--- | :--- | :--- |
+| **`🛠 Tuning`** | Pre-show PA alignment, spatial averaging, and offline EQ/crossover design | Displays all source types (**Live Measurements**, **Stored Traces**, **Virtual EQ**, **Math Union**), **Signal Generator**, and per-source property inspectors. |
+| **`🎚 Show`** | Concert sound-level compliance and narrowband feedback monitoring | Hides `Stored` and `Math Union` traces from charts (preserving their saved visibility flags for Tuning mode), switches the right dock to **Live Mics & SPL Watch**, **Feedback Ring Log**, and **Show Limits & Log**, and **forcibly mutes and hides the Signal Generator** whenever a hardware audio interface is active. |
+
+### URL State, Autosave & Offline PWA
+- **URL Sharing & History:** Mode, layout preset, active chart plot types, simulator preset, SPL weighting/time constants, and selected source sync to URL query parameters (`?mode=...&layout=...&plots=...`) with full Browser Back/Forward support.
+- **Session Recovery:** Routing, live measurement slots, generator configuration, and SPL alert thresholds autosave to `localStorage`. Captured/imported traces, Virtual EQs, Math Unions, calibration curves, and rolling `1 Hz` SPL compliance checkpoints persist in `IndexedDB`.
+- **Hardware Reload Safety:** Reloading the page while **Hardware** input mode is active starts **Paused** (`Resume` button shown) so the browser receives a clean user gesture before opening `AudioContext` and microphone streams.
 
 ---
 
-## 2. Tutorial 1: Time-Aligning a PA & Capturing Reference Traces
+## 2. Top Control Bar Reference
 
-**Scenario:** Your measurement microphone is placed `~2.9 m` (`8.5 ms` acoustic flight time) in front of the PA. Until the reference signal is delayed by `8.5 ms` to match that air flight time, the **Phase (°)** plot wraps wildly across frequency and cannot be read cleanly.
+### Chart Layout Presets
+Each mode maintains its own active chart stack (`1` to `3` panels):
+- **Tuning Layouts:** `PA Alignment 3x (Mag + Phase + Impulse)`, `Transfer Function 2x (Mag + Phase)`, `Live Mixing 2x (RTA + Magnitude)`, `Single Chart 1x`.
+- **Show Layouts:** `Live Show 2x (RTA + SPL History)`, `Live Show 3x (RTA + SPL History + TF Mag)`, `Single Chart 1x`.
 
-1. Make sure you are in **`🛠 Tuning`** mode with **`PA Alignment 3x (Mag + Phase + Impulse)`** selected in the layout dropdown.
-2. Select **`Live Measurement`** in the **Sources** list on the right.
-3. Look at the **Auto Delay Finder** readout in the **Live Measurement** inspector:
-   - It continuously deconvolves the impulse response peak and reports **`~8.50 ms`** (`~2.92 m`) along with detected acoustic polarity (`+ Normal` or `Ø Inverted`).
-4. Click **`Apply Delay`** (or press **`D`** on your keyboard).
+### Input, Reference & Hardware Channel Limit
+- **Input Selector (`INPUT`):** Switches between **`Built-in Demo Simulator`** and any detected multi-channel **`Hardware`** audio interface (`getUserMedia` with echo cancellation, noise suppression, and auto-gain disabled at the device's native sample rate).
+- **Hardware Generator Auto-Mute:** Switching `INPUT` from `Built-in Demo Simulator` to any physical hardware device automatically sets **`GEN`** to **`OFF`** so pink noise never fires unexpectedly into an unmuted PA.
+- **Global Reference (`Ref`):** Shown in Hardware mode. Selects **`Internal Gen`** (internal digital loopback) or any physical input **`In Ch 1..N`** (physical analog/digital loopback or console matrix feed).
+- **Concurrent Tap Capacity:** The real-time `AudioWorklet` ring buffer taps up to **`8` distinct physical hardware input channels** simultaneously—supporting up to **`7` live measurement microphones + `1` physical reference loopback channel** (or `8` microphones when `Ref` is set to `Internal Gen`).
+- **`Pause` / `Resume` (`Space`):** Freezes live capture, spectrum integration, and hardware generator output simultaneously.
 
-![Locked Reference Delay Flattening Phase & Captured Stored Trace](./images/02-delay-alignment-and-capture.png)
+### Signal Generator (`GEN`)
+- **`ON` / `OFF` Toggle:** Enables or mutes the internal test signal.
+- **Signal Types:**
+  - `Pink Noise (-3 dB/oct)` — Equal energy per octave for broadband transfer function and RTA work.
+  - `White Noise (Flat)` — Equal energy per Hz.
+  - `Brown Noise (-6 dB/oct)` — Low-frequency weighted spectrum.
+  - `Burst Pink (Crest/Sub)` — Periodic pulsed pink noise.
+  - `Sine Wave (1 kHz)` — Fixed `1,000 Hz` reference tone for level checks.
+  - `Log Chirp Sweep` — `2`-second logarithmic `20 Hz – 20 kHz` sweep.
+- **Output Level:** `0 dBFS (Hot)`, `-3`, `-6`, `-12` (default), `-18`, or `-24 dBFS`.
+- **Hardware Output Routing (`Out`):** Routes generator audio to **`Out Ch 1+2`**, an individual physical output **`Out Ch 1..N`**, or **`Mute Out`**.
 
-Watch all three charts snap into alignment immediately:
-- The **Impulse Response** peak centers cleanly at **`0.0 ms`**.
-- The **Phase (°)** trace unwraps into a smooth, readable curve across the passband so you can spot crossover phase shifts and horn-to-woofer transitions at a glance.
-- Click **`Capture Trace`** (or press **`C`**) to freeze a snapshot into **Stored Sources**, and rename it (for example, `FOH Center Baseline`) so you can compare before-and-after changes at any time!
+### Broadband SPL Meter (`IEC 61672`)
+- **Weighting Curve:** **`dBA`**, **`dBC`**, or **`dBZ`** (flat unweighted).
+- **Integration Time:** **`Fast`** (`125 ms`), **`Slow`** (`1,000 ms`), **`Impulse`** (`35 ms` rise / `1,500 ms` fall), or **`Leq`** (continuous energy-equivalent level since last reset).
+- **Readouts:**
+  - In **Tuning** mode: main weighted SPL plus **`Leq`** and **`Pk`** (true peak).
+  - In **Show** mode: main SPL plus **`LAeq1m`**, **`LAeq15m / Limit`**, **`LC−LA`** (`1`-minute C-minus-A low-end balance), **`Pk`**, and a colorblind-safe compliance badge (**`● OK`**, **`▲ WARN`**, or **`◆ LIMIT`**).
 
 ---
 
-## 3. Tutorial 2: Virtual Parametric EQ, Crossovers & Room Matching
+## 3. Chart Panels & Plot Types
 
-**Scenario:** Rather than blasting pink noise in the room for twenty minutes while experimenting with EQ cuts, capture a measurement once (or use a live trace) and design your corrective EQ and crossovers virtually!
+Every chart panel header stays locked to a single `32 px` row; hovering inside any plot displays exact domain coordinates (`Hz`, period `ms`, wavelength `m`, `dB`, phase `°`, coherence `%`) inside a floating canvas HUD pill. All panels include **`Y+`**, **`Y−`**, and **`Reset`** vertical zoom controls.
 
-1. Select **`Live Measurement`** (in Demo Mode, try choosing the **`PA Room Modes & Comb`** simulator preset in the Live Measurement inspector to see classic low-mid room buildup and high-frequency roll-off).
-2. In the **Sources** header on the right, click **`+ EQ`** (or press **`E`**).
-3. In the **Virtual Equalizer** inspector:
-   - Verify **Apply Virtual EQ To Source** is set to your target live or stored trace.
-   - Click **`Auto-Match Room`** to automatically synthesize a smooth corrective parametric EQ curve that tames resonant peaks without trying to boost narrow acoustic comb nulls!
-4. **Interactive On-Chart Sculpting & Crossovers:**
-   - Look at the **Magnitude** chart: numbered **EQ band handles** sit directly on the filter curve. **Drag any handle left/right** to sweep frequency or **up/down** to adjust gain (`dB`) while watching the predicted post-EQ room trace update in real time!
-   - Under **Crossovers (HPF / LPF)** in the inspector, enable **`Linkwitz-Riley 24 dB/oct`** (`LR24` or `LR48`) high-pass or low-pass filters and electronic **Delay (`ms`)** / **Polarity (`Ø`)** to preview complete 2-way sub-to-top crossover summation in Magnitude, Phase, and Group Delay.
-   - Press **`Cmd / Ctrl + Z`** anytime to undo any drag or filter tweak.
+| Plot Type | Domain & Scale | Header Controls & Behavior |
+| :--- | :--- | :--- |
+| **`Magnitude (TF)`** | `20 Hz – 20 kHz` (log), `dB` | Relative transfer-function gain (`|H(f)|`). Supports coherence blanking (`Coh: Alpha Fade`, `Coh: Hard Cutoff`, `Coh: Off`), threshold (`γ² ≥ 20%..95%`), **`FB Watch`** callouts, and interactive **Virtual EQ** handles. |
+| **`Phase`** | `20 Hz – 20 kHz` (log), `-180° .. +180°` | Wrapped transfer-function phase with clean wrap-break suppression and coherence blanking (`Alpha Fade` / `Hard Cutoff` / `Off`). |
+| **`Group Delay`** | `20 Hz – 20 kHz` (log), `ms` | Rate of phase change ($-\frac{1}{2\pi}\frac{d\phi}{df}$) with coherence blanking. |
+| **`Coherence`** | `20 Hz – 20 kHz` (log), `0% .. 100%` | Magnitude-squared coherence $\gamma^2(f)$ measuring causal linearity between Reference and Measurement. |
+| **`Impulse (Linear)`** | `-10 ms .. +30 ms`, normalized amplitude | Regularized inverse-FFT impulse response showing arrival timing and polarity (`+` upward vs. `-` downward spike). |
+| **`Impulse (ETC dB)`** | `-10 ms .. +30 ms`, `-60 .. 0 dB` | Logarithmic Energy-Time Curve ($20 \log_{10}|h(t)|$) revealing early boundary reflections `-10` to `-40 dB` below the direct arrival. |
+| **`Step Response`** | `-10 ms .. +30 ms`, cumulative amplitude | Running integral of the impulse response showing low-frequency decay and driver polarity transitions. |
+| **`Spectrum (RTA)`** | `20 Hz – 20 kHz` (log), `dBFS` | Live spectrum selectable between **`1/3 Oct Bars`**, **`1/6 Oct Bars`**, **`1/12 Oct Bars`**, or **`Narrowband Line`**, with **`Peak Hold`** and **`FB Watch`** toggles. |
+| **`SPL / Leq History`** | `-1m .. 0s` up to `-4h .. 0s`, `dB` | Rolling level timeline across **`1 min`**, **`5 min`** (`4 Hz` resolution), **`15 min`**, **`60 min`**, or **`4 hours`** (`1 Hz` resolution), with trace modes (`Compliance (LAeq15m + LAeq1m + Pk)`, `dBA (Fast + LAeq1m)`, `dBA vs dBC (Leq1m)`, `Multi-Mic (LAeq1m per Mic)`) and **`Limits`** guide toggle. |
 
+---
+
+## 4. Sources & Inspectors (`🛠 Tuning` Mode)
+
+The **Sources (N)** card lists all active sources with visibility checkboxes, color dots, type badges (`MEASUREMENT`, `STORED`, `EQ`, `UNION`), and creation buttons (**`+ Meas`**, **`+ EQ`**, **`+ Math`**, **`+ .FRD`**).
+
+### Live Measurement Inspector
+![Locked Reference Delay & Captured Stored Trace](./images/02-delay-alignment-and-capture.png)
+
+- **`Capture` (`C`) / `Reset Avg` (`R`) / `Delete`:** Snapshots the current live curve into a persistent **Stored Trace**, clears FFT/meter accumulators, or deletes secondary measurement slots.
+- **Measurement Name & Routing:** Editable label plus **`Simulator Rig Preset`** (`6` built-in acoustic models in Demo mode) or **`Meas Channel (M)`** (`Ch 1..N` in Hardware mode).
+- **Preamp Headroom (`dBFS`):** Live pre-gain RMS/Peak bars and **`OK` / `CLIP`** (`≥ -0.5 dBFS`) indicators for both **`Meas M`** and **`Ref R`**, independent of software `Input Gain (dB)`.
+- **Delay Alignment (`Ref Delay (ms)` & `Find & Apply Delay`):** Displays deconvolved **`Est Delay`** in `ms` (with **`(−POL)`** badge when acoustic polarity is inverted). Clicking **`Find & Apply Delay`** (`D`) locks `Ref Delay` to unwrap phase and center the impulse peak at `0.0 ms`.
+- **`Input Gain (dB)` & `Polarity`:** Applies software trim and polarity flip (`Normal (+)` / `Inverted (−180°)`). Note: adjusting `Input Gain (dB)` shifts **both** broadband SPL readouts and transfer-function Magnitude (`dB`), so set SPL calibration gain before capturing baseline TF traces.
+- **`Feedback Watch Mode`:** `FOH Normal (Balanced)`, `Monitor / Wedge Sensitive`, `Custom Thresholds`, or `Off`.
+- **`Mic Calibration Curve`:** Selects a saved `.cal` / `.txt` / `.frd` capsule correction curve. Calibration curves correct frequency-domain **Transfer Function** and **RTA** traces; broadband `IEC 61672` SPL meters measure raw time-domain pressure directly from `Input Gain` calibration.
+
+#### Advanced Measurement Settings
+![Advanced Measurement Settings Inspector](./images/06-advanced-measurement-settings.png)
+
+Transform and smoothing settings are synchronized across all live slots so multi-mic `Math Union` combinations always share aligned frequency bins:
+
+| Control | Options | Practical Guidance |
+| :--- | :--- | :--- |
+| **`Reference Override`** | `Follow Global Ref`, `Internal Generator Loopback`, `In Ch 1..N` | Overrides the topbar Global Reference for a specific slot (e.g., comparing sub processor drive vs. main matrix). |
+| **`Input Filter`** | `None (Flat / Z)`, `A-Weighting`, `C-Weighting`, `1 kHz Notch` | Pre-filters FFT capture (`1 kHz Notch` aids THD+N residual inspection; never double-weights broadband SPL). |
+| **`FFT Size`** | `1024`, `2048`, `4096` (default), `8192`, `16384`, `32768` | Larger FFTs give finer low-frequency bin spacing ($\Delta f = f_s / N$) at the cost of longer time windows (`4096 @ 48 kHz` $\approx 85\text{ ms}$, `11.7 Hz` bins). |
+| **`Window Function`** | `Hann` (default), `Blackman-Harris`, `Flattop`, `Hamming`, `Rectangular` | `Hann` balances sidelobe leakage and frequency resolution; `Flattop` maximizes single-tone amplitude accuracy; `Blackman-Harris` minimizes spectral leakage. |
+| **`Averaging Mode`** | `FIFO Window` (`4..64` frames), `LPF / Exponential` (`0.2..5 Hz`), `Off` | `FIFO` averages a fixed sliding window of recent frames; `LPF` applies smooth exponential decay. |
+| **`Octave Smoothing`** | `None`, `1/48`, `1/24`, `1/12` (default), `1/6`, `1/3`, `1 Octave` | Smooths visual comb ripple across fractional octaves in both Magnitude and complex Phase. |
+| **`TF Estimator`** | `H1 Cross-Spectrum` (default), `\|M\| / \|R\| Ratio` | `H1` ($G_{RM}/G_{RR}$) rejects uncorrelated crowd/room noise on the mic; `Ratio` divides magnitudes directly. |
+| **`Upload Calibration`** | `.cal`, `.txt`, `.frd` | Parses 2- or 3-column calibration files and stores them in `IndexedDB` for reuse across sessions. |
+
+### Stored Trace Inspector
+- Displays capture timestamp and notes, editable **`Trace Name`**, **`Gain Offset (dB)`**, and **`Delay Offset (ms)`**, plus **`Export .FRD`** and **`Delete`**.
+- Importing an external `.FRD` file (`+ .FRD`) whose `200 Hz – 2 kHz` passband mean exceeds `35 dB` (such as an absolute `~105 dB SPL` prediction from `WebSpeakerSim`) automatically subtracts that passband mean so the target curve overlays cleanly at `0 dB` relative gain.
+- *(Note: Stored Traces intentionally omit a direct Polarity toggle; attach a **Virtual EQ** source to preview polarity inversion `Ø` or crossover filters on a stored trace.)*
+
+### Virtual Equalizer Inspector (`+ EQ`)
 ![Virtual Parametric EQ, Crossovers & On-Chart Handles](./images/03-virtual-eq-and-crossovers.png)
 
----
+- **`Apply Virtual EQ To Source`:** Targets any live measurement or stored trace, or `None (Show Filter Curve Only)`.
+- **`Auto-Match Room`:** Analyzes the target trace's `1/3`-octave coherence-weighted response relative to the `250 Hz – 3 kHz` vocal band, synthesizing subtractive peaking cuts for broad resonances (`45 Hz – 7.5 kHz`) plus gentle high-shelf compensation while ignoring narrow acoustic comb dips.
+- **Output Trim, Delay & Polarity:** Gain (`dB`), Electronic Delay (`ms`, negative or positive), Polarity (`Ø`), and Bypass/Mute.
+- **High-Pass & Low-Pass Crossovers:** `Butterworth` (`12`, `18`, `24`, `48 dB/oct`) and `Linkwitz-Riley` (`12`, `24`, `48 dB/oct`) topologies.
+- **Parametric EQ (`1` to `12` bands):** `Peaking`, `Low Shelf`, `High Shelf`, `Notch`, and `All-Pass` sections evaluated at `192 kHz` reference sample rate (zero Nyquist cramping near `20 kHz`).
+- **On-Chart Handle Gestures:** Drag any numbered **`EQ1..EQn`** handle horizontally for **Frequency**, vertically for **Gain (`dB`)**, or hold **`Shift` while dragging vertically or scrolling the mouse wheel** to narrow or widen **`Q`** (`0.25` to `36`).
 
-## 4. Tutorial 3: Multi-Mic Spatial Averaging & Trace Math
+### Math / Union Inspector (`+ Math`)
+![Multi-Mic Live Measurements & N-Input Power Spatial Average](./images/04-multi-mic-spatial-average.png)
 
-**Scenario:** Never EQ an entire venue from a single microphone position—a deep cancellation at one seat might be a `6 dB` peak two meters away. Let's run multiple measurement microphones simultaneously and compute a live **Spatial Average**.
-
-1. Click **`+ Meas`** in the **Sources** header (or press **`M`**) to add a second simultaneous live measurement (`Live Measurement #2`), and rename it `House Left Mid` or `Balcony Lip`.
-   - In Hardware Mode, assign each Live Measurement slot to its own physical input (`In Ch 1`, `In Ch 2`, `In Ch 3`, up to 8 simultaneous mics sharing the Global Reference!).
-   - In Demo Simulator Mode, give each slot a different **Sim Rig** preset (for example, `FOH Flat + Reflections` on Mic 1 and `PA Room Modes` on Mic 2).
-2. Click **`+ Math`** (or press **`U`**) to create a **Math / Union** source.
-3. In the **Math / Union Source** inspector:
-   - Choose **`Power Average (RMS Mag)`** to average magnitude across multiple seats around the room without high-frequency phase comb cancellation, or **`Vector Average (Complex)`** when averaging time-aligned measurements within a tight zone.
-   - Check the boxes next to the live or stored traces you want to combine.
-   - Other handy modes include **`dB Difference (A − B)`** (great for comparing actual PA response against an imported `.FRD` target curve!) and **`Sum (A + B Complex)`** (great for previewing how a separately measured Sub and Top will sum acoustically!).
-
-![Multi-Mic Live Measurements & Power Spatial Average](./images/04-multi-mic-spatial-average.png)
-
----
-
-## 5. Tutorial 4: Live Show SPL Compliance & Feedback Watch
-
-**Scenario:** Soundcheck is done and the audience is walking in. You want to monitor vocal/monitor feedback and keep front-of-house sound levels safely below a venue **`98 dB LAeq15`** ordinance limit—with zero risk of turning on pink noise.
-
-1. Click **`🎚 Show`** in the top-left corner of the Top Bar.
-   - If you are on a hardware audio interface, the Signal Generator automatically mutes and hides.
-   - The workspace switches to **`Live Show 2x (RTA + SPL History)`** with the dedicated **Show Sidebar** on the right.
-2. **Test Feedback Watch (Even Without Mics):**
-   - Under **Live Mics & SPL Watch** on the right, set the **Sim Rig** dropdown to **`Live Show + Feedback Ring`** to simulate program music with a runaway narrowband feedback ring.
-   - Watch the **RTA Spectrum** chart: **Feedback Watch** distinguishes sustained narrowband sinusoidal rings from normal musical transients, pinning a callout flag right on the offending peak with its exact **frequency (`Hz`), musical pitch (`Note + cents`), and ISO 1/3-octave graphic EQ band**!
-   - In the **Feedback Ring Log** card on the right, click **`Cut Notch`** next to any detected ring to drop a surgical narrowband notch directly into your Virtual EQ.
-3. **Monitor Rolling SPL Limits & Export Show Logs:**
-   - The bottom **SPL / Leq History** chart plots rolling **`LAeq15`** (solid), **`LAeq1`** (dashed), **`LAF`** (translucent), and **`Peak`** against configurable Warning/Limit guide lines (`15 min`, `60 min`, or `2 hr` windows).
-   - At the end of the night, click **`Export CSV`** in the **SPL Compliance** card to download a timestamped SPL/Leq compliance report for venue management.
-
-![Live Show Mode with Feedback Watch & Rolling SPL Compliance History](./images/05-live-show-spl-and-feedback.png)
+| Math Operation | Input Selection UI | Acoustic Use Case |
+| :--- | :--- | :--- |
+| **`Vector Average`** | Multi-source checkboxes (`2..N`) | Complex phase-aware average for closely spaced mics or coherent low-frequency zones. |
+| **`Power Average (RMS)`** | Multi-source checkboxes (`2..N`) | Phase-blind energy average ($10\log_{10}(\frac{1}{N}\sum 10^{L_i/10})$) across wide audience seating for room EQ. |
+| **`Vector Sum (A + B)`** | Multi-source checkboxes (`2..N`) | Predicts combined acoustic summation of separately measured Sub + Top + Fill passes. |
+| **`Minimum Envelope`** / **`Maximum Envelope`** | Multi-source checkboxes (`2..N`) | Per-bin minimum or maximum magnitude envelope across multiple seat captures. |
+| **`Vector Subtract (A - B)`** | `Source A` & `Source B` dropdowns | Complexphasor difference ($A - B$). |
+| **`dB Difference (A / B)`** | `Source A` & `Source B` dropdowns | Magnitude ratio in dB ($L_A - L_B$) and phase difference ($\phi_A - \phi_B$) for Predict-to-Measure verification. |
+| **`Apply Filter (A × B)`** | `Source A` & `Source B` dropdowns | Multiplies transfer functions ($A \cdot B$, summing dB and phase). |
 
 ---
 
-## 6. Quick Reference: Calibration, `.FRD` I/O & Keyboard Shortcuts
+## 5. Show Mode Compliance & Feedback Reference (`🎚 Show`)
 
-### Microphone Calibration & `.FRD` Trace Exchange
+![Live Show Mode Hardware Safety Lockout, Seeded 15m SPL History & Feedback Callouts](./images/05-live-show-spl-and-feedback.png)
 
-- **Microphone Calibration Curves (`.cal` / `.frd` / `.txt`):** Select any **Live Measurement**, expand **Microphone Calibration**, and upload your mic's calibration file. It is saved in your browser's offline `IndexedDB` library so you can assign different calibration curves to each measurement mic channel anytime.
-- **Import & Export `.FRD` Traces:**
-  - Click **`+ .FRD`** in the **Sources** header to import any standard 2-column or 3-column `.frd` curve (including predicted Virtual Mic curves exported from **[WebSpeakerSim](../../WebSpeakerSim/docs/user-guide.md)**—see **[Tutorial 04: Predict-to-Measure Field Verification](../../../docs/tutorials/04-predict-to-measure-field-verification.md)**!).
-  - Select any **Stored Trace** and click **`Export .FRD`** to save its Magnitude + Phase response to disk.
+### Live Mics & SPL Watch Card
+- **`+ Mic`:** Adds concurrent show monitoring microphones (`LAeq15` and `LAF` badges shown per row), with per-slot hardware channel/reference routing and **`FB Watch`** mode (`FOH Normal`, `Monitor / Wedge Sensitive`, `Custom`, `Off`).
 
-### Keyboard Shortcuts
+### Feedback Ring Log & Callout Flags
+- **RTA Callout Flags:** Active rings display center frequency and nearest **ISO 31-band GEQ** center (e.g., `◆ 2.48 kHz (ISO 2.5 kHz)` on line 1; prominence `+dB`, estimated `Q`, musical pitch `D#7`, and mic name on line 2).
+- **Feedback Ring Log Card:** Lists latched and active rings with severity badges (`◆` critical runaway feedback, `▲` persistent ring, `●` held history), exact musical pitch + cents offset (`D#7 (-6c)`), and **`Notch EQ`**.
+- **`Notch EQ` Action:** Creates (or updates) a `Feedback Notch (<Mic Name>)` Virtual EQ source with a narrowband peaking cut (`Q = 8..24`) at the ring frequency. Clicking **`Notch EQ`** repeatedly on the same frequency deepens the cut by **`-3.0 dB`** per click (down to `-18 dB`).
 
-| Shortcut | Action |
+### Show Limits & Log Card
+- **Compliance Alert Metric:** `LAeq,15m` (default), `LAeq,60m`, `LAeq,5m`, `LAeq,1m`, `LCeq,1m`, `LAF`, or `LZpeak`.
+- **Thresholds:** Default **`Warn = 98 dB`**, **`Limit = 102 dB`**.
+- **30-Minute Checkpoint Window:** `1 Hz` SPL history checkpoints save to `IndexedDB` every `10 s` and automatically restore on browser reload if the checkpoint is **less than `30 minutes` old** (older show logs expire automatically so yesterday's gig never contaminates today's averages; click **`Reset Log`** anytime to start fresh).
+- **`CSV ⬇` Export:** Downloads `websoundmeter-spl-log-<UTC-ISO-timestamp>.csv` in chronological long format (one row per active slot per second: `timestamp_iso, slot_id, laf_db, lcf_db, laeq_1m_db, lceq_1m_db, laeq_5m_db, laeq_15m_db, laeq_60m_db, lpeak_db`).
+
+---
+
+## 6. Keyboard Shortcuts & Undo Scope
+
+| Key | Action |
 | :--- | :--- |
-| `Space` | **Pause / Resume** live analyzer & hardware signal generator |
-| `C` | **Capture** active live trace into **Stored Sources** |
-| `D` | **Apply** Auto Delay Finder propagation delay to active Live Measurement |
-| `M` | Add a new simultaneous **Live Measurement** (`+ Meas`) |
-| `E` | Add a new **Virtual Parametric EQ & Crossover** source (`+ EQ`) |
-| `U` | Add a new **Math / Union** source (`+ Math`) |
-| `R` | **Reset** averaging buffers and Peak Hold |
-| `Cmd / Ctrl + Z` | **Undo** last authored source, EQ, or slot edit |
-| `Cmd / Ctrl + Shift + Z` or `Ctrl + Y` | **Redo** edit |
-| `1` / `2` / `3` / `4` | Switch between **1**, **2**, **3**, or **4** stacked charts |
-| `Escape` | Close open modal or clear inspector |
-
+| `Cmd / Ctrl + Z` | Undo last authored Stored Trace, Virtual EQ, or Math Union change *(live hardware routing, `Ref Delay`, and live `Input Gain` are immediate hardware/worker controls and are not part of the undo stack)* |
+| `Cmd / Ctrl + Shift + Z` / `Ctrl + Y` | Redo authored change |
+| `Space` | Pause / Resume measurement and generator |
+| `C` | Capture active live trace to Stored Traces |
+| `D` | Find & Apply propagation delay on active Live Measurement |
+| `M` | Add a new Live Measurement slot (`+ Meas`) |
+| `E` | Add a new Virtual EQ source (`+ EQ`, Tuning mode) |
+| `U` | Add a new Math Union source (`+ Math`, Tuning mode) |
+| `R` | Reset averaging and peak hold on active Live Measurement |
+| `1` / `2` / `3` | Switch between 1-chart, 2-chart, and 3-chart layout presets |
+| `Escape` | Collapse Advanced Settings or return selection to active Live Measurement |
+| `Shift + Drag` / `Shift + Wheel` (on EQ handle) | Adjust parametric EQ band `Q` (`0.25 .. 36`) |

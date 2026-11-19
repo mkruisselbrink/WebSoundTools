@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Regenerates all 22 Retina (2x DPR, 1440×900) documentation and tutorial screenshots
- * across `docs/images/`, `docs/tutorials/images/`, `apps/WebSoundMeter/docs/images/`,
+ * Regenerates all Retina (2x DPR, 1440×900 + targeted UI crops) documentation and tutorial
+ * screenshots across `docs/images/`, `docs/tutorials/images/`, `apps/WebSoundMeter/docs/images/`,
  * and `apps/WebSpeakerSim/docs/images/`.
  *
  * Executed directly via Node 26 native TypeScript:
@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { syncPwaManifestScreenshots } from './pwa-manifest-screenshots.ts';
 import { captureTutorialScenes } from './tutorial-scenes.ts';
 import { captureWsmGuideScenes } from './wsm-guide-scenes.ts';
 import { captureWssGuideScenes } from './wss-guide-scenes.ts';
@@ -37,6 +38,7 @@ export async function createRetinaPage(browser: Browser): Promise<RetinaSession>
     deviceScaleFactor: 2,
     acceptDownloads: true,
   });
+  context.setDefaultTimeout(4500);
   const page = await context.newPage();
   return { context, page };
 }
@@ -46,10 +48,14 @@ function startPreviewServer(
   port: number
 ): Promise<ChildProcess> {
   const viteBin = path.join(REPO_ROOT, 'node_modules/.bin/vite');
-  const proc = spawn(viteBin, ['preview', '--port', String(port), '--strictPort'], {
-    cwd: path.join(REPO_ROOT, 'apps', appFolder),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const proc = spawn(
+    process.execPath,
+    [viteBin, 'preview', '--port', String(port), '--strictPort'],
+    {
+      cwd: path.join(REPO_ROOT, 'apps', appFolder),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
 
   return new Promise((resolve, reject) => {
     let stderrBuf = '';
@@ -80,7 +86,25 @@ function startPreviewServer(
   });
 }
 
+function cleanGeneratedPngDirs(repoRoot: string): void {
+  const dirs = [
+    path.join(repoRoot, 'docs/images'),
+    path.join(repoRoot, 'docs/tutorials/images'),
+    path.join(repoRoot, 'apps/WebSoundMeter/docs/images'),
+    path.join(repoRoot, 'apps/WebSpeakerSim/docs/images'),
+  ];
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const file of fs.readdirSync(dir)) {
+      if (file.endsWith('.png')) {
+        fs.unlinkSync(path.join(dir, file));
+      }
+    }
+  }
+}
+
 async function main(): Promise<void> {
+  cleanGeneratedPngDirs(REPO_ROOT);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wst-screenshots-'));
   console.log('Starting Vite preview servers for WebSoundMeter & WebSpeakerSim...');
   const wsmServer = await startPreviewServer('WebSoundMeter', WSM_PORT);
@@ -115,7 +139,9 @@ async function main(): Promise<void> {
       exportedFrdPath,
     });
 
-    console.log('Successfully generated all 22 Retina documentation screenshots.');
+    await syncPwaManifestScreenshots(browser, REPO_ROOT);
+
+    console.log('Successfully generated all Retina documentation & tutorial screenshots.');
   } finally {
     if (browser) {
       await browser.close();

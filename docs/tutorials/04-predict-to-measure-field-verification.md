@@ -1,68 +1,69 @@
 # Tutorial 04: Predict-to-Measure Field Verification (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
 
-A venue prediction is only half the story until you hang the PA and verify that the physical rig matches your design. Because **WebSpeakerSim** and **WebSoundMeter** share the exact same `@foh/dsp` filter math and `@foh/acoustics` `.FRD` parser/interpolator, you can carry predicted Virtual Microphone responses straight onto the gig and compute a live **`Measured − Predicted`** error curve in seconds.
+A venue prediction is only half the story until you hang the PA and verify that the physical rig matches your design. Because **WebSpeakerSim** and **WebSoundMeter** share the exact same `@foh/dsp` filter evaluation and `@foh/acoustics` `.FRD` parser/interpolator, you can export predicted Virtual Microphone responses straight onto the gig and compute a smoothed **`Measured − Predicted`** error curve in seconds.
 
 ---
 
-## Step 1: Export Predicted `.FRD` Target Curves from `WebSpeakerSim`
+## 1. Export Predicted `.FRD` Target Curves from `WebSpeakerSim`
 
-1. In **WebSpeakerSim** (`http://localhost:5174`), place Virtual Microphones at the exact physical coordinates where you plan to set your measurement mic stands in the venue—for example:
-   - **`FOH Mix Position`** (`X = 14.0 m, Y = 0.0 m, Z = 1.65 m`)
-   - **`Front Row Off-Axis`** (`X = 3.5 m, Y = 2.5 m, Z = 1.55 m`)
+1. In **WebSpeakerSim** (`http://localhost:5174`), place Virtual Microphones at the physical coordinates where you will set your measurement mic stands on site:
+   - **`FOH Mix Position`** (`X = 13.5 m, Y = 0.0 m, Z = 1.65 m` in the `Live Club` preset).
+   - Click **`+ Mic`** (`M`) in the **Virtual Mics** section if you also want an off-axis spot check (for example, `Front Row Off-Axis` at `X = 3.5 m, Y = 2.5 m, Z = 1.65 m`).
 2. Select **`FOH Mix Position`** under **Virtual Mics** in the right-hand **Scene Tree**.
-3. In the **Predicted Response @ Mic** card, click **`Export Predicted .FRD`** to download `FOH-Mix-Position.frd` (standard 3-column `Frequency_Hz  SPL_dB  Phase_Deg` format across `20 Hz – 20 kHz`).
+3. Inside the **`Predicted Level & Arrival`** card, click **`Export Predicted .FRD`** to download `foh-mix-position-predicted.frd` (standard 3-column `FreqHz  MagDb  PhaseDeg` format across `20 Hz – 20 kHz`, phase-referenced to earliest arrival $t_0$).
 
-![Exporting Predicted .FRD from a Virtual Mic in WebSpeakerSim](../images/01-wss-export-predicted-frd.png)
-
----
-
-## Step 2: Import the `.FRD` into `WebSoundMeter` on Site
-
-1. At the venue, place your physical measurement microphone at FOH (`X = 14.0 m`), wire your loopback ([Tutorial 01](./01-hardware-setup-and-mic-calibration.md)), and open **WebSoundMeter** (`http://localhost:5173`).
-2. Click **`+ .FRD`** in the **Sources** header on the right and select `FOH-Mix-Position.frd`.
-3. **Automatic `0 dB` SPL Normalization:**
-   - **WebSpeakerSim** exports absolute predicted SPL (for example, `~104 dB SPL`), whereas a dual-FFT transfer function in **WebSoundMeter** centers around `0 dB` relative gain.
-   - **WebSoundMeter** automatically normalizes high-SPL `.FRD` curves around their `100 Hz – 4 kHz` passband mean (`0 dB`) upon import so your predicted trace overlays cleanly onto your live `0 dB` transfer function!
-   - Select the imported trace in **Stored Sources** anytime to fine-tune **`Gain Offset (dB)`** or **`Delay Offset (ms)`** so midband levels (`500 Hz – 2 kHz`) align to the tenth of a dB.
-
-![Overlaying Imported Predicted .FRD Against Live FOH Measurement](../images/02-wsm-import-and-compare-frd.png)
+![Exporting Predicted .FRD from Predicted Level & Arrival in WebSpeakerSim](../images/01-wss-export-predicted-frd.png)
 
 ---
 
-## Step 3: Compute a Live `Measured − Predicted` Difference Curve (`+ Math`)
+## 2. Import, Normalize & Smooth in `WebSoundMeter` on Site
 
-Rather than squinting at two overlapping traces to spot subtle deviations, let **WebSoundMeter** subtract the prediction from your live measurement:
+1. At the venue, place your physical measurement microphone at the matching FOH coordinate (`X = 13.5 m`), gain-stage your loopback reference, and open **WebSoundMeter** (`http://localhost:5173`).
+2. Lock your live FOH propagation delay (**`Find & Apply Delay`** / `D`) and expand **`Advanced Settings ▾`** to set **`Octave Smoothing`** to **`1/6 Octave`** or **`1/3 Octave`** (matching tonal resolution across multi-source ground-bounce comb ripples).
+3. Click **`+ .FRD`** in the **Sources** header and load `foh-mix-position-predicted.frd`:
+   - **Automatic `200 Hz – 2 kHz` Passband Normalization:** **WebSpeakerSim** exports absolute predicted SPL (e.g., `~108 dB SPL`), whereas a dual-FFT transfer function in **WebSoundMeter** centers around `0 dB` relative gain. Whenever an imported `.FRD` curve's `200 Hz – 2 kHz` passband mean exceeds `35 dB`, **WebSoundMeter** automatically subtracts that mean upon import so the predicted trace overlays directly onto your `0 dB` measurement.
+   - **Fine Level & Arrival Alignment:** Select the imported trace in **Sources** to open the **Stored Trace** inspector and fine-tune **`Gain Offset (dB)`** or **`Delay Offset (ms)`** (especially when multiple cabinets contribute before the dominant arrival so phase slopes align across `200 Hz – 4 kHz`).
 
-1. Lock your live FOH measurement delay (`Find & Apply Delay` / `D`) and click **`Capture`** (`C`) to snapshot `FOH Measured` (or keep `Live Measurement` selected directly).
-2. Click **`+ Math`** in **Sources** to add a **Math / Union** source.
-3. In the **Union Inspector**:
-   - Set **Math Operation** to **`dB Difference (A / B)`** (`diff-db`, which plots $L_{\text{Measured}}(f) - L_{\text{Predicted}}(f)$ in dB and $\phi_A - \phi_B$ in degrees).
-   - Set **Source A** to your **Live / Captured FOH Measurement**.
-   - Set **Source B** to your imported **`FOH-Predicted`** `.FRD` trace.
-
-![Measured Minus Predicted dB Difference Trace Isolating Room Modes & Air Loss](./images/t04-01-measured-minus-predicted-diff.png)
+![Overlaying Smoothed Live FOH Measurement Against Imported Predicted .FRD](../images/02-wsm-import-and-compare-frd.png)
 
 ---
 
-## Step 4: How to Diagnose Differences Between Prediction & Reality
+## 3. Compute a Smoothed `dB Difference (A / B)` Error Curve (`+ Math`)
 
-Wherever the **`Measured − Predicted`** trace sits near `0 dB`, your physical rig is performing just as modeled! When it deviates, check the frequency band to distinguish **rigging/wiring mistakes** from **normal room acoustics**:
+Rather than squinting at two overlapping traces, subtract the prediction directly from your measurement:
+
+1. Click **`Capture`** (`C`) on your aligned FOH measurement and rename the stored trace **`FOH Measured`** (uncheck `Live Measurement` visibility if you want a clean 3-trace comparison).
+2. Click **`+ Math`** (`U`) in **Sources** to add a **Math Union** source.
+3. In the **Math Union** inspector:
+   - Set **`Math Operation`** to **`dB Difference (A / B)`** (plotting $L_{\text{Measured}}(f) - L_{\text{Predicted}}(f)$ in dB and $\phi_A - \phi_B$ in degrees).
+   - Set **`Source A`** to **`FOH Measured`**.
+   - Set **`Source B`** to **`foh-mix-position-predicted`**.
+
+![Smoothed Measured Minus Predicted dB Difference Curve](./images/t04-01-measured-minus-predicted-diff.png)
+
+*(Note: when practicing in Demo Simulator mode, Demo Preset 2 models generic room modes rather than the exact `Live Club` geometry; on a real rig, `dB Difference (A / B)` isolates real venue boundary loading and rigging errors directly.)*
+
+---
+
+## 4. Diagnosing Differences Between Prediction & Reality
+
+Wherever the **`dB Difference (A / B)`** trace sits near `0 dB`, your rigged PA matches the model. When it deviates, check the frequency band to separate **rigging/wiring mistakes** from **normal room acoustics**:
 
 | Deviation Signature | Likely Physical Cause | Action to Take |
 | :--- | :--- | :--- |
-| **Deep notch (`-10` to `-20 dB`) right at `80–100 Hz`** where prediction was smooth | Subwoofer or Main processor polarity button flipped, or wrong delay preset loaded in amp rack | Check processor polarity (`Ø`) & delay—**do not EQ!** |
-| **`+4` to `+8 dB` broad rise below `160 Hz`** compared to free-field/half-space prediction | Side-wall / rear-wall boundary loading ("room gain") and modal buildup not modeled by direct-field + floor bounce | Apply gentle low-shelf / broad parametric cut in Virtual EQ (`+ EQ`) after checking multiple seats |
-| **Entire shelf `-6 dB` down above `3 kHz`** at a specific seat | Cabinet vertical tilt angle hung steeper/flatter than the CAD sheet, or HF compression driver muted/blown | Check cabinet inclinometer / rigging pin angle first, then driver continuity (`Solo` box close-up) |
-| **Smooth gentle droop above `8–12 kHz`** (`-2` to `-4 dB`) at `25 m+` FOH | Venue air is drier (`20–30% RH`) or warmer than modeled, or heavy stage velour/drapery absorption | Compensate gently with a gentle high-shelf (`Q = 0.7`) if needed at FOH without scorching the front rows |
+| **Deep notch (`-10` to `-20 dB`) right at `80–100 Hz`** where prediction was smooth | Subwoofer or Main processor polarity flipped, or wrong delay preset loaded in amp rack | Check processor polarity (`Ø`) & delay—do not boost with EQ. |
+| **`+4` to `+8 dB` broad rise below `160 Hz`** compared to half-space prediction | Side-wall / rear-wall boundary loading ("room gain") and modal buildup not modeled by direct-field + floor bounce | Apply gentle low-shelf / broad subtractive cut in Virtual EQ (`+ EQ`) after checking a multi-seat spatial average. |
+| **Entire shelf `-6 dB` down above `3 kHz`** at a specific seat | Cabinet vertical tilt hung steeper/flatter than the CAD sheet, or HF compression driver muted/damaged | Verify cabinet inclinometer / rigging pin angle first, then solo the cabinet close-up. |
+| **Smooth gentle droop above `8–12 kHz`** (`-2` to `-4 dB`) at `25 m+` FOH | Venue air is drier (`20–30% RH`) or warmer than modeled, or heavy stage drapery absorption | Compensate gently with a broad high-shelf (`Q = 0.7`) if appropriate for FOH without over-brightening front rows. |
 
 ---
 
-## Step 5: Export Post-Tuning As-Built `.FRD` Archives
+## 5. Archiving Post-Tuning As-Built `.FRD` Files
 
 Once your PA is aligned and equalized:
 1. Capture final post-EQ traces (`FOH Final`, `Balcony Final`, `Front Fill Final`).
-2. Select each stored trace and click **`Export .FRD`** in the **Stored Source Inspector** to archive standard `.FRD` show files alongside your `.wss-project.json` venue design for the next tour stop in that room!
+2. Select each stored trace and click **`Export .FRD`** in the **Stored Trace** inspector to archive standard `.FRD` show files alongside your `.wss-project.json` venue bundle for future tour stops.
 
 ---
 
-**Next Step $\rightarrow$** [Tutorial 05: Live Show SPL Compliance & Feedback Ring-Out](./05-live-show-spl-compliance-and-feedback.md)
+*Return to the [FOH Tutorial Index](./README.md).*

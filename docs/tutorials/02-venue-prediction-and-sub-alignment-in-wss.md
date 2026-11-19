@@ -1,107 +1,99 @@
-# Tutorial 02: 3D Venue Prediction, Cardioid Subs & Alignment (`WebSpeakerSim`)
+# Tutorial 02: Club Venue Prediction, Cardioid Subs & Alignment (`WebSpeakerSim`)
 
-Before loading a truck or rigging a single point-source cabinet, **WebSpeakerSim** lets you verify horizontal/vertical horn coverage, eliminate stage bass wash with directional subwoofer arrays, time-align fills and subs at virtual microphone positions, and export predicted `.FRD` target curves for on-site verification.
-
----
-
-## 1. Launch & Load the Venue Model
-
-Start **WebSpeakerSim** from the `WebSoundTools` workspace root:
-
-```bash
-npm run dev:wss
-```
-
-Open `http://localhost:5174`. By default, **WebSpeakerSim** opens the **Live Club — 12" Mains + Cardioid Subs + Front Fills** venue (`18 m` deep $\times$ `12 m` wide standing floor + stage deck).
-
-![WebSpeakerSim Workspace Overview](../../apps/WebSpeakerSim/docs/images/01-workspace-overview.png)
-
-### Room Coordinate System & Atmosphere Check
-
-1. Click **`Atmosphere, Colormap & Venue Bounds`** at the bottom of the right-hand **Scene Tree**.
-2. Enter the expected show-time air conditions (**`Temperature °C`** and **`Relative Humidity %`**):
-   - Air temperature shifts the speed of sound ($c \approx 331.3 + 0.606 T_C\text{ m/s}$)—a `10 °C` warm-up between afternoon soundcheck (`18 °C`) and a packed show (`28 °C`) changes a `20 m` delay ring's arrival time by **`~1.0 ms`** and shifts subwoofer quarter-wave cardioid cancellation frequencies!
-   - Relative humidity governs **ISO 9613-1 high-frequency air absorption** (`8–16 kHz` loss over long throws).
+Before rolling cases out of the truck, acoustic prediction lets you verify horn aiming, front-fill coverage, stage bass rejection, and initial delay times in minutes. In this tutorial we design and align an `18 m × 12 m` live music club in **WebSpeakerSim** (`http://localhost:5174`).
 
 ---
 
-## 2. Step-by-Step: Aiming L/R Mains & Spotting Near-Field Gaps
+## 1. Venue Coordinates & Scene Layout
 
-Broadband pink-noise heatmaps look deceptively smooth because omnidirectional low frequencies mask high-frequency horn beaming. Always aim point-source tops at **`4 kHz`** first:
+Load **`Live Club — 12" Mains + Cardioid Subs + Front Fills`** from the **`Venue`** selector in the top bar.
 
-1. In the **Top Bar**, set **Band** to **`4 kHz (Single Band)`**.
-2. In the **Point Sources** section of the right sidebar, click **`On`** next to **`Front Fill L`** so it toggles to **`Muted`**.
-3. Click **`Main L`** (`Z = 3.8 m`, `Y = +4.5 m`, `90° × 60°` 12" 2-way active top) to highlight its 3D aiming vector in both **Plan View** and **Side Section**.
-
-![Mains Only at 4 kHz Highlighting Front-Row Center Gap](../../apps/WebSpeakerSim/docs/images/02-mains-4khz-gap.png)
-
-### What to Look For
-- **Downstage Center Hole (`X = 1.5–4.5 m, Y = 0 m`):** Listeners standing at the front barrier sit well inside and underneath both flown `90° × 60°` horns, dropping vocal intelligibility by `10+ dB` and pulling overall **`±3dB`** coverage evenness down to **`47%`**.
-- **Interactive Aiming:** Drag the white circular **aim handle** in **Plan View** to adjust inward toe-in (**`Azimuth = -12°`**) and drag it in **Side Section** to aim vertical throw (**`Tilt = -11°`**, pointing roughly two-thirds of the way toward the back wall so inverse-square distance loss balances the horn's vertical off-axis roll-off). Because **`Symmetric L/R Pair`** is checked, `Main L (R)` mirrors every edit automatically.
-
-### Filling the Center Gap & Checking the Histogram
-
-1. Click **`Muted` $\rightarrow$ `On`** next to **`Front Fill L`** (`8"` stage-lip fills at `Z = 1.05 m`, `Y = ±1.6 m`, `Tilt = -4°`).
-2. Switch **Band** back to **`Broadband Pink (dBA)`**, set **Scale** to **`Auto ±6 dB`** with **`2 dB`** contours, and select the **`SPL Histogram`** tab in the bottom chart drawer.
-
-![Even Coverage with Front Fills & Audience SPL Histogram](../../apps/WebSpeakerSim/docs/images/03-frontfills-coverage-histogram.png)
-
-Coverage within `±3 dB` across the entire audience zone jumps from `47%` to **`82%`**!
+**WebSpeakerSim** uses a right-handed metric coordinate system (`meters`):
+- **`+X` (Throw):** Stage lip (`X = 0 m`) out toward FOH (`X = 13.5 m`) and back wall (`X = 18.5 m`).
+- **`+Y` (Lateral):** **Stage Left** (`+Y`, top of Plan View, which is *House Right* when looking from FOH); `-Y` is **Stage Right** (*House Left*); `Y = 0 m` is room centerline.
+- **`+Z` (Elevation):** Floor (`Z = 0 m`) upward toward the ceiling (`Z = 6.0 m`).
 
 ---
 
-## 3. Step-by-Step: Eliminating Stage Bass Wash (`63 Hz` Cardioid Stack)
+## 2. Aiming L/R Mains at `4 kHz` & Filling the Front-Center Gap
 
-Subwoofers placed along the downstage edge are physically closer to the band's vocal and drum microphones (`2 m` behind the subs) than to the audience (`4–18 m` in front). Let's compare an unsteered broadside array against a quarter-wave **Cardioid Subwoofer Array (`CSA`)**:
+Broadband heatmaps include omnidirectional sub-bass that masks high-frequency vocal dead spots. Always inspect horn aiming at **`2 kHz` or `4 kHz`** first:
 
-1. Set **Band** in the top bar to **`63 Hz (Single Band)`** and **Scale** to **`Auto 36 dB`**.
-2. Select **`Center Cardioid Subs`** under **Subwoofer Arrays** and switch **Array Mode** to **`Broadside Line`**.
+1. In the **Point Sources** tree on the right, click **`On` $\rightarrow$ `Muted`** next to **`Front Fill L`**.
+2. Set **`Band`** in the top bar to **`4 kHz (Single Band)`**, set **`Contours`** to **`Off`**, and click **`Stepped`** so discrete isobar color bands reveal high-frequency coverage clearly.
+3. Click **`Main L`** (`X = 0.4 m, Y = +4.5 m, Z = 3.8 m`). Because **`Symmetric L/R Pair`** is checked, its mirrored twin **`Main R`** (`Y = -4.5 m`) tracks every position and angle edit automatically.
+
+![Mains Only at 4 kHz Showing Near-Field Center Gap](../../apps/WebSpeakerSim/docs/images/02-mains-4khz-gap.png)
+
+Notice two key details:
+- Right in front of the downstage edge around **`Front Row Center`** (`X = 2.5 m, Y = 0 m`), listeners sit inside the triangular shadow between the widely spaced `Main L` and `Main R` horns (`47%` within `±3 dB` at `4 kHz`).
+- Dragging the white circular **aim handle** in **Plan View** adjusts inward toe-in (**`Azimuth = -12°`**), while dragging it in **Side Section** aims vertical throw (**`Tilt = -11°`**, pointing roughly two-thirds down the floor so inverse-square distance loss balances horn off-axis roll-off).
+
+### Unmuting Stage-Lip Front Fills & Checking Broadband Evenness
+
+1. Click **`Muted` $\rightarrow$ `On`** next to **`Front Fill L`** (`8"` stage-lip enclosures laid horizontally with `Roll = 90°` at `Z = 1.05 m`, `Y = ±1.6 m`, and **`Tilt = +4°`**—angling gently upward from the `1.05 m` stage lip toward `1.65 m` standing ear height).
+2. Switch **`Band`** to **`Broadband Pink (dBA)`**, click **`Stepped`** off, set **`Scale`** to **`Auto ±6 dB`** with **`2 dB`** contours, and open the **`SPL Histogram`** tab in the bottom chart drawer.
+
+![Balanced Broadband Club Coverage & Audience SPL Histogram](../../apps/WebSpeakerSim/docs/images/03-frontfills-coverage-histogram.png)
+
+Across the entire standing floor, broadband coverage within `±3 dB` reaches **`82%`** (`Mean 105.9 dB`) with the front-row center vocal gap filled smoothly.
+
+---
+
+## 3. Eliminating Stage Bass Wash (`63 Hz` Cardioid Stack)
+
+Subwoofers stacked along the downstage edge sit closer to vocal and drum microphones on stage (`X = -1.5 m`) than to the audience (`X = 2.5–18.5 m`). Compare an omnidirectional broadside line against a quarter-wave **Cardioid Stack (`CSA`)**:
+
+1. Set **`Band`** to **`63 Hz (Single Band)`**, **`Contours`** to **`3 dB`**, and **`Scale`** to **`Auto 36 dB`**.
+2. Select **`Center Cardioid Subs`** under **Subwoofer Arrays** and set **`Array Mode`** to **`Broadside Line`**.
 
 ![Omnidirectional Broadside Sub Array Flooding the Stage at 63 Hz](../../apps/WebSpeakerSim/docs/images/04-subs-broadside-63hz.png)
 
-Notice **`Stage Rej: -4.6 dB`** in the top bar—the stage deck is `4.6 dB` *louder* at `63 Hz` than the audience floor!
+Notice **`Stage Rej: -4.6 dB`** in the top bar—at `63 Hz`, the stage deck is `4.6 dB` *louder* than the audience average.
 
-3. Now switch **Array Mode** to **`Cardioid Stack (CSA)`**, set **Tune Freq (Hz)** to **`63`**, and click **`Set λ/4 Depth + Delay`**:
-   - Rear-facing cabinets automatically invert polarity (`Ø`) and apply quarter-wave electronic delay ($\tau = d / c \approx 3.9\text{ ms}$ for `1.35 m` acoustic offset):
-     - **Forward (`+X` toward audience):** Rear box wave arrives in phase with front boxes.
-     - **Backward (`-X` onto stage):** Rear box wave arrives $180^\circ$ out of phase (`d/c + d/c = λ/2` + polarity flip), carving a deep rear cancellation null!
+3. Switch **`Array Mode`** to **`Cardioid Stack (CSA)`**, verify **`Tune Freq (Hz)`** is **`63`**, and click **`Set λ/4 (1.36m)`**:
+   - Rear-facing cabinets (`#2` and `#4` at `X = -0.18 m`) rotate `180°`, invert polarity (`Ø Inv`), and apply quarter-wave electronic delay ($\tau = d / c = 3.96\text{ ms}$ for $d = 1.36\text{ m}$ at $c = 343.2\text{ m/s}$):
+     - **Forward (`+X` toward audience):** Rear-box wave travels an extra distance $+d$ ($+d/c$ acoustic lag) plus $+d/c$ electronic delay $= \lambda / 2$ ($180^\circ$ total lag). Combined with the $180^\circ$ polarity flip, $180^\circ + 180^\circ = 360^\circ$—arriving **in phase** with the front boxes.
+     - **Backward (`-X` onto stage):** Because the rear box sits $d$ closer to the stage ($-d/c$ acoustic lead), its $+d/c$ electronic delay brings both waves to the stage at the **exact same instant** ($0^\circ$ time offset), where the $180^\circ$ polarity flip cancels them out of phase.
 
-![Cardioid Stack Carving a Deep 63 Hz Null Across the Stage Deck](../../apps/WebSpeakerSim/docs/images/05-subs-cardioid-63hz.png)
+![Cardioid Stack Carving a 63 Hz Null Across the Stage Deck](../../apps/WebSpeakerSim/docs/images/05-subs-cardioid-63hz.png)
 
-**`Stage Rej`** improves by over **`17 dB`** (to **`+12.8 dB`**), turning the entire stage deck deep blue/violet while maintaining solid low-end punch out front.
+![CSA Subwoofer Array Designer & Generated Enclosure Schedule](./images/t02-03-csa-enclosure-schedule.png)
+
+**`Stage Rej`** improves by **`10.2 dB`** (from `-4.6 dB` to **`+5.6 dB`**), turning the stage deck cool blue while preserving full low-end impact out front. Copy the per-cabinet coordinates, `3.96 ms` delay, and `Ø Inv` polarity directly from **`GENERATED ENCLOSURE SCHEDULE (4)`** at the bottom right.
 
 ---
 
-## 4. Step-by-Step: Virtual Mic Time Alignment & On-Chart DSP Group EQ
+## 4. Virtual Mic Time Alignment & On-Chart DSP Group EQ
 
-### Auto-Aligning Arrival Times & Phase
+### One-Click Inter-Group Alignment
 
-1. Select **`FOH Mix Position`** under **Virtual Mics** in the right sidebar (`X = 14.0 m, Y = 0 m, Z = 1.65 m`) and open the **`Arrivals`** or **`Phase (°)`** tab in the bottom chart drawer.
+1. Select **`FOH Mix Position`** (`X = 13.5 m, Y = 0 m, Z = 1.65 m`) under **Virtual Mics** and open the **`Phase (°)`** tab in the bottom chart drawer.
 2. In the **Auto Time-Alignment** section of the Virtual Mic inspector:
-   - Set **Reference Group** to **`Subs`** (or whichever acoustic source arrives latest when you cannot physically move cabinets).
-   - Set **Target Group to Delay** to **`Mains`** (or **`Front Fills`** when aligning fills at a front-row mic).
-   - Click **`Apply Electronic Delay`**—**WebSpeakerSim** computes the exact geometric + crossover group-delay offset and writes it directly to the target DSP Group.
+   - Set **`Reference`** to **`Cardioid Sub Array`** (the latest-arriving acoustic group due to low-pass crossover group delay and quarter-wave CSA delay).
+   - Set **`Target`** to **`Main L/R Tops`** and **`Align Freq (Hz)`** to **`90`** (matching the `90 Hz` `LR24` crossover).
+   - Click **`Apply Delay & Polarity`** to write the exact electronic alignment delay directly to the `Main L/R Tops` DSP Group.
 
-![Virtual Mic Arrival Times & One-Click Group Alignment](../../apps/WebSpeakerSim/docs/images/06-virtual-mic-time-alignment.png)
+![Live Club FOH Virtual Mic Phase & One-Click Group Alignment](./images/t02-02-club-mic-alignment.png)
 
 ### Sculpting Crossovers & Draggable DSP Group EQ Handles
 
-1. Under **DSP Groups** in the right sidebar, click **`Mains`**.
-2. In the **DSP Group Inspector**, configure the high-pass crossover (**`LR 24 dB/oct` @ `85 Hz`**) and click **`+ Band`** under **Parametric EQ** to add or tweak corrective bands.
-3. Look at the **Virtual Mic Magnitude** chart at the bottom: **interactive numbered EQ handles** appear directly on the response curve—drag horizontally for frequency, vertically for gain (`dB`), or hold `Shift` while dragging/scrolling to narrow or widen **`Q`**!
+1. Under **DSP Groups**, click **`Main L/R Tops`** (`LR 24 dB/oct` high-pass @ `90 Hz`) and switch the bottom chart back to **`Magnitude (dB)`**.
+2. Click **`+ Add Band`** under **Parametric EQ** to insert corrective filters.
+3. Drag the green **`EQ1..EQ3`** handles directly on the **Magnitude (dB)** chart:
+   - **Horizontal drag** sweeps **Frequency (`Hz`)**.
+   - **Vertical drag** adjusts **Gain (`dB`)**.
+   - **`Shift + Vertical Drag`** or **`Shift + Mouse Wheel`** narrows or widens **`Q`**.
 
-![Interactive DSP Group Crossovers & Draggable On-Chart EQ Handles](./images/t02-01-wss-dsp-group-eq-handles.png)
-
----
-
-## 5. Adding Custom Loudspeakers & Exporting Predicted `.FRD` Curves
-
-- **Custom Enclosures (`L` / `Speaker Library`):** Click **`Speaker Library`** in the top bar to browse built-in models, synthesize any loudspeaker from published PDF datasheet specs (**`Spec Builder`** tab: `H° × V°`, `-3 dB` passband, dimensions, sensitivity & Max SPL), or import `.gll`, `.clf`, and `.frd` files locally into `IndexedDB`.
-
-![Loudspeaker Library & Datasheet Spec Builder](../../apps/WebSpeakerSim/docs/images/07-speaker-library-spec-builder.png)
-
-- **Exporting `.FRD` for Field Measurement:** Select **`FOH Mix Position`** under **Virtual Mics** and click **`Export Predicted .FRD`**. Save `FOH-Mix-Position.frd`—in [Tutorial 04](./04-predict-to-measure-field-verification.md) we will load this exact prediction into **WebSoundMeter** to verify the rigged PA in the venue!
+![Interactive DSP Group Crossovers & Multi-Band On-Chart EQ Handles](./images/t02-01-wss-dsp-group-eq-handles.png)
 
 ---
 
-**Next Step $\rightarrow$** [Tutorial 03: PA Time Alignment, Sub/Top Crossover & Virtual EQ in WebSoundMeter](./03-pa-time-alignment-and-eq-in-wsm.md)
+## 5. Custom Loudspeakers & Exporting Predicted `.FRD` Curves
+
+- **Loudspeaker Library (`L` / `Speaker Library / Import`):** Click **`Speaker Library / Import`** in the top bar to browse built-in enclosures, synthesize a 3D directivity balloon from a PDF datasheet in the **`Datasheet Spec Builder`** tab (`H° × V°` coverage, `-3 dB` passband cuts, and continuous Max SPL @ `1 m`), or import `.gll`, `.clf`, and `.frd` files into `IndexedDB`.
+- **Exporting `.FRD` Targets:** Select **`FOH Mix Position`** under **Virtual Mics** and click **`Export Predicted .FRD`** inside **`Predicted Level & Arrival`** to save `foh-mix-position-predicted.frd` for field verification on site.
+
+---
+
+*Return to the [FOH Tutorial Index](./README.md).*

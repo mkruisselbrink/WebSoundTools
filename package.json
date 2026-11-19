@@ -16,7 +16,7 @@
     "test:watch": "vitest",
     "build": "npm --workspace web-sound-meter run build && npm --workspace web-speaker-sim run build",
     "test:e2e": "npm --workspace web-sound-meter run test:e2e && npm --workspace web-speaker-sim run test:e2e",
-    "docs:screenshots": "npm run build && node docs/scripts/generate-screenshots.ts"
+    "docs:screenshots": "tsc --noEmit -p docs/scripts/tsconfig.json && npm run build && node docs/scripts/generate-screenshots.ts"
   },
   "engines": {
     "node": ">=22.18.0"
