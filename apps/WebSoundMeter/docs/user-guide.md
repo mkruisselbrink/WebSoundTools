@@ -43,7 +43,7 @@ Open `http://localhost:5173` in your browser. **WebSoundMeter** boots immediatel
 
 2. **Center Chart Stack:**
    - Each chart panel can independently display **Magnitude (dB)**, **Phase (°)**, **Impulse Response**, **Step Response**, **Group Delay (ms)**, **Coherence ($\gamma^2$)**, **RTA Spectrum** (continuous line or `1/3`, `1/6`, `1/12` octave bars), or **SPL / Leq History**.
-   - Hover anywhere inside a plot to inspect exact **Frequency (`Hz`), Period (`ms`), Acoustic Wavelength (`m` / `ft`), Level (`dB`), Phase (`°`), and Coherence (`%`)** in the floating cursor HUD. Notice how trace brightness automatically fades where coherence drops in noisy or reverberant frequency regions!
+   - Hover anywhere inside a plot to inspect exact **Frequency (`Hz`), Period (`ms`), Acoustic Wavelength (`m` / `ft`), Level (`dB`), Phase (`°`), and Coherence (`%`)** in the floating cursor HUD. Each Transfer Function panel (`Magnitude`, `Phase`, `Group Delay`) lets you switch coherence masking between **`Coh: Alpha Fade`**, **`Coh: Hard Cutoff`** (completely blanking bins below your selected `γ² ≥ 20%..95%` threshold), or **`Coh: Off`**.
 
 3. **Right Dock (Sources Tree + Property Inspector):**
    - Lists all active **Live Measurements**, **Stored Traces**, **Virtual EQs**, and **Math / Union** sources with visibility checkboxes and color swatches, plus quick action buttons (`+ Meas`, `+ EQ`, `+ Math`, `+ .FRD`).

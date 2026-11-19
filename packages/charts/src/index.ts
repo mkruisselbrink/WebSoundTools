@@ -40,6 +40,7 @@ export {
   valueToNormX,
   valueToNormY,
   type BuildTraceNdcOptions,
+  type CoherenceBlankingMode,
   type MagnitudeSpanMode,
   type TraceVertexBuffer,
 } from './coord-math.js';

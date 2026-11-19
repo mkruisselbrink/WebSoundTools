@@ -12,6 +12,7 @@ import {
   computeZoomedYRange,
   fohChartPanelStyles,
   type ChartScene,
+  type CoherenceBlankingMode,
   type CursorReadoutModel,
 } from '@foh/charts';
 import type { BiquadSpec } from '@foh/dsp';
@@ -55,8 +56,21 @@ export class ChartPanelElement extends FohChartPanelBase {
   @property({ attribute: false })
   eqBands: BiquadSpec[] | null = null;
 
+  @property({ type: String })
+  coherenceMode: CoherenceBlankingMode = 'alpha';
+
   @property({ type: Boolean })
-  coherenceAlpha: boolean = true;
+  get coherenceAlpha(): boolean {
+    return this.coherenceMode !== 'off';
+  }
+
+  set coherenceAlpha(enabled: boolean) {
+    this.coherenceMode = enabled
+      ? this.coherenceMode === 'off'
+        ? 'alpha'
+        : this.coherenceMode
+      : 'off';
+  }
 
   @property({ type: Number })
   coherenceThreshold: number = 0.35;
@@ -151,7 +165,7 @@ export class ChartPanelElement extends FohChartPanelBase {
       eqBands: this.eqBands,
       rtaMode: this.rtaMode,
       showPeakHold: this.showPeakHold,
-      coherenceAlpha: this.coherenceAlpha,
+      coherenceMode: this.coherenceMode,
       coherenceThreshold: this.coherenceThreshold,
       showFeedbackWatch: this.showFeedbackWatch,
       splTraceMode: this.splTraceMode,
@@ -169,7 +183,8 @@ export class ChartPanelElement extends FohChartPanelBase {
       plotType: this.plotType,
       rtaMode: this.rtaMode,
       showPeakHold: this.showPeakHold,
-      coherenceAlpha: this.coherenceAlpha,
+      coherenceMode: this.coherenceMode,
+      coherenceThreshold: this.coherenceThreshold,
       showFeedbackWatch: this.showFeedbackWatch,
       splWindowSec: this.splWindowSec,
       splTraceMode: this.splTraceMode,
@@ -177,12 +192,19 @@ export class ChartPanelElement extends FohChartPanelBase {
       onPlotTypeChange: this.handlePlotTypeChange,
       onRtaModeChange: (mode) => {
         this.rtaMode = mode;
+        this.requestChartRepaint();
       },
       onTogglePeakHold: (enabled) => {
         this.showPeakHold = enabled;
+        this.requestChartRepaint();
       },
-      onToggleCoherenceAlpha: (enabled) => {
-        this.coherenceAlpha = enabled;
+      onCoherenceModeChange: (mode) => {
+        this.coherenceMode = mode;
+        this.requestChartRepaint();
+      },
+      onCoherenceThresholdChange: (threshold) => {
+        this.coherenceThreshold = threshold;
+        this.requestChartRepaint();
       },
       onToggleFeedbackWatch: (enabled) => {
         this.showFeedbackWatch = enabled;

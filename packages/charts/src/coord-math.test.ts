@@ -51,10 +51,14 @@ describe('coord-math', () => {
     expect(formatRelativeTimeLabel(-7200)).toBe('-2h');
   });
 
-  it('computes coherence alpha curve and zoomed Y ranges', () => {
-    expect(computeCoherenceAlpha(1.0, 0.4, true)).toBe(1.0);
-    expect(computeCoherenceAlpha(0.2, 0.4, true)).toBeCloseTo(0.05, 3);
+  it('computes coherence alpha fade, hard cutoff, and zoomed Y ranges', () => {
+    expect(computeCoherenceAlpha(1.0, 0.4, 'alpha')).toBe(1.0);
+    expect(computeCoherenceAlpha(0.2, 0.4, 'alpha')).toBeCloseTo(0.05, 3);
+    expect(computeCoherenceAlpha(0.2, 0.4, 'off')).toBe(1.0);
     expect(computeCoherenceAlpha(0.2, 0.4, false)).toBe(1.0);
+    expect(computeCoherenceAlpha(0.39, 0.4, 'cutoff')).toBe(0.0);
+    expect(computeCoherenceAlpha(0.4, 0.4, 'cutoff')).toBe(1.0);
+    expect(computeCoherenceAlpha(0.85, 0.4, 'cutoff')).toBe(1.0);
 
     expect(computeZoomedYRange(-24, 24, 0.5)).toEqual({ yMin: -12, yMax: 12 });
     expect(computeZoomedYRange(-12, 12, 2.0)).toEqual({ yMin: -24, yMax: 24 });

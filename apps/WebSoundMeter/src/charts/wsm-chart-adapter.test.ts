@@ -191,5 +191,37 @@ describe('WSM plot-types & wsm-chart-adapter', () => {
     });
     expect(splScene.thresholdGuide).toBeDefined();
     expect(splScene.traces?.length).toBeGreaterThanOrEqual(3);
+
+    // Hard coherence cutoff mode blanks bins strictly below coherenceThreshold (alpha = 0)
+    // and keeps bins >= coherenceThreshold at full solid opacity (alpha = 1)
+    fd.coherence.fill(0.5);
+    for (let i = 100; i < 200; i++) {
+      fd.coherence[i] = 0.85;
+    }
+    const cutoffScene = buildWsmChartScene({
+      plotType: 'magnitude',
+      bounds: { xMin: 20, xMax: 24000, yMin: -24, yMax: 24 },
+      sources: [src],
+      eqBands: null,
+      rtaMode: 'bars-3',
+      showPeakHold: false,
+      coherenceMode: 'cutoff',
+      coherenceThreshold: 0.7,
+      showFeedbackWatch: false,
+      splTraceMode: 'compliance-15m',
+      showSplThresholds: false,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+    });
+    const cutoffTrace = cutoffScene.traces?.[0];
+    expect(cutoffTrace?.ndcVertices).toBeDefined();
+    let solidCount = 0;
+    let blankedCount = 0;
+    for (let v = 0; v < (cutoffTrace?.ndcVertexCount ?? 0); v++) {
+      const a = cutoffTrace!.ndcVertices![v * 3 + 2];
+      if (a === 1.0) solidCount++;
+      else if (a === 0.0) blankedCount++;
+    }
+    expect(solidCount).toBe(100);
+    expect(blankedCount).toBeGreaterThan(300);
   });
 });

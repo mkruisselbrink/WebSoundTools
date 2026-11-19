@@ -19,6 +19,7 @@ function createMock2dContext(): CanvasRenderingContext2D {
     strokeStyle: '',
     lineWidth: 1,
     lineJoin: 'round',
+    lineCap: 'round',
     globalAlpha: 1,
     font: '',
     textAlign: 'left',
@@ -93,6 +94,18 @@ describe('canvas-grid-painter', () => {
     ]);
     drawCanvasTrace(ctx, verts, 5, '#38bdf8', box, { lineDash: [4, 2] });
     expect(ctx.stroke).toHaveBeenCalled();
+
+    // Isolated valid point surrounded by hard-cutoff zero-alpha bins emits a degenerate segment so round cap renders
+    const isolatedCtx = createMock2dContext();
+    const isolatedVerts = new Float32Array([
+      -0.4, 0.0, 0.0,
+      0.0, 0.25, 1.0,
+      0.4, 0.0, 0.0,
+    ]);
+    drawCanvasTrace(isolatedCtx, isolatedVerts, 3, '#10b981', box);
+    expect(isolatedCtx.moveTo).toHaveBeenCalledTimes(1);
+    expect(isolatedCtx.lineTo).toHaveBeenCalledTimes(1);
+    expect(isolatedCtx.stroke).toHaveBeenCalledTimes(1);
 
     drawRtaBarSeries(
       ctx,

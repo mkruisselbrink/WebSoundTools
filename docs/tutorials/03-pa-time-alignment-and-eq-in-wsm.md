@@ -39,7 +39,7 @@ In a real venue with HVAC rumble, crowd chatter, and reverberant room tails, not
 ![Noisy Venue Measurement Showing Coherence Plot & Automatic Trace Opacity Fading](./images/t03-03-noisy-venue-coherence-blanking.png)
 
 ### Golden FOH Rules for Coherence
-- **Automatic Alpha Blanking:** Notice how **WebSoundMeter** automatically fades trace brightness where coherence drops—so noisy frequencies below your subwoofer cutoff (`< 30 Hz`) or inside deep acoustic comb cancellations visually ghost out instead of tricking your eye!
+- **Alpha Fade vs. Hard Cutoff Blanking:** In any **Magnitude**, **Phase**, or **Group Delay** chart header, choose between **`Coh: Alpha Fade`** (smoothly tapering opacity below your chosen $\gamma^2$ threshold so noisy sub-bass or comb nulls ghost out), **`Coh: Hard Cutoff`** (completely hiding bins below your chosen `γ² ≥ 20%..95%` threshold—ideal for keeping wrapped Phase clean), or **`Coh: Off`**.
 - **Low Coherence + Deep Narrow Dip = Acoustic Reflection Comb Null:** Moving the microphone `30 cm` shifts the dip to a different frequency. **Never boost a low-coherence dip with EQ**—you will only burn amplifier headroom and make neighboring seats harsh.
 - **Broad Low Coherence Across the Whole Band:** Either your reference delay (`Ref Delay`) is off by more than half an FFT window, or ambient room noise is overpowering your pink noise—increase `FIFO Averages` (`16` $\rightarrow$ `32` or `64` frames) or raise generator level slightly.
 

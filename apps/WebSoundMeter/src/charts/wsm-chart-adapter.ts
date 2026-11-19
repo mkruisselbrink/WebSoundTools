@@ -13,6 +13,7 @@ import {
   type CalloutFlag,
   type ChartAxisBounds,
   type ChartScene,
+  type CoherenceBlankingMode,
   type CursorReadoutModel,
   type FractionalOctaveBarSeries,
   type ThresholdGuide,
@@ -46,7 +47,8 @@ export interface WsmChartSceneInput {
   readonly eqBands: readonly BiquadSpec[] | null;
   readonly rtaMode: RtaDisplayMode;
   readonly showPeakHold: boolean;
-  readonly coherenceAlpha: boolean;
+  readonly coherenceMode?: CoherenceBlankingMode;
+  readonly coherenceAlpha?: boolean;
   readonly coherenceThreshold: number;
   readonly showFeedbackWatch: boolean;
   readonly splTraceMode: SplHistoryTraceMode;
@@ -354,6 +356,8 @@ export function buildWsmChartScene(input: WsmChartSceneInput): ChartScene {
       };
     });
   } else {
+    const coherenceMode: CoherenceBlankingMode =
+      input.coherenceMode ?? (input.coherenceAlpha === false ? 'off' : 'alpha');
     traces = [];
     for (const src of visibleSources) {
       const vBuf = buildTraceVertices(
@@ -363,7 +367,7 @@ export function buildWsmChartScene(input: WsmChartSceneInput): ChartScene {
         bounds.xMax,
         bounds.yMin,
         bounds.yMax,
-        input.coherenceAlpha,
+        coherenceMode,
         input.coherenceThreshold
       );
       traces.push({

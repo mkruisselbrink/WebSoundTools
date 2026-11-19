@@ -73,6 +73,16 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await expect(app.locator('chart-panel')).toHaveCount(2);
     expect(page.url()).toContain('layout=tf-dual');
 
+    // Switch Phase chart coherence masking to Hard Cutoff at >= 70%
+    const phasePanel = app.locator('[data-testid="chart-panel-1"]');
+    const cohModeSelect = phasePanel.locator('[data-testid="select-coherence-mode"]');
+    await expect(cohModeSelect).toHaveValue('alpha');
+    await cohModeSelect.selectOption('cutoff');
+    const cohThresholdSelect = phasePanel.locator('[data-testid="select-coherence-threshold"]');
+    await expect(cohThresholdSelect).toBeVisible();
+    await cohThresholdSelect.selectOption('0.7');
+    await expect(cohThresholdSelect).toHaveValue('0.7');
+
     // Add a Virtual Equalizer source and click Auto-Flatten
     await app.locator('[data-testid="btn-add-eq"]').click();
     const autoFlattenBtn = app.locator('[data-testid="btn-auto-flatten-eq"]');

@@ -181,6 +181,9 @@ export function drawCanvasTrace(
 
   let currentAlphaBucket = -1;
   let pathOpen = false;
+  let segmentVertexCount = 0;
+  let lastPx = 0;
+  let lastPy = 0;
 
   for (let i = 0; i < vertexCount; i++) {
     const ndcX = vertices[i * 3];
@@ -192,8 +195,12 @@ export function drawCanvasTrace(
 
     if (alpha <= 0.01) {
       if (pathOpen) {
+        if (segmentVertexCount === 1) {
+          ctx.lineTo(lastPx, lastPy);
+        }
         ctx.stroke();
         pathOpen = false;
+        segmentVertexCount = 0;
       }
       currentAlphaBucket = -1;
       continue;
@@ -210,12 +217,19 @@ export function drawCanvasTrace(
       ctx.beginPath();
       ctx.moveTo(px, py);
       pathOpen = true;
+      segmentVertexCount = 1;
     } else {
       ctx.lineTo(px, py);
+      segmentVertexCount++;
     }
+    lastPx = px;
+    lastPy = py;
   }
 
   if (pathOpen) {
+    if (segmentVertexCount === 1) {
+      ctx.lineTo(lastPx, lastPy);
+    }
     ctx.stroke();
   }
   ctx.setLineDash([]);

@@ -2,16 +2,22 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { CoherenceBlankingMode } from '@foh/charts';
 import { html, nothing, type TemplateResult } from 'lit';
 import type { SplHistoryTraceMode, SplHistoryWindowSec } from '../dsp/spl-history.js';
 import { PLOT_METADATA, type PlotType } from './plot-types.js';
 import type { RtaDisplayMode } from './wsm-chart-adapter.js';
 
+export const COHERENCE_THRESHOLD_PRESETS: readonly number[] = [
+  0.2, 0.35, 0.5, 0.7, 0.85, 0.95,
+];
+
 export interface WsmChartHeaderProps {
   readonly plotType: PlotType;
   readonly rtaMode: RtaDisplayMode;
   readonly showPeakHold: boolean;
-  readonly coherenceAlpha: boolean;
+  readonly coherenceMode: CoherenceBlankingMode;
+  readonly coherenceThreshold: number;
   readonly showFeedbackWatch: boolean;
   readonly splWindowSec: SplHistoryWindowSec;
   readonly splTraceMode: SplHistoryTraceMode;
@@ -19,7 +25,8 @@ export interface WsmChartHeaderProps {
   readonly onPlotTypeChange: (e: Event) => void;
   readonly onRtaModeChange: (mode: RtaDisplayMode) => void;
   readonly onTogglePeakHold: (enabled: boolean) => void;
-  readonly onToggleCoherenceAlpha: (enabled: boolean) => void;
+  readonly onCoherenceModeChange: (mode: CoherenceBlankingMode) => void;
+  readonly onCoherenceThresholdChange: (threshold: number) => void;
   readonly onToggleFeedbackWatch: (enabled: boolean) => void;
   readonly onSplWindowChange: (windowSec: SplHistoryWindowSec) => void;
   readonly onSplTraceModeChange: (mode: SplHistoryTraceMode) => void;
@@ -81,21 +88,51 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
         props.plotType === 'phase' ||
         props.plotType === 'group-delay'
           ? html`
-              <label
-                class="label-muted"
-                title="Fade trace opacity in frequency regions with low coherence"
-                style="display:flex;align-items:center;gap:3px;cursor:pointer;"
+              <select
+                aria-label="Coherence Masking Mode"
+                data-testid="select-coherence-mode"
+                title="Coherence masking mode: smooth opacity fade, hard level cutoff, or off"
+                .value=${props.coherenceMode}
+                @change=${(e: Event) =>
+                  props.onCoherenceModeChange(
+                    (e.target as HTMLSelectElement).value as CoherenceBlankingMode
+                  )}
               >
-                <input
-                  type="checkbox"
-                  .checked=${props.coherenceAlpha}
-                  @change=${(e: Event) =>
-                    props.onToggleCoherenceAlpha(
-                      (e.target as HTMLInputElement).checked
-                    )}
-                />
-                Coherence Alpha
-              </label>
+                <option value="alpha" ?selected=${props.coherenceMode === 'alpha'}>
+                  Coh: Alpha Fade
+                </option>
+                <option value="cutoff" ?selected=${props.coherenceMode === 'cutoff'}>
+                  Coh: Hard Cutoff
+                </option>
+                <option value="off" ?selected=${props.coherenceMode === 'off'}>
+                  Coh: Off
+                </option>
+              </select>
+              ${props.coherenceMode !== 'off'
+                ? html`
+                    <select
+                      aria-label="Coherence Threshold"
+                      data-testid="select-coherence-threshold"
+                      title="Minimum coherence (γ²) threshold"
+                      .value=${String(props.coherenceThreshold)}
+                      @change=${(e: Event) =>
+                        props.onCoherenceThresholdChange(
+                          Number((e.target as HTMLSelectElement).value)
+                        )}
+                    >
+                      ${COHERENCE_THRESHOLD_PRESETS.map(
+                        (thr) => html`
+                          <option
+                            value=${String(thr)}
+                            ?selected=${Math.abs(props.coherenceThreshold - thr) < 1e-4}
+                          >
+                            γ² ≥ ${Math.round(thr * 100)}%
+                          </option>
+                        `
+                      )}
+                    </select>
+                  `
+                : nothing}
             `
           : nothing}
 

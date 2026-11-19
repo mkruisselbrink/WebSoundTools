@@ -15,6 +15,7 @@ import {
   normXToValue,
   valueToNormX,
   valueToNormY,
+  type CoherenceBlankingMode,
   type TraceVertexBuffer,
 } from '@foh/charts';
 import { computeBinGroupDelayMs } from '@foh/dsp';
@@ -27,6 +28,7 @@ export {
   normXToValue,
   valueToNormX,
   valueToNormY,
+  type CoherenceBlankingMode,
   type TraceVertexBuffer,
 };
 
@@ -192,7 +194,7 @@ export function buildTraceVertices(
   xMax: number,
   yMin: number,
   yMax: number,
-  coherenceAlphaEnabled: boolean = true,
+  coherenceModeOrEnabled: boolean | CoherenceBlankingMode = 'alpha',
   coherenceThreshold: number = 0.35
 ): TraceVertexBuffer {
   const meta = PLOT_METADATA[plotType];
@@ -255,16 +257,23 @@ export function buildTraceVertices(
   const xArr = new Float32Array(bCount);
   const yArr = new Float32Array(bCount);
   const alphaArr = new Float32Array(bCount);
-  const useCoh =
-    coherenceAlphaEnabled &&
-    (plotType === 'magnitude' || plotType === 'phase' || plotType === 'group-delay');
+  const resolvedCohMode: CoherenceBlankingMode =
+    typeof coherenceModeOrEnabled === 'boolean'
+      ? coherenceModeOrEnabled
+        ? 'alpha'
+        : 'off'
+      : coherenceModeOrEnabled;
+  const effectiveCohMode: CoherenceBlankingMode =
+    plotType === 'magnitude' || plotType === 'phase' || plotType === 'group-delay'
+      ? resolvedCohMode
+      : 'off';
 
   for (let i = 1; i < fd.length; i++) {
     const k = i - 1;
     const bin = getEffectiveBinResponse(source, i);
     const f = bin.frequency;
     xArr[k] = f;
-    alphaArr[k] = computeCoherenceAlpha(bin.coherence, coherenceThreshold, useCoh);
+    alphaArr[k] = computeCoherenceAlpha(bin.coherence, coherenceThreshold, effectiveCohMode);
 
     if (plotType === 'magnitude') {
       yArr[k] = bin.magnitude > 1e-10 ? 20.0 * Math.log10(bin.magnitude) : -120.0;

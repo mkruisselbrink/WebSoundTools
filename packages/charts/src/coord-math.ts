@@ -11,6 +11,8 @@ import type { ChartAxisBounds, ChartPadding, ChartPlotBox } from './chart-scene-
 
 export type MagnitudeSpanMode = 'auto-30' | 'auto-60' | 'auto-80';
 
+export type CoherenceBlankingMode = 'off' | 'alpha' | 'cutoff';
+
 export const DEFAULT_CHART_PADDING: ChartPadding = {
   left: 52,
   right: 18,
@@ -134,15 +136,22 @@ export function computeZoomedYRange(
 }
 
 /**
- * Maps coherence `gamma^2` in `[0, 1]` to per-vertex alpha opacity in `[0, 1]`
- * using a square-root taper above `threshold` and a faint ghost trace below it.
+ * Maps coherence `gamma^2` in `[0, 1]` to per-vertex alpha opacity in `[0, 1]`:
+ * - `'off'` / `false`: always `1.0` (unmasked solid trace)
+ * - `'alpha'` / `true`: square-root taper above `threshold` with a `0.05` ghost trace below it
+ * - `'cutoff'`: hard gate (`1.0` at or above `threshold`, `0.0` break below `threshold`)
  */
 export function computeCoherenceAlpha(
   coherence: number,
   threshold: number,
-  enabled: boolean
+  modeOrEnabled: boolean | CoherenceBlankingMode = 'alpha'
 ): number {
-  if (!enabled) return 1.0;
+  const mode: CoherenceBlankingMode =
+    typeof modeOrEnabled === 'boolean' ? (modeOrEnabled ? 'alpha' : 'off') : modeOrEnabled;
+  if (mode === 'off') return 1.0;
+  if (mode === 'cutoff') {
+    return coherence >= threshold ? 1.0 : 0.0;
+  }
   if (coherence >= 1.0) return 1.0;
   if (coherence < threshold) return 0.05;
   const span = Math.max(0.01, 1.0 - threshold);
