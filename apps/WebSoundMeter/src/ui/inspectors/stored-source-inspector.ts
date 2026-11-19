@@ -42,9 +42,11 @@ export function renderStoredInspector(
 
       <div class="prop-grid">
         <div class="prop-field full-width">
-          <label>Trace Name</label>
+          <label for="wsm-stored-name">Trace Name</label>
           <input
             type="text"
+            id="wsm-stored-name"
+            name="stored-trace-name"
             aria-label="Stored Trace Name"
             .value=${stored.name}
             @input=${(e: Event) =>
@@ -55,9 +57,11 @@ export function renderStoredInspector(
         </div>
 
         <div class="prop-field">
-          <label>Gain Offset (dB)</label>
+          <label for="wsm-stored-gain">Gain Offset (dB)</label>
           <input
             type="number"
+            id="wsm-stored-gain"
+            name="stored-gain-offset-db"
             step="0.5"
             aria-label="Stored Gain Offset (dB)"
             .value=${String(stored.gainOffsetDb)}
@@ -69,9 +73,11 @@ export function renderStoredInspector(
         </div>
 
         <div class="prop-field">
-          <label>Delay Offset (ms)</label>
+          <label for="wsm-stored-delay">Delay Offset (ms)</label>
           <input
             type="number"
+            id="wsm-stored-delay"
+            name="stored-delay-offset-ms"
             step="0.1"
             aria-label="Stored Delay Offset (ms)"
             .value=${String(stored.delayOffsetMs)}

@@ -172,5 +172,6 @@ Transform and smoothing settings are synchronized across all live slots so multi
 | `U` | Add a new Math Union source (`+ Math`, Tuning mode) |
 | `R` | Reset averaging and peak hold on active Live Measurement |
 | `1` / `2` / `3` | Switch between 1-chart, 2-chart, and 3-chart layout presets |
-| `Escape` | Collapse Advanced Settings or return selection to active Live Measurement |
+| `?` | Open or close Help, Keyboard Shortcuts & GitHub dialog |
+| `Escape` | Close dialog, collapse Advanced Settings, or return selection to active Live Measurement |
 | `Shift + Drag` / `Shift + Wheel` (on EQ handle) | Adjust parametric EQ band `Q` (`0.25 .. 36`) |

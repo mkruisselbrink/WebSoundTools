@@ -16,6 +16,36 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     await expect(page.getByTestId('viewport-section')).toBeVisible();
     await expect(page.getByTestId('chart-drawer')).toBeVisible();
 
+    // Verify Topbar GitHub link & Help modal open/close via button and Escape
+    await expect(page.getByTestId('link-github')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools'
+    );
+    await page.getByTestId('btn-help').click();
+    await expect(page.getByTestId('help-modal')).toBeVisible();
+    await expect(page.getByTestId('help-link-issues')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools/issues'
+    );
+    const cardBoxes = await page
+      .locator('foh-help-modal .resource-card')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    expect(cardBoxes).toHaveLength(4);
+    expect(cardBoxes[0].bottom).toBeLessThanOrEqual(cardBoxes[2].top);
+    expect(cardBoxes[1].bottom).toBeLessThanOrEqual(cardBoxes[3].top);
+    await expect(page.getByTestId('help-link-commit')).toHaveCount(0);
+    await page.locator('foh-help-modal').evaluate((el: Element) => {
+      (el as HTMLElement & { commitSha: string }).commitSha =
+        'df48c8b1a2b3c4d5e6f708192a3b4c5d6e7f8091';
+    });
+    await expect(page.getByTestId('help-link-commit')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools/commit/df48c8b1a2b3c4d5e6f708192a3b4c5d6e7f8091'
+    );
+    await expect(page.getByTestId('help-link-commit')).toContainText('df48c8b1');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('help-modal')).not.toBeVisible();
+
     // Switch viewport layouts
     await wss.setViewportLayout('plan');
     await expect(page.getByTestId('viewport-plan')).toBeVisible();

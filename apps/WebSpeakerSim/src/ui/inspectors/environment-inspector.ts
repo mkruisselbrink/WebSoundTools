@@ -32,9 +32,11 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
       <div class="form-section">
         <div class="form-section-title">Project & Drive Level</div>
         <div class="field-row">
-          <span class="field-label">Project Name</span>
+          <label class="field-label" for="env-project-name">Project Name</label>
           <input
             type="text"
+            id="env-project-name"
+            name="project-name"
             .value=${scene.name}
             @change=${(ev: Event) =>
               store.updateScene((s) => ({
@@ -44,9 +46,11 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
           />
         </div>
         <div class="field-row">
-          <span class="field-label">Drive Offset (dB)</span>
+          <label class="field-label" for="env-drive-offset">Drive Offset (dB)</label>
           <input
             type="number"
+            id="env-drive-offset"
+            name="drive-offset-db"
             step="1"
             min="-40"
             max="6"
@@ -67,6 +71,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Temp (°C)</span>
             <input
               type="number"
+              name="env-temp-c"
               step="1"
               min="-20"
               max="50"
@@ -83,6 +88,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Humidity (%)</span>
             <input
               type="number"
+              name="env-rh-pct"
               step="5"
               min="5"
               max="100"
@@ -104,6 +110,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Pressure (kPa)</span>
             <input
               type="number"
+              name="env-pressure-kpa"
               step="0.5"
               .value=${String(scene.atmosphere.pressureKpa)}
               @input=${(ev: Event) =>
@@ -119,9 +126,11 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
       <div class="form-section">
         <div class="form-section-title">Ground-Plane Reflection (Z = 0)</div>
         <div class="field-row">
-          <span class="field-label">ReflectFactor</span>
+          <label class="field-label" for="env-ground-reflect">ReflectFactor</label>
           <input
             type="number"
+            id="env-ground-reflect"
+            name="ground-reflection-factor"
             step="0.05"
             min="0"
             max="1"
@@ -139,8 +148,10 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
       <div class="form-section">
         <div class="form-section-title">SPL Colormap & Contours</div>
         <div class="field-row">
-          <span class="field-label">Range Mode</span>
+          <label class="field-label" for="env-cmap-range">Range Mode</label>
           <select
+            id="env-cmap-range"
+            name="env-cmap-range"
             .value=${cmap.rangeMode}
             @change=${(ev: Event) =>
               store.setColormap({
@@ -165,8 +176,10 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
           </select>
         </div>
         <div class="field-row">
-          <span class="field-label">Palette</span>
+          <label class="field-label" for="env-cmap-palette">Palette</label>
           <select
+            id="env-cmap-palette"
+            name="env-cmap-palette"
             .value=${cmap.palette}
             @change=${(ev: Event) =>
               store.setColormap({
@@ -185,8 +198,10 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
           </select>
         </div>
         <div class="field-row">
-          <span class="field-label">Contours</span>
+          <label class="field-label" for="env-cmap-contours">Contours</label>
           <select
+            id="env-cmap-contours"
+            name="env-cmap-contours"
             .value=${String(cmap.isolineStepDb)}
             @change=${(ev: Event) =>
               store.setColormap({
@@ -205,6 +220,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Manual Min (dB)</span>
             <input
               type="number"
+              name="env-cmap-min"
               step="3"
               .value=${String(cmap.minSplDb)}
               @input=${(ev: Event) => store.setColormap({ minSplDb: numVal(ev, cmap.minSplDb) })}
@@ -214,6 +230,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Manual Max (dB)</span>
             <input
               type="number"
+              name="env-cmap-max"
               step="3"
               .value=${String(cmap.maxSplDb)}
               @input=${(ev: Event) => store.setColormap({ maxSplDb: numVal(ev, cmap.maxSplDb) })}
@@ -224,6 +241,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
           <label class="check-label">
             <input
               type="checkbox"
+              name="env-cmap-stepped"
               .checked=${cmap.stepped}
               @change=${(ev: Event) =>
                 store.setColormap({
@@ -237,6 +255,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
           <label class="check-label">
             <input
               type="checkbox"
+              name="env-cmap-outside"
               .checked=${cmap.showOutsideSurfaces}
               @change=${(ev: Event) =>
                 store.setColormap({
@@ -255,6 +274,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>X Min (m)</span>
             <input
               type="number"
+              name="env-bounds-xmin"
               step="1"
               data-testid="env-bounds-xmin"
               .value=${String(scene.planBounds.xMin)}
@@ -269,6 +289,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>X Max (m)</span>
             <input
               type="number"
+              name="env-bounds-xmax"
               step="1"
               data-testid="env-bounds-xmax"
               .value=${String(scene.planBounds.xMax)}
@@ -283,6 +304,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Y Min (m)</span>
             <input
               type="number"
+              name="env-bounds-ymin"
               step="1"
               data-testid="env-bounds-ymin"
               .value=${String(scene.planBounds.yMin)}
@@ -297,6 +319,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Y Max (m)</span>
             <input
               type="number"
+              name="env-bounds-ymax"
               step="1"
               data-testid="env-bounds-ymax"
               .value=${String(scene.planBounds.yMax)}
@@ -313,6 +336,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Ceiling Z Max (m)</span>
             <input
               type="number"
+              name="env-bounds-zmax"
               step="0.5"
               min="2"
               data-testid="env-bounds-zmax"
@@ -328,6 +352,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <span>Slice Y (m)</span>
             <input
               type="number"
+              name="env-slice-y"
               step="0.5"
               data-testid="env-slice-y"
               .value=${String(Number(scene.sectionBounds.sliceYM.toFixed(2)))}

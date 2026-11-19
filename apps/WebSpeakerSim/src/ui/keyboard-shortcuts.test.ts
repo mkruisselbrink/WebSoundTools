@@ -14,6 +14,7 @@ function createHandlers(): AppShortcutHandlers {
     toggleGroundReflection: vi.fn(),
     setLayoutMode: vi.fn(),
     openSpeakerLibrary: vi.fn(),
+    openHelp: vi.fn(),
     onEscape: vi.fn(),
   };
 }
@@ -55,6 +56,9 @@ describe('Keyboard Shortcuts Dispatcher', () => {
 
     expect(fire('2')).toBe(true);
     expect(h.setLayoutMode).toHaveBeenCalledWith('plan');
+
+    expect(fire('?', { shiftKey: true })).toBe(true);
+    expect(h.openHelp).toHaveBeenCalledTimes(1);
   });
 
   it('ignores single-key shortcuts when composedPath includes a Shadow DOM input element', () => {

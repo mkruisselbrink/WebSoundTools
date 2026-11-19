@@ -61,8 +61,10 @@ export function renderEqInspector(
       </div>
 
       <div class="prop-field full-width">
-        <label>Apply Virtual EQ To Source</label>
+        <label for="wsm-eq-target-source">Apply Virtual EQ To Source</label>
         <select
+          id="wsm-eq-target-source"
+          name="eq-target-source"
           aria-label="Apply Virtual EQ To Source"
           .value=${eq.targetSourceId ?? ''}
           @change=${(e: Event) => {

@@ -75,6 +75,9 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
                   >
                     <input
                       type="file"
+                      id="wsm-input-import-frd"
+                      name="import-frd-file"
+                      aria-label="Import .FRD Trace File"
                       accept=".frd,.cal,.txt,.csv"
                       data-testid="input-import-frd"
                       style="display:none;"

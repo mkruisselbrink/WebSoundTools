@@ -83,6 +83,8 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
       data-testid="spl-meter-bar"
     >
       <select
+        id="wsm-select-spl-weighting"
+        name="spl-weighting"
         aria-label="SPL Weighting"
         data-testid="select-spl-weighting"
         .value=${props.splWeighting}
@@ -94,6 +96,8 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
         <option value="Z">dBZ</option>
       </select>
       <select
+        id="wsm-select-spl-time"
+        name="spl-integration-time"
         aria-label="SPL Integration Time"
         .value=${props.splTime}
         @change=${(e: Event) =>

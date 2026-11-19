@@ -88,6 +88,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
           <span>Gain (dB)</span>
           <input
             type="number"
+            name="dsp-gain-${entityId}"
             step="0.5"
             aria-label="Gain (dB)"
             data-testid=${testIds?.gainDb ?? 'foh-dsp-gain'}
@@ -103,6 +104,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
           <span>Delay (ms)</span>
           <input
             type="number"
+            name="dsp-delay-${entityId}"
             step="0.1"
             min=${minDelay !== undefined ? String(minDelay) : nothing}
             aria-label="Delay (ms)"
@@ -121,6 +123,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
         <label class="foh-check-label">
           <input
             type="checkbox"
+            name="dsp-polarity-${entityId}"
             aria-label="Invert Polarity"
             data-testid=${testIds?.invertPolarity ?? 'foh-dsp-polarity'}
             .checked=${dsp.invertPolarity}
@@ -134,6 +137,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
         <label class="foh-check-label">
           <input
             type="checkbox"
+            name="dsp-muted-${entityId}"
             aria-label=${props.muteLabel ?? 'Mute'}
             data-testid=${testIds?.muted ?? 'foh-dsp-muted'}
             .checked=${dsp.muted}
@@ -153,6 +157,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
         <label class="foh-mini-field">
           <span>HPF Slope</span>
           <select
+            name="dsp-hpf-topology-${entityId}"
             aria-label="HPF Topology"
             data-testid=${testIds?.hpfTopology ?? 'foh-hpf-topology'}
             .value=${dsp.highPass.topology}
@@ -177,6 +182,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
           <span>HPF Freq (Hz)</span>
           <input
             type="number"
+            name="dsp-hpf-freq-${entityId}"
             min="15"
             max="20000"
             step="5"
@@ -201,6 +207,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
         <label class="foh-mini-field">
           <span>LPF Slope</span>
           <select
+            name="dsp-lpf-topology-${entityId}"
             aria-label="LPF Topology"
             data-testid=${testIds?.lpfTopology ?? 'foh-lpf-topology'}
             .value=${dsp.lowPass.topology}
@@ -225,6 +232,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
           <span>LPF Freq (Hz)</span>
           <input
             type="number"
+            name="dsp-lpf-freq-${entityId}"
             min="20"
             max="20000"
             step="5"
@@ -276,6 +284,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
               <label class="foh-check-label">
                 <input
                   type="checkbox"
+                  name="eq-enabled-${entityId}-${idx}"
                   aria-label="Enable EQ Band ${idx + 1}"
                   .checked=${band.enabled}
                   @change=${(ev: Event) =>
@@ -286,6 +295,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
                 #${idx + 1}
               </label>
               <select
+                name="eq-type-${entityId}-${idx}"
                 aria-label="EQ Band ${idx + 1} Type"
                 .value=${band.type}
                 @change=${(ev: Event) =>
@@ -319,6 +329,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
                 <span>Freq (Hz)</span>
                 <input
                   type="number"
+                  name="eq-freq-${entityId}-${idx}"
                   min="20"
                   max="20000"
                   step="10"
@@ -337,6 +348,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
                 <span>Gain (dB)</span>
                 <input
                   type="number"
+                  name="eq-gain-${entityId}-${idx}"
                   min="-24"
                   max="18"
                   step="0.5"
@@ -355,6 +367,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
                 <span>Q</span>
                 <input
                   type="number"
+                  name="eq-q-${entityId}-${idx}"
                   min="0.1"
                   max="30"
                   step="0.1"

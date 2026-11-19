@@ -37,6 +37,8 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
         ${props.genConfig.enabled ? 'ON' : 'OFF'}
       </button>
       <select
+        id="wsm-select-generator-type"
+        name="generator-signal-type"
         aria-label="Generator Signal Type"
         data-testid="select-generator-type"
         .value=${props.genConfig.type}
@@ -50,6 +52,8 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
         )}
       </select>
       <select
+        id="wsm-select-generator-level"
+        name="generator-level-dbfs"
         aria-label="Generator Level (dBFS)"
         data-testid="select-generator-level"
         title="Generator Output Level (dBFS)"
@@ -70,6 +74,8 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
               >Out:</span
             >
             <select
+              id="wsm-select-generator-output"
+              name="generator-output-channel"
               aria-label="Generator Output Channel"
               data-testid="select-generator-output-channel"
               .value=${String(props.generatorOutputChannel)}

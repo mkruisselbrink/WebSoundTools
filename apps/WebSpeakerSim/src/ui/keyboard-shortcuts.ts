@@ -21,6 +21,7 @@ export interface AppShortcutHandlers {
   readonly toggleGroundReflection: () => void;
   readonly setLayoutMode: (mode: ViewportLayoutMode) => void;
   readonly openSpeakerLibrary: () => void;
+  readonly openHelp?: () => void;
   readonly onEscape: () => void;
 }
 
@@ -47,6 +48,7 @@ export function dispatchAppShortcut(
       '1': () => handlers.setLayoutMode('split'),
       '2': () => handlers.setLayoutMode('plan'),
       '3': () => handlers.setLayoutMode('section'),
+      '?': handlers.openHelp,
     },
   });
 }

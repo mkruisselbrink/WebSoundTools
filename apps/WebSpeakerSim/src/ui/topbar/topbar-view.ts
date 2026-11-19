@@ -5,6 +5,7 @@
  * Topbar template view (`src/ui/topbar/topbar-view.ts`).
  */
 
+import { FOH_GITHUB_REPO_URL, renderGithubMarkSvg } from '@foh/ui';
 import { html, type TemplateResult } from 'lit';
 import { DEMO_VENUE_PRESETS } from '../../library/demo-presets.js';
 import type {
@@ -142,6 +143,7 @@ export interface TopbarRenderCallbacks {
   readonly onOpenSpeakerLibrary: () => void;
   readonly onSetLayoutMode: (mode: ViewportLayoutMode) => void;
   readonly onToggleChartDrawer: () => void;
+  readonly onOpenHelp: () => void;
 }
 
 export function renderTopbar(
@@ -170,6 +172,7 @@ export function renderTopbar(
         <label class="tb-label" for="preset-select">Venue:</label>
         <select
           id="preset-select"
+          name="venue-preset"
           data-testid="preset-select"
           .value=${activePresetId}
           @change=${(ev: Event) => cb.onSelectPreset((ev.target as HTMLSelectElement).value)}
@@ -217,6 +220,7 @@ export function renderTopbar(
         <label class="tb-label" for="band-select">Band:</label>
         <select
           id="band-select"
+          name="analysis-band"
           data-testid="band-select"
           .value=${activeBandKey}
           @change=${(ev: Event) => {
@@ -236,6 +240,7 @@ export function renderTopbar(
         <label class="tb-label" for="colormap-range-select">Scale:</label>
         <select
           id="colormap-range-select"
+          name="colormap-range-mode"
           data-testid="colormap-range-select"
           title="SPL color window — choose Auto ±3 dB or ±6 dB to highlight small coverage differences"
           .value=${cmap.rangeMode}
@@ -255,6 +260,9 @@ export function renderTopbar(
           ? html`
               <input
                 type="number"
+                id="topbar-min-spl"
+                name="topbar-min-spl"
+                aria-label="Manual Min SPL (dB)"
                 step="3"
                 style="width:52px"
                 data-testid="topbar-min-spl"
@@ -267,6 +275,9 @@ export function renderTopbar(
               />
               <input
                 type="number"
+                id="topbar-max-spl"
+                name="topbar-max-spl"
+                aria-label="Manual Max SPL (dB)"
                 step="3"
                 style="width:52px"
                 data-testid="topbar-max-spl"
@@ -283,6 +294,7 @@ export function renderTopbar(
         <label class="tb-label" for="colormap-palette-select">Palette:</label>
         <select
           id="colormap-palette-select"
+          name="colormap-palette"
           data-testid="colormap-palette-select"
           title="Heatmap color palette"
           .value=${cmap.palette}
@@ -299,6 +311,7 @@ export function renderTopbar(
         <label class="tb-label" for="isoline-select">Contours:</label>
         <select
           id="isoline-select"
+          name="colormap-contours"
           data-testid="isoline-select"
           title="Equal-SPL contour line spacing"
           .value=${String(cmap.isolineStepDb)}
@@ -421,6 +434,29 @@ export function renderTopbar(
         >
           Charts
         </button>
+
+        <span class="tb-divider" role="separator" aria-orientation="vertical"></span>
+
+        <button
+          type="button"
+          class="btn"
+          data-testid="btn-help"
+          title="Help, Keyboard Shortcuts, User Guide & Report Issue (?)"
+          @click=${cb.onOpenHelp}
+        >
+          ? Help
+        </button>
+        <a
+          class="btn btn-link"
+          href=${FOH_GITHUB_REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="link-github"
+          title="View source code & file issues on GitHub"
+        >
+          ${renderGithubMarkSvg()}
+          <span>GitHub</span>
+        </a>
       </div>
     </header>
   `;

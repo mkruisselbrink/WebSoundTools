@@ -35,6 +35,12 @@ import {
 import { DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 import '../viewport/viewport-panel.js';
 import { appShellStyles } from './app-shell-styles.js';
+import {
+  WSS_HELP_ATTRIBUTION,
+  WSS_HELP_RESOURCES,
+  WSS_HELP_SHORTCUTS,
+  WSS_HELP_SUMMARY,
+} from './help-content.js';
 import { renderEntityInspector } from './inspectors/index.js';
 import './inspectors/speaker-library-modal.js';
 import { dispatchAppShortcut } from './keyboard-shortcuts.js';
@@ -55,6 +61,7 @@ export class WebSpeakerSimApp extends LitElement {
   @state() private chartDrawerExpanded = true;
   @state() private speakerLibraryOpen = false;
   @state() private projectsModalOpen = false;
+  @state() private helpModalOpen = false;
   @state() private savedProjects: SavedProjectRecord[] = [];
   @state() private toastMessage = '';
 
@@ -90,8 +97,13 @@ export class WebSpeakerSimApp extends LitElement {
       openSpeakerLibrary: () => {
         this.speakerLibraryOpen = true;
       },
+      openHelp: () => {
+        this.helpModalOpen = !this.helpModalOpen;
+      },
       onEscape: () => {
-        if (this.speakerLibraryOpen) {
+        if (this.helpModalOpen) {
+          this.helpModalOpen = false;
+        } else if (this.speakerLibraryOpen) {
           this.speakerLibraryOpen = false;
         } else if (this.projectsModalOpen) {
           this.projectsModalOpen = false;
@@ -332,11 +344,16 @@ export class WebSpeakerSimApp extends LitElement {
             this.chartDrawerExpanded = !this.chartDrawerExpanded;
             this.scheduleAutosave();
           },
+          onOpenHelp: () => {
+            this.helpModalOpen = true;
+          },
         }
       )}
 
       <input
         id="project-file-input"
+        name="project-file-input"
+        aria-label="Import Project Bundle JSON"
         data-testid="project-file-input"
         type="file"
         accept=".json"
@@ -422,7 +439,22 @@ export class WebSpeakerSimApp extends LitElement {
       ></wss-speaker-library-modal>
 
       ${this.projectsModalOpen ? this.renderProjectsModal() : ''}
-      ${this.toastMessage && !this.speakerLibraryOpen && !this.projectsModalOpen
+      <foh-help-modal
+        .open=${this.helpModalOpen}
+        appName="WebSpeakerSim"
+        .appSummary=${WSS_HELP_SUMMARY}
+        .resources=${WSS_HELP_RESOURCES}
+        .shortcuts=${WSS_HELP_SHORTCUTS}
+        .attribution=${WSS_HELP_ATTRIBUTION}
+        dialogTestId="help-modal"
+        @close-modal=${() => {
+          this.helpModalOpen = false;
+        }}
+      ></foh-help-modal>
+      ${this.toastMessage &&
+      !this.speakerLibraryOpen &&
+      !this.projectsModalOpen &&
+      !this.helpModalOpen
         ? html`<foh-toast
             data-testid="toast-banner"
             .message=${this.toastMessage}

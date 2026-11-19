@@ -21,6 +21,7 @@ export interface AppShortcutActions {
   readonly onAddUnionSource?: () => void;
   readonly onResetAveraging?: () => void;
   readonly onSelectLayoutCount?: (count: 1 | 2 | 3) => void;
+  readonly onOpenHelp?: () => void;
   readonly onEscape?: () => void;
   readonly onUndo?: () => void;
   readonly onRedo?: () => void;
@@ -54,6 +55,7 @@ export function dispatchAppKeydown(
       '1': actions.onSelectLayoutCount ? () => actions.onSelectLayoutCount?.(1) : undefined,
       '2': actions.onSelectLayoutCount ? () => actions.onSelectLayoutCount?.(2) : undefined,
       '3': actions.onSelectLayoutCount ? () => actions.onSelectLayoutCount?.(3) : undefined,
+      '?': actions.onOpenHelp,
     },
   });
 }

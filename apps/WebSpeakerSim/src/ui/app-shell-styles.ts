@@ -140,6 +140,12 @@ export const appShellStyles = [
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
+    min-block-size: 24px;
+    min-inline-size: 24px;
+  }
+
+  .btn-link {
+    text-decoration: none;
   }
 
   .btn:hover:not(:disabled) {

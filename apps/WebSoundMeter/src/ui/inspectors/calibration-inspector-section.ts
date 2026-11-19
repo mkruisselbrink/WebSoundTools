@@ -40,9 +40,11 @@ export function renderCalibrationSelectorSection(params: {
 
   return html`
     <div class="prop-field full-width">
-      <label>Mic Calibration Curve</label>
+      <label for="wsm-calibration-curve">Mic Calibration Curve</label>
       <div style="display:flex;gap:4px;align-items:center;">
         <select
+          id="wsm-calibration-curve"
+          name="mic-calibration-curve"
           style="flex:1;"
           aria-label="Saved Mic Calibration Curve"
           data-testid="select-calibration-curve"
@@ -108,8 +110,10 @@ export function renderAdvancedMeasurementSettings(params: {
     ${slot && inputMode === 'hardware'
       ? html`
           <div class="prop-field full-width">
-            <label>Ref Channel (R) Override</label>
+            <label for="wsm-live-slot-ref-ch">Ref Channel (R) Override</label>
             <select
+              id="wsm-live-slot-ref-ch"
+              name="slot-reference-channel"
               aria-label="Slot Reference Channel"
               data-testid="select-live-slot-ref-channel"
               .value=${String(slot.referenceChannel)}
@@ -145,14 +149,16 @@ export function renderAdvancedMeasurementSettings(params: {
       class="prop-field full-width"
       style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
     >
-      <label style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
+      <span class="prop-label" style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
         Shared Transform & Averaging (All Live Measurements)
-      </label>
+      </span>
     </div>
 
     <div class="prop-field">
-      <label>FFT Size</label>
+      <label for="wsm-fft-size">FFT Size</label>
       <select
+        id="wsm-fft-size"
+        name="fft-size"
         aria-label="FFT Size"
         data-testid="select-fft-size"
         .value=${String(cfg.fftSize)}
@@ -171,8 +177,10 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field">
-      <label>Window Function</label>
+      <label for="wsm-window-type">Window Function</label>
       <select
+        id="wsm-window-type"
+        name="window-function"
         aria-label="Window Function"
         .value=${cfg.windowType}
         @change=${(e: Event) =>
@@ -187,8 +195,10 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field">
-      <label>Averaging Mode</label>
+      <label for="wsm-averaging-mode">Averaging Mode</label>
       <select
+        id="wsm-averaging-mode"
+        name="averaging-mode"
         aria-label="Averaging Mode"
         .value=${cfg.averagingType}
         @change=${(e: Event) =>
@@ -203,8 +213,10 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field">
-      <label>FIFO Averages</label>
+      <label for="wsm-fifo-depth">FIFO Averages</label>
       <select
+        id="wsm-fifo-depth"
+        name="fifo-averages"
         aria-label="FIFO Averages"
         .value=${String(cfg.fifoDepth)}
         @change=${(e: Event) =>
@@ -221,8 +233,10 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field">
-      <label>Octave Smoothing</label>
+      <label for="wsm-octave-smoothing">Octave Smoothing</label>
       <select
+        id="wsm-octave-smoothing"
+        name="octave-smoothing"
         aria-label="Octave Smoothing"
         data-testid="select-smoothing"
         .value=${cfg.octaveSmoothing}
@@ -242,8 +256,10 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field">
-      <label>TF Estimator</label>
+      <label for="wsm-tf-estimator">TF Estimator</label>
       <select
+        id="wsm-tf-estimator"
+        name="tf-estimator"
         aria-label="TF Estimator"
         .value=${cfg.estimator}
         @change=${(e: Event) =>
@@ -260,14 +276,16 @@ export function renderAdvancedMeasurementSettings(params: {
       class="prop-field full-width"
       style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
     >
-      <label style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
+      <span class="prop-label" style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
         Channel Pre-Filter & Calibration Upload
-      </label>
+      </span>
     </div>
 
     <div class="prop-field full-width">
-      <label>Input Filter</label>
+      <label for="wsm-input-filter">Input Filter</label>
       <select
+        id="wsm-input-filter"
+        name="input-filter"
         aria-label="Input Filter"
         .value=${cfg.inputFilter}
         @change=${(e: Event) =>
@@ -283,9 +301,11 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div class="prop-field full-width">
-      <label>Upload New Calibration (.cal / .txt / .frd)</label>
+      <label for="wsm-calibration-upload">Upload New Calibration (.cal / .txt / .frd)</label>
       <input
         type="file"
+        id="wsm-calibration-upload"
+        name="mic-calibration-file"
         aria-label="Mic Calibration File"
         accept=".cal,.txt,.frd"
         @change=${onCalibrationUpload}

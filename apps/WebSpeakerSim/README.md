@@ -2,6 +2,8 @@
 
 **WebSpeakerSim** is an offline-capable, browser-based live-sound speaker placement and 3D electro-acoustic direct-field simulation platform built in pure TypeScript with Lit 3, a dedicated Simulation Web Worker, and hybrid WebGL2 + HiDPI Canvas2D rendering.
 
+- **Live Web App:** **[speakersim.mkrsound.com](https://speakersim.mkrsound.com)** *(installable offline PWA)*
+
 ---
 
 ## Key Features
@@ -71,6 +73,7 @@ Simulation Worker Thread (src/physics/sim.worker.ts — Pure TypeScript Float32A
 | `G` | Toggle 1st-Order Ground Reflection |
 | `L` | Open Loudspeaker Library, Spec Builder & Importer |
 | `1` / `2` / `3` | Switch Layout (`Split` / `Plan` / `Section`) |
+| `?` | Open or close Help, Keyboard Shortcuts & GitHub dialog |
 | `Escape` | Close open modal or clear active selection |
 
 ---

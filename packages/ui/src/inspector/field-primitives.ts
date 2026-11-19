@@ -32,16 +32,20 @@ export function renderCoordinateGrid(
   const gridClass = fields.length <= 2 ? 'foh-xy-grid' : 'foh-xyz-grid';
   return html`
     <div class=${gridClass}>
-      ${fields.map((field) => {
+      ${fields.map((field, idx) => {
         const displayValue =
           field.precision !== undefined
             ? String(Number(field.value.toFixed(field.precision)))
             : String(field.value);
+        const fieldName =
+          field.testId ??
+          `coord-${field.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${idx}`;
         return html`
           <label class="foh-mini-field">
             <span>${field.label}</span>
             <input
               type="number"
+              name=${fieldName}
               step=${field.step !== undefined ? String(field.step) : '0.1'}
               min=${field.min !== undefined ? String(field.min) : nothing}
               max=${field.max !== undefined ? String(field.max) : nothing}

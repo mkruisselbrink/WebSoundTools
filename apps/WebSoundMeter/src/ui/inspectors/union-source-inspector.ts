@@ -51,8 +51,10 @@ export function renderUnionInspector(
 
       <div class="prop-grid">
         <div class="prop-field full-width">
-          <label>Math Operation</label>
+          <label for="wsm-union-operation">Math Operation</label>
           <select
+            id="wsm-union-operation"
+            name="union-math-operation"
             aria-label="Union Math Operation"
             .value=${union.operation}
             @change=${(e: Event) => {
@@ -82,8 +84,10 @@ export function renderUnionInspector(
         ${isBinaryOp
           ? html`
               <div class="prop-field">
-                <label>Source A</label>
+                <label for="wsm-union-source-a">Source A</label>
                 <select
+                  id="wsm-union-source-a"
+                  name="union-source-a"
                   aria-label="Union Source A"
                   .value=${union.sourceIds[0] ?? ''}
                   @change=${(e: Event) => {
@@ -103,8 +107,10 @@ export function renderUnionInspector(
               </div>
 
               <div class="prop-field">
-                <label>Source B</label>
+                <label for="wsm-union-source-b">Source B</label>
                 <select
+                  id="wsm-union-source-b"
+                  name="union-source-b"
                   aria-label="Union Source B"
                   .value=${union.sourceIds[1] ?? ''}
                   @change=${(e: Event) => {
@@ -129,7 +135,7 @@ export function renderUnionInspector(
                 role="group"
                 aria-label="Sources to Combine"
               >
-                <label>Sources to Combine (${union.sourceIds.length} selected)</label>
+                <span class="prop-label">Sources to Combine (${union.sourceIds.length} selected)</span>
                 <div class="union-source-checklist" data-testid="union-source-checklist">
                   ${candidates.map((s) => {
                     const checked = selectedIds.has(s.id);
@@ -137,6 +143,7 @@ export function renderUnionInspector(
                       <label class="union-check-row">
                         <input
                           type="checkbox"
+                          name="union-include-${s.id}"
                           aria-label="Include ${s.name} in Union"
                           .checked=${checked}
                           @change=${(e: Event) => {

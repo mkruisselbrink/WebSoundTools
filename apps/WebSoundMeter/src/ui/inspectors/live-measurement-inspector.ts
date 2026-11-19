@@ -147,9 +147,11 @@ export function renderLiveMeasurementInspector(
         ${slot
           ? html`
               <div class="prop-field full-width">
-                <label>Measurement Name</label>
+                <label for="wsm-live-slot-name">Measurement Name</label>
                 <input
                   type="text"
+                  id="wsm-live-slot-name"
+                  name="live-measurement-name"
                   aria-label="Live Measurement Name"
                   data-testid="input-live-slot-name"
                   .value=${slot.name}
@@ -163,8 +165,10 @@ export function renderLiveMeasurementInspector(
               ${inputMode === 'simulator'
                 ? html`
                     <div class="prop-field full-width">
-                      <label>Simulator Rig Preset</label>
+                      <label for="wsm-live-slot-preset">Simulator Rig Preset</label>
                       <select
+                        id="wsm-live-slot-preset"
+                        name="slot-simulator-preset"
                         aria-label="Slot Simulator Preset"
                         data-testid="select-live-slot-preset"
                         .value=${slot.simulatorPreset}
@@ -188,8 +192,10 @@ export function renderLiveMeasurementInspector(
                   `
                 : html`
                     <div class="prop-field full-width">
-                      <label>Meas Channel (M)</label>
+                      <label for="wsm-live-slot-meas-ch">Meas Channel (M)</label>
                       <select
+                        id="wsm-live-slot-meas-ch"
+                        name="slot-measurement-channel"
                         aria-label="Slot Measurement Channel"
                         data-testid="select-live-slot-meas-channel"
                         .value=${String(slot.measurementChannel)}
@@ -216,7 +222,7 @@ export function renderLiveMeasurementInspector(
           : nothing}
 
         <div class="prop-field full-width">
-          <label>Preamp Headroom (dBFS)</label>
+          <span class="prop-label">Preamp Headroom (dBFS)</span>
           <div class="dbfs-meter-strip" data-testid="input-dbfs-meter-strip">
             ${renderDbfsMeterRow(
               'Meas M',
@@ -244,9 +250,11 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field">
-          <label>Ref Delay (ms)</label>
+          <label for="wsm-ref-delay-ms">Ref Delay (ms)</label>
           <input
             type="number"
+            id="wsm-ref-delay-ms"
+            name="reference-delay-ms"
             step="0.1"
             aria-label="Reference Delay (ms)"
             data-testid="input-ref-delay-ms"
@@ -259,7 +267,8 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field">
-          <label
+          <span
+            class="prop-label"
             data-testid="delay-estimate-readout"
             style="font-variant-numeric:tabular-nums;white-space:nowrap;"
           >
@@ -270,7 +279,7 @@ export function renderLiveMeasurementInspector(
             ${delayEst && delayEst.polarity < 0
               ? html`<span style="color:#f43f5e;font-weight:700;">(−POL)</span>`
               : nothing}
-          </label>
+          </span>
           <button
             class="btn-primary"
             data-testid="btn-apply-delay"
@@ -282,9 +291,11 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field">
-          <label>Input Gain (dB)</label>
+          <label for="wsm-input-gain-db">Input Gain (dB)</label>
           <input
             type="number"
+            id="wsm-input-gain-db"
+            name="input-gain-db"
             step="0.5"
             aria-label="Input Gain (dB)"
             .value=${String(cfg.gainDb)}
@@ -296,7 +307,7 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field">
-          <label>Polarity</label>
+          <span class="prop-label">Polarity</span>
           <button
             class=${cfg.invertPolarity ? 'btn-active' : ''}
             @click=${() => handlers.onUpdateConfig({ invertPolarity: !cfg.invertPolarity })}
@@ -306,8 +317,10 @@ export function renderLiveMeasurementInspector(
         </div>
 
         <div class="prop-field full-width">
-          <label>Feedback Watch Mode</label>
+          <label for="wsm-feedback-mode">Feedback Watch Mode</label>
           <select
+            id="wsm-feedback-mode"
+            name="feedback-watch-mode"
             aria-label="Feedback Watch Mode"
             data-testid="select-feedback-mode"
             .value=${cfg.feedbackMode ?? 'foh-normal'}

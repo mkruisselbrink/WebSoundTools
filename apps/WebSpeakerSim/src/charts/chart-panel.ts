@@ -258,6 +258,7 @@ export class WssChartPanel extends FohChartPanelBase {
                 <label class="span-label" for="wss-mag-span-select">Span:</label>
                 <select
                   id="wss-mag-span-select"
+                  name="chart-mag-span"
                   class="span-select"
                   data-testid="chart-mag-span-select"
                   title="Vertical dB span for Magnitude plot"

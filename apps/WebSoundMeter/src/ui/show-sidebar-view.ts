@@ -107,6 +107,7 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                   <div class="source-row-left">
                     <input
                       type="checkbox"
+                      name="show-slot-visible-${slot.id}"
                       aria-label="Toggle visibility for ${slot.name}"
                       .checked=${src?.visible ?? slot.visible}
                       @click=${(e: Event) => e.stopPropagation()}
@@ -149,6 +150,7 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                       <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
                         <span class="label-muted">Sim Rig:</span>
                         <select
+                          name="show-sim-preset-${slot.id}"
                           aria-label="Simulator Rig Preset for ${slot.name}"
                           data-testid="select-show-sim-preset-${slot.id}"
                           style="flex:1;min-width:0;"
@@ -176,6 +178,7 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                         <span class="label-muted">In M / R:</span>
                         <div style="display:flex;gap:4px;flex:1;justify-content:flex-end;">
                           <select
+                            name="show-meas-ch-${slot.id}"
                             aria-label="Measurement Channel for ${slot.name}"
                             data-testid="select-show-meas-ch-${slot.id}"
                             title="Measurement Input Channel (M)"
@@ -198,6 +201,7 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                             )}
                           </select>
                           <select
+                            name="show-ref-ch-${slot.id}"
                             aria-label="Reference Channel for ${slot.name}"
                             data-testid="select-show-ref-ch-${slot.id}"
                             title="Reference Input Channel (R)"
@@ -235,6 +239,7 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                 <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
                   <span class="label-muted">FB Watch:</span>
                   <select
+                    name="show-fb-mode-${slot.id}"
                     aria-label="Feedback Watch Sensitivity for ${slot.name}"
                     data-testid="select-fb-mode-${slot.id}"
                     .value=${fbMode}
@@ -352,8 +357,10 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
 
         <div class="prop-grid">
           <div class="prop-field full-width">
-            <label>Compliance Alert Metric</label>
+            <label for="wsm-spl-alert-metric">Compliance Alert Metric</label>
             <select
+              id="wsm-spl-alert-metric"
+              name="spl-alert-metric"
               aria-label="Compliance Alert Metric"
               data-testid="select-spl-alert-metric"
               .value=${props.splAlertThresholds.metric}
@@ -373,9 +380,11 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
           </div>
 
           <div class="prop-field">
-            <label>▲ Warn Threshold (dB)</label>
+            <label for="wsm-spl-warn-db">▲ Warn Threshold (dB)</label>
             <input
               type="number"
+              id="wsm-spl-warn-db"
+              name="spl-warn-db"
               step="0.5"
               aria-label="SPL Warning Threshold dB"
               data-testid="input-spl-warn-db"
@@ -390,9 +399,11 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
           </div>
 
           <div class="prop-field">
-            <label>◆ Limit Threshold (dB)</label>
+            <label for="wsm-spl-limit-db">◆ Limit Threshold (dB)</label>
             <input
               type="number"
+              id="wsm-spl-limit-db"
+              name="spl-limit-db"
               step="0.5"
               aria-label="SPL Limit Threshold dB"
               data-testid="input-spl-limit-db"

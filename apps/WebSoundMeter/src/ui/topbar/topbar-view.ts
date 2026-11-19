@@ -2,6 +2,7 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { FOH_GITHUB_REPO_URL, renderGithubMarkSvg } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
 import type { LayoutPreset } from '../app-shell.js';
 import { WorkspaceMode } from '../url-state.js';
@@ -20,6 +21,7 @@ export interface TopbarViewProps
   readonly layoutPreset: LayoutPreset;
   readonly onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
   readonly onLayoutPresetChange: (preset: LayoutPreset) => void;
+  readonly onOpenHelp?: () => void;
 }
 
 export function renderTopbar(props: TopbarViewProps): TemplateResult {
@@ -53,6 +55,8 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         </div>
 
         <select
+          id="wsm-select-layout"
+          name="chart-layout"
           aria-label="Chart Layout"
           data-testid="select-layout"
           .value=${props.layoutPreset}
@@ -89,6 +93,28 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         ? nothing
         : renderGeneratorGroup(props)}
       ${renderSplMeterGroup(props)}
+
+      <div class="toolbar-group topbar-meta-actions">
+        <button
+          type="button"
+          data-testid="btn-help"
+          title="Help, Keyboard Shortcuts, User Guide & Report Issue (?)"
+          @click=${() => props.onOpenHelp?.()}
+        >
+          ? Help
+        </button>
+        <a
+          class="topbar-link"
+          href=${FOH_GITHUB_REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="link-github"
+          title="View source code & file issues on GitHub"
+        >
+          ${renderGithubMarkSvg()}
+          <span>GitHub</span>
+        </a>
+      </div>
     </header>
   `;
 }

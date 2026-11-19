@@ -62,6 +62,41 @@ export const appShellStyles = [
     white-space: nowrap;
   }
 
+  .topbar-meta-actions {
+    margin-left: auto;
+  }
+
+  .topbar-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    min-block-size: 24px;
+    min-inline-size: 24px;
+  }
+
+  @media (hover: hover) {
+    .topbar-link:hover {
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .topbar-link,
+    .topbar-meta-actions button {
+      min-block-size: 28px;
+      min-inline-size: 28px;
+    }
+  }
+
   .toolbar-label {
     color: #94a3b8;
     font-size: 11px;
@@ -323,7 +358,7 @@ export const appShellStyles = [
     grid-column: 1 / -1;
   }
 
-  .prop-field label {
+  .prop-field :is(label, .prop-label) {
     color: #94a3b8;
     font-size: 10px;
   }

@@ -2,6 +2,8 @@
 
 **WebSoundMeter** is an offline-capable, browser-based multi-channel acoustic measurement, PA alignment, and sound level metering platform built in pure TypeScript with Web Audio (`AudioWorklet`), lock-free `SharedArrayBuffer` ring buffers, a dedicated DSP `Worker`, and hybrid WebGL2 + HiDPI Canvas2D charting.
 
+- **Live Web App:** **[meter.mkrsound.com](https://meter.mkrsound.com)** *(installable offline PWA)*
+
 ---
 
 ## Key Features
@@ -80,7 +82,8 @@ Main Thread (Lit 3 UI + Charts) ◄────┘
 | `U` | Create a new Math Union source (`+ Math`, Tuning mode) |
 | `R` | Reset averaging buffers and peak-hold accumulators on active slot |
 | `1` / `2` / `3` | Switch between 1, 2, or 3 stacked chart panels |
-| `Escape` | Collapse Advanced Settings or return selection to active Live Measurement |
+| `?` | Open or close Help, Keyboard Shortcuts & GitHub dialog |
+| `Escape` | Close dialog, collapse Advanced Settings, or return selection to active Live Measurement |
 
 ---
 

@@ -26,8 +26,39 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     // Click "Apply Delay" and verify Ref Delay input updates to ~8.50 ms
     await wsm.applyAutoDelay();
     const refDelayInput = wsm.app.getByTestId('input-ref-delay-ms');
+    await expect(refDelayInput).not.toHaveValue('0');
     const refDelayVal = Number(await refDelayInput.inputValue());
     expect(refDelayVal).toBeCloseTo(8.5, 1);
+
+    // Verify Topbar GitHub link and Help modal non-overlapping resource cards + Escape close
+    await expect(wsm.app.getByTestId('link-github')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools'
+    );
+    await wsm.app.getByTestId('btn-help').click();
+    await expect(wsm.app.getByTestId('help-modal')).toBeVisible();
+    await expect(wsm.app.getByTestId('help-link-issues')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools/issues'
+    );
+    const cardBoxes = await wsm.app
+      .locator('foh-help-modal .resource-card')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    expect(cardBoxes).toHaveLength(4);
+    expect(cardBoxes[0].bottom).toBeLessThanOrEqual(cardBoxes[2].top);
+    expect(cardBoxes[1].bottom).toBeLessThanOrEqual(cardBoxes[3].top);
+    await expect(wsm.app.getByTestId('help-link-commit')).toHaveCount(0);
+    await wsm.app.locator('foh-help-modal').evaluate((el: Element) => {
+      (el as HTMLElement & { commitSha: string }).commitSha =
+        'df48c8b1a2b3c4d5e6f708192a3b4c5d6e7f8091';
+    });
+    await expect(wsm.app.getByTestId('help-link-commit')).toHaveAttribute(
+      'href',
+      'https://github.com/mkruisselbrink/WebSoundTools/commit/df48c8b1a2b3c4d5e6f708192a3b4c5d6e7f8091'
+    );
+    await expect(wsm.app.getByTestId('help-link-commit')).toContainText('df48c8b1');
+    await page.keyboard.press('Escape');
+    await expect(wsm.app.getByTestId('help-modal')).not.toBeVisible();
 
     // Add a second simultaneous Live Measurement source (+ Meas)
     await wsm.addLiveMeasurement('Sub Nearfield Live');

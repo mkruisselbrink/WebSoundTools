@@ -4,8 +4,8 @@ Browser-native Front-of-House (FOH) acoustic prediction and real-time audio meas
 
 ## Applications
 
-- **[`apps/WebSoundMeter`](apps/WebSoundMeter/README.md)** — Multi-channel dual-FFT acoustic analyzer, transfer function / coherence / impulse-response measurement, virtual crossover & parametric EQ modeling, and Live Show SPL compliance + feedback watch.
-- **[`apps/WebSpeakerSim`](apps/WebSpeakerSim/README.md)** — Synchronized 2D Plan & Side Section venue simulator over a 3D direct-field + ground-reflection acoustic solver, point-source & cardioid/end-fire/arc subwoofer modeling, `.gll` / `.clf` / `.frd` loudspeaker importers, and Virtual Mic `.frd` target export.
+- **[`apps/WebSoundMeter`](apps/WebSoundMeter/README.md)** (**[Live App: `meter.mkrsound.com`](https://meter.mkrsound.com)**) — Multi-channel dual-FFT acoustic analyzer, transfer function / coherence / impulse-response measurement, virtual crossover & parametric EQ modeling, and Live Show SPL compliance + feedback watch.
+- **[`apps/WebSpeakerSim`](apps/WebSpeakerSim/README.md)** (**[Live App: `speakersim.mkrsound.com`](https://speakersim.mkrsound.com)**) — Synchronized 2D Plan & Side Section venue simulator over a 3D direct-field + ground-reflection acoustic solver, point-source & cardioid/end-fire/arc subwoofer modeling, `.gll` / `.clf` / `.frd` loudspeaker importers, and Virtual Mic `.frd` target export.
 
 ## Shared Workspace Packages (`@foh/*`)
 

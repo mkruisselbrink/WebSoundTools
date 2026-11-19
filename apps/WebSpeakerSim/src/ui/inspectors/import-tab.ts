@@ -52,6 +52,8 @@ export function renderImportTab(params: {
       </div>
       <input
         id="speaker-file-input"
+        name="speaker-file-input"
+        aria-label="Import Loudspeaker Files"
         data-testid="speaker-file-input"
         type="file"
         multiple
@@ -68,18 +70,22 @@ export function renderImportTab(params: {
 
     <div class="form-grid">
       <div class="field">
-        <label>.frd/.csv Nominal Horizontal (°)</label>
+        <label for="import-frd-h-deg">.frd/.csv Nominal Horizontal (°)</label>
         <input
           type="number"
+          id="import-frd-h-deg"
+          name="import-frd-h-deg"
           .value=${String(frdHDeg)}
           @input=${(ev: Event) =>
             onPatchFallbackDispersion({ frdHDeg: Number((ev.target as HTMLInputElement).value) })}
         />
       </div>
       <div class="field">
-        <label>.frd/.csv Nominal Vertical (°)</label>
+        <label for="import-frd-v-deg">.frd/.csv Nominal Vertical (°)</label>
         <input
           type="number"
+          id="import-frd-v-deg"
+          name="import-frd-v-deg"
           .value=${String(frdVDeg)}
           @input=${(ev: Event) =>
             onPatchFallbackDispersion({ frdVDeg: Number((ev.target as HTMLInputElement).value) })}

@@ -46,9 +46,11 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
       <div class="form-section">
         <div class="form-section-title">Topology & Model</div>
         <div class="field-row">
-          <span class="field-label">Name</span>
+          <label class="field-label" for="sa-name-input">Name</label>
           <input
             type="text"
+            id="sa-name-input"
+            name="sa-name"
             .value=${sa.name}
             @change=${(ev: Event) =>
               store.updateSubArray(sa.id, { name: (ev.target as HTMLInputElement).value })}
@@ -56,8 +58,10 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </div>
 
         <div class="field-row">
-          <span class="field-label">Array Mode</span>
+          <label class="field-label" for="sa-mode-select">Array Mode</label>
           <select
+            id="sa-mode-select"
+            name="sa-mode"
             data-testid="sa-mode-select"
             .value=${sa.mode}
             @change=${(ev: Event) =>
@@ -73,8 +77,10 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </div>
 
         <div class="field-row">
-          <span class="field-label">Sub Model</span>
+          <label class="field-label" for="sa-speaker-select">Sub Model</label>
           <select
+            id="sa-speaker-select"
+            name="sa-speaker"
             data-testid="sa-speaker-select"
             .value=${sa.speakerId}
             @change=${(ev: Event) =>
@@ -91,8 +97,10 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </div>
 
         <div class="field-row">
-          <span class="field-label">DSP Group</span>
+          <label class="field-label" for="sa-group-select">DSP Group</label>
           <select
+            id="sa-group-select"
+            name="sa-dsp-group"
             .value=${sa.dspGroupId}
             @change=${(ev: Event) =>
               store.updateSubArray(sa.id, {
@@ -112,6 +120,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Enclosures (1–24)</span>
             <input
               type="number"
+              name="sa-box-count"
               min="1"
               max="24"
               step="1"
@@ -129,6 +138,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Tune Freq (Hz)</span>
             <input
               type="number"
+              name="sa-tuning-hz"
               min="25"
               max="160"
               step="1"
@@ -170,6 +180,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Origin X (m)</span>
             <input
               type="number"
+              name="sa-origin-x"
               step="0.1"
               .value=${String(Number(sa.origin.x.toFixed(2)))}
               @input=${(ev: Event) =>
@@ -184,6 +195,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Origin Y (m)</span>
             <input
               type="number"
+              name="sa-origin-y"
               step="0.1"
               .value=${String(Number(sa.origin.y.toFixed(2)))}
               @input=${(ev: Event) =>
@@ -198,6 +210,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Origin Z (m)</span>
             <input
               type="number"
+              name="sa-origin-z"
               step="0.05"
               .value=${String(Number(sa.origin.z.toFixed(2)))}
               @input=${(ev: Event) =>
@@ -215,6 +228,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Spacing (m)</span>
             <input
               type="number"
+              name="sa-spacing-m"
               step="0.05"
               min="0.3"
               .value=${String(sa.spacingM)}
@@ -230,6 +244,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
             <span>Azimuth (°)</span>
             <input
               type="number"
+              name="sa-azimuth-deg"
               step="1"
               .value=${String(sa.azimuthDeg)}
               @input=${(ev: Event) =>
@@ -246,6 +261,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                   <span>CSA Depth (m)</span>
                   <input
                     type="number"
+                    name="sa-csa-depth-m"
                     step="0.05"
                     min="0.3"
                     .value=${String(sa.cardioidDepthOffsetM)}
@@ -269,6 +285,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                     <span>Arc Angle (°)</span>
                     <input
                       type="number"
+                      name="sa-arc-angle-deg"
                       step="5"
                       min="0"
                       max="160"

@@ -84,9 +84,11 @@ export function renderVirtualMicInspector(
       <div class="form-section">
         <div class="form-section-title">Microphone Coordinates</div>
         <div class="field-row">
-          <span class="field-label">Name</span>
+          <label class="field-label" for="mic-name-input">Name</label>
           <input
             type="text"
+            id="mic-name-input"
+            name="mic-name"
             .value=${mic.name}
             @change=${(ev: Event) =>
               store.updateVirtualMic(mic.id, { name: (ev.target as HTMLInputElement).value })}
@@ -98,6 +100,7 @@ export function renderVirtualMicInspector(
             <span>X (m)</span>
             <input
               type="number"
+              name="mic-pos-x"
               step="0.2"
               data-testid="mic-pos-x"
               .value=${String(Number(mic.position.x.toFixed(2)))}
@@ -113,6 +116,7 @@ export function renderVirtualMicInspector(
             <span>Y (m)</span>
             <input
               type="number"
+              name="mic-pos-y"
               step="0.2"
               data-testid="mic-pos-y"
               .value=${String(Number(mic.position.y.toFixed(2)))}
@@ -128,6 +132,7 @@ export function renderVirtualMicInspector(
             <span>Z Ear (m)</span>
             <input
               type="number"
+              name="mic-pos-z"
               step="0.05"
               data-testid="mic-pos-z"
               .value=${String(Number(mic.position.z.toFixed(2)))}
@@ -182,8 +187,10 @@ export function renderVirtualMicInspector(
       <div class="form-section" data-testid="auto-time-align-panel">
         <div class="form-section-title">Auto Time-Alignment @ ${mic.name}</div>
         <div class="field-row">
-          <span class="field-label">Reference</span>
+          <label class="field-label" for="align-ref-select">Reference</label>
           <select
+            id="align-ref-select"
+            name="align-ref-group"
             data-testid="align-ref-select"
             .value=${refGroupId}
             @change=${(ev: Event) =>
@@ -196,8 +203,10 @@ export function renderVirtualMicInspector(
         </div>
 
         <div class="field-row">
-          <span class="field-label">Target</span>
+          <label class="field-label" for="align-target-select">Target</label>
           <select
+            id="align-target-select"
+            name="align-target-group"
             data-testid="align-target-select"
             .value=${targetGroupId}
             @change=${(ev: Event) =>
@@ -211,9 +220,11 @@ export function renderVirtualMicInspector(
         </div>
 
         <div class="field-row">
-          <span class="field-label">Align Freq (Hz)</span>
+          <label class="field-label" for="align-freq-hz">Align Freq (Hz)</label>
           <input
             type="number"
+            id="align-freq-hz"
+            name="align-freq-hz"
             min="30"
             max="4000"
             step="5"

@@ -47,6 +47,8 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
     <div class="toolbar-group" role="group" aria-label="Audio Input Routing">
       <span class="toolbar-label">Input</span>
       <select
+        id="wsm-select-input-mode"
+        name="audio-input-source"
         aria-label="Audio Input Source"
         data-testid="select-input-mode"
         .value=${currentSelectValue}
@@ -85,6 +87,8 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
               >Ref:</span
             >
             <select
+              id="wsm-select-ref-channel"
+              name="global-reference-channel"
               aria-label="Global Reference Channel"
               data-testid="select-ref-channel"
               .value=${String(props.globalReferenceChannel)}

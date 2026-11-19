@@ -61,9 +61,11 @@ export function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): Tem
       <div class="form-section">
         <div class="form-section-title">Group Identity</div>
         <div class="field-row">
-          <span class="field-label">Group Name</span>
+          <label class="field-label" for="dsp-group-name-input">Group Name</label>
           <input
             type="text"
+            id="dsp-group-name-input"
+            name="dsp-group-name"
             .value=${grp.name}
             @change=${(ev: Event) =>
               store.updateDspGroup(grp.id, { name: (ev.target as HTMLInputElement).value })}

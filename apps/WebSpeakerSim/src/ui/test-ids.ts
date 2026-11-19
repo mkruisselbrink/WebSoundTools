@@ -29,6 +29,11 @@ export const WSS_TEST_IDS = {
   layoutPlanBtn: 'layout-plan',
   layoutSectionBtn: 'layout-section',
   toggleChartsBtn: 'btn-toggle-charts',
+  helpBtn: 'btn-help',
+  githubLink: 'link-github',
+  helpModal: 'help-modal',
+  helpIssuesLink: 'help-link-issues',
+  helpSourceLink: 'help-link-source',
 
   // Main Shell, Viewports, Charts & Modals
   projectFileInput: 'project-file-input',

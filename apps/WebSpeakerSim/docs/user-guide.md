@@ -158,6 +158,7 @@ Synthesizes a 3D frequency-dependent directivity balloon from published manufact
 | `G` | Toggle 1st-order Ground Bounce |
 | `L` | Open Loudspeaker Library / Spec Builder / Importer |
 | `1` / `2` / `3` | Switch viewport layout (`Split` / `Plan` / `Section`) |
+| `?` | Open or close Help, Keyboard Shortcuts & GitHub dialog |
 | `Escape` | Close open modal or clear selection |
 | `Shift + Drag` (in viewport) | Measure acoustic distance (`m`) & flight time (`ms`) |
 | `Shift + Drag` / `Shift + Wheel` (on EQ handle) | Adjust DSP Group EQ band `Q` (`0.25 .. 36`) |

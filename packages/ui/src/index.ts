@@ -28,6 +28,17 @@ export {
 export { FohModal } from './overlays/foh-modal.js';
 export { FohToast } from './overlays/foh-toast.js';
 export {
+  FOH_GITHUB_ISSUES_URL,
+  FOH_GITHUB_REPO_URL,
+  FOH_GITHUB_TUTORIALS_URL,
+  FohHelpModal,
+  renderGithubMarkSvg,
+  resolveHelpCommitLink,
+  type HelpCommitLink,
+  type HelpResourceLink,
+  type HelpShortcutItem,
+} from './overlays/foh-help-modal.js';
+export {
   dispatchKeyboardShortcut,
   isEditableShortcutTarget,
   type ShortcutEventLike,

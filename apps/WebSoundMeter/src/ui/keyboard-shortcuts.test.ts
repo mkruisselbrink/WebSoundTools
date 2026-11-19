@@ -111,12 +111,13 @@ describe('keyboard-shortcuts', () => {
     const onAddUnionSource = vi.fn();
     const onResetAveraging = vi.fn();
     const onSelectLayoutCount = vi.fn();
+    const onOpenHelp = vi.fn();
     const onEscape = vi.fn();
 
-    for (const key of ['e', 'u', 'r', '1', '2', '3', 'Escape']) {
+    for (const key of ['e', 'u', 'r', '1', '2', '3', '?', 'Escape']) {
       expect(
         dispatchAppKeydown(
-          { key, target: { tagName: 'DIV' }, preventDefault },
+          { key, shiftKey: key === '?', target: { tagName: 'DIV' }, preventDefault },
           {
             onCaptureTrace,
             onFindAndApplyDelay,
@@ -124,6 +125,7 @@ describe('keyboard-shortcuts', () => {
             onAddUnionSource,
             onResetAveraging,
             onSelectLayoutCount,
+            onOpenHelp,
             onEscape,
           }
         )
@@ -135,6 +137,7 @@ describe('keyboard-shortcuts', () => {
     expect(onSelectLayoutCount).toHaveBeenNthCalledWith(1, 1);
     expect(onSelectLayoutCount).toHaveBeenNthCalledWith(2, 2);
     expect(onSelectLayoutCount).toHaveBeenNthCalledWith(3, 3);
+    expect(onOpenHelp).toHaveBeenCalledTimes(1);
     expect(onEscape).toHaveBeenCalledTimes(1);
   });
 });

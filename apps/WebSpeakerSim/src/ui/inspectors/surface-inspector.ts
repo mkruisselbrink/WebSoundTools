@@ -27,17 +27,21 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
       <div class="form-section">
         <div class="form-section-title">Classification</div>
         <div class="field-row">
-          <span class="field-label">Name</span>
+          <label class="field-label" for="surf-name-input">Name</label>
           <input
             type="text"
+            id="surf-name-input"
+            name="surf-name"
             .value=${surf.name}
             @change=${(ev: Event) =>
               store.updateSurface(surf.id, { name: (ev.target as HTMLInputElement).value })}
           />
         </div>
         <div class="field-row">
-          <span class="field-label">Surface Role</span>
+          <label class="field-label" for="surf-role-select">Surface Role</label>
           <select
+            id="surf-role-select"
+            name="surf-role"
             .value=${surf.role}
             @change=${(ev: Event) =>
               store.updateSurface(surf.id, {
@@ -61,6 +65,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>X Start (m)</span>
             <input
               type="number"
+              name="surf-x-start"
               step="0.5"
               .value=${String(surf.xStart)}
               @input=${(ev: Event) =>
@@ -75,6 +80,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>X End (m)</span>
             <input
               type="number"
+              name="surf-x-end"
               step="0.5"
               .value=${String(surf.xEnd)}
               @input=${(ev: Event) =>
@@ -92,6 +98,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>Y Center</span>
             <input
               type="number"
+              name="surf-y-center"
               step="0.5"
               .value=${String(surf.yCenter)}
               @input=${(ev: Event) =>
@@ -106,6 +113,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>Width Start</span>
             <input
               type="number"
+              name="surf-width-start"
               step="0.5"
               min="1"
               .value=${String(surf.widthStart)}
@@ -121,6 +129,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>Width End</span>
             <input
               type="number"
+              name="surf-width-end"
               step="0.5"
               min="1"
               .value=${String(surf.widthEnd)}
@@ -139,6 +148,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>Deck Z Start</span>
             <input
               type="number"
+              name="surf-z-start"
               step="0.2"
               .value=${String(surf.zStart)}
               @input=${(ev: Event) =>
@@ -147,12 +157,13 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                   { zStart: numVal(ev, surf.zStart) },
                   `sf-z-${surf.id}`
                 )}
-            />
+          />
           </label>
           <label class="mini-field">
             <span>Deck Z End</span>
             <input
               type="number"
+              name="surf-z-end"
               step="0.2"
               .value=${String(surf.zEnd)}
               @input=${(ev: Event) =>
@@ -167,6 +178,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
             <span>Ear Height</span>
             <input
               type="number"
+              name="surf-ear-height"
               step="0.05"
               min="0"
               .value=${String(surf.earHeightM)}

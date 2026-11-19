@@ -73,6 +73,7 @@ export function renderEntityTreeSection(
                 ? html`
                     <input
                       type="checkbox"
+                      name="tree-toggle-${item.id}"
                       aria-label=${item.toggle.ariaLabel ?? `Toggle ${item.title}`}
                       .checked=${item.toggle.active}
                       @click=${(ev: Event) => ev.stopPropagation()}

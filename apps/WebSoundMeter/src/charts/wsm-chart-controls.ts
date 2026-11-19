@@ -42,6 +42,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
     <div class="chart-header">
       <div class="header-left">
         <select
+          name="chart-plot-type"
           aria-label="Plot Type"
           .value=${props.plotType}
           @change=${props.onPlotTypeChange}
@@ -57,6 +58,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
         ${props.plotType === 'rta'
           ? html`
               <select
+                name="chart-rta-mode"
                 aria-label="RTA Mode"
                 .value=${props.rtaMode}
                 @change=${(e: Event) =>
@@ -75,6 +77,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
               >
                 <input
                   type="checkbox"
+                  name="chart-rta-peak-hold"
                   .checked=${props.showPeakHold}
                   @change=${(e: Event) =>
                     props.onTogglePeakHold((e.target as HTMLInputElement).checked)}
@@ -89,6 +92,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
         props.plotType === 'group-delay'
           ? html`
               <select
+                name="chart-coherence-mode"
                 aria-label="Coherence Masking Mode"
                 data-testid="select-coherence-mode"
                 title="Coherence masking mode: smooth opacity fade, hard level cutoff, or off"
@@ -111,6 +115,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
               ${props.coherenceMode !== 'off'
                 ? html`
                     <select
+                      name="chart-coherence-threshold"
                       aria-label="Coherence Threshold"
                       data-testid="select-coherence-threshold"
                       title="Minimum coherence (γ²) threshold"
@@ -145,6 +150,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
               >
                 <input
                   type="checkbox"
+                  name="chart-feedback-watch"
                   data-testid="toggle-feedback-watch"
                   .checked=${props.showFeedbackWatch}
                   @change=${(e: Event) =>
@@ -160,6 +166,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
         ${props.plotType === 'spl-history'
           ? html`
               <select
+                name="chart-spl-window"
                 aria-label="SPL History Window"
                 data-testid="select-spl-window"
                 .value=${String(props.splWindowSec)}
@@ -176,6 +183,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
               </select>
 
               <select
+                name="chart-spl-trace-mode"
                 aria-label="SPL Trace Mode"
                 data-testid="select-spl-trace-mode"
                 .value=${props.splTraceMode}
@@ -196,6 +204,7 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
               >
                 <input
                   type="checkbox"
+                  name="chart-spl-thresholds"
                   data-testid="toggle-spl-thresholds"
                   .checked=${props.showSplThresholds}
                   @change=${(e: Event) =>

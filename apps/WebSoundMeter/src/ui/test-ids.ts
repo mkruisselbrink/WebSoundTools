@@ -24,6 +24,11 @@ export const WSM_TEST_IDS = {
   splMainValue: 'spl-main-value',
   splStatusBadge: 'spl-status-badge',
   splShowComplianceMetrics: 'spl-show-compliance-metrics',
+  helpBtn: 'btn-help',
+  githubLink: 'link-github',
+  helpModal: 'help-modal',
+  helpIssuesLink: 'help-link-issues',
+  helpSourceLink: 'help-link-source',
 
   // Chart Header Controls
   coherenceModeSelect: 'select-coherence-mode',

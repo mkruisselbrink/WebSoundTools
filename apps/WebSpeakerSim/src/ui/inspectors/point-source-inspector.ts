@@ -34,9 +34,11 @@ export function renderPointSourceInspector(
       <div class="form-section">
         <div class="form-section-title">Enclosure & Routing</div>
         <div class="field-row">
-          <span class="field-label">Name</span>
+          <label class="field-label" for="ps-name-input">Name</label>
           <input
             type="text"
+            id="ps-name-input"
+            name="ps-name"
             data-testid="ps-name-input"
             .value=${ps.name}
             @change=${(ev: Event) =>
@@ -45,8 +47,10 @@ export function renderPointSourceInspector(
         </div>
 
         <div class="field-row">
-          <span class="field-label">Loudspeaker</span>
+          <label class="field-label" for="ps-speaker-select">Loudspeaker</label>
           <select
+            id="ps-speaker-select"
+            name="ps-speaker"
             data-testid="ps-speaker-select"
             .value=${ps.speakerId}
             @change=${(ev: Event) =>
@@ -75,8 +79,10 @@ export function renderPointSourceInspector(
           : ''}
 
         <div class="field-row">
-          <span class="field-label">DSP Group</span>
+          <label class="field-label" for="ps-group-select">DSP Group</label>
           <select
+            id="ps-group-select"
+            name="ps-dsp-group"
             data-testid="ps-group-select"
             .value=${ps.dspGroupId}
             @change=${(ev: Event) =>
@@ -96,6 +102,7 @@ export function renderPointSourceInspector(
           <label class="check-label">
             <input
               type="checkbox"
+              name="ps-mirror-lr"
               data-testid="ps-mirror-checkbox"
               .checked=${ps.mirrorLeftRight}
               @change=${(ev: Event) =>
@@ -108,6 +115,7 @@ export function renderPointSourceInspector(
           <label class="check-label">
             <input
               type="checkbox"
+              name="ps-muted"
               .checked=${ps.muted}
               @change=${(ev: Event) =>
                 store.updatePointSource(ps.id, {
@@ -126,6 +134,7 @@ export function renderPointSourceInspector(
             <span>X Throw (m)</span>
             <input
               type="number"
+              name="ps-pos-x"
               step="0.1"
               data-testid="ps-pos-x"
               .value=${String(Number(ps.position.x.toFixed(2)))}
@@ -141,6 +150,7 @@ export function renderPointSourceInspector(
             <span>Y Lateral (m)</span>
             <input
               type="number"
+              name="ps-pos-y"
               step="0.1"
               data-testid="ps-pos-y"
               .value=${String(Number(ps.position.y.toFixed(2)))}
@@ -156,6 +166,7 @@ export function renderPointSourceInspector(
             <span>Z Height (m)</span>
             <input
               type="number"
+              name="ps-pos-z"
               step="0.1"
               data-testid="ps-pos-z"
               .value=${String(Number(ps.position.z.toFixed(2)))}
@@ -174,6 +185,7 @@ export function renderPointSourceInspector(
             <span>Azimuth (°)</span>
             <input
               type="number"
+              name="ps-azimuth"
               step="1"
               data-testid="ps-azimuth"
               .value=${String(Number(ps.orientation.azimuthDeg.toFixed(1)))}
@@ -194,6 +206,7 @@ export function renderPointSourceInspector(
             <span>Tilt (°)</span>
             <input
               type="number"
+              name="ps-tilt"
               step="1"
               data-testid="ps-tilt"
               .value=${String(Number(ps.orientation.tiltDeg.toFixed(1)))}
@@ -214,6 +227,7 @@ export function renderPointSourceInspector(
             <span>Roll (°)</span>
             <input
               type="number"
+              name="ps-roll"
               step="5"
               .value=${String(Number(ps.orientation.rollDeg.toFixed(1)))}
               @input=${(ev: Event) =>
@@ -239,6 +253,7 @@ export function renderPointSourceInspector(
             <span>Trim Gain (dB)</span>
             <input
               type="number"
+              name="ps-trim-gain"
               step="0.5"
               .value=${String(ps.trimGainDb)}
               @input=${(ev: Event) =>
@@ -253,6 +268,7 @@ export function renderPointSourceInspector(
             <span>Trim Delay (ms)</span>
             <input
               type="number"
+              name="ps-trim-delay"
               step="0.1"
               min="0"
               .value=${String(ps.trimDelayMs)}
@@ -269,6 +285,7 @@ export function renderPointSourceInspector(
           <label class="check-label">
             <input
               type="checkbox"
+              name="ps-invert-polarity"
               .checked=${ps.invertPolarity}
               @change=${(ev: Event) =>
                 store.updatePointSource(ps.id, {

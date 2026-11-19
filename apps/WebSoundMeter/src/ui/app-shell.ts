@@ -6,6 +6,7 @@
  * Main Application Shell (`<web-sound-meter-app>` Lit 3 Web Component).
  */
 
+import '@foh/ui';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import {
@@ -33,6 +34,12 @@ import { SourceData, exportSourceDataToFrd } from '../sources/source-data.js';
 import { SourceStore, isLiveSourceId } from '../sources/source-store.js';
 import { loadWorkspaceSession } from '../sources/workspace-session.js';
 import { appShellStyles } from './app-shell-styles.js';
+import {
+  WSM_HELP_ATTRIBUTION,
+  WSM_HELP_RESOURCES,
+  WSM_HELP_SHORTCUTS,
+  WSM_HELP_SUMMARY,
+} from './help-content.js';
 import { renderEqInspector } from './inspectors/eq-source-inspector.js';
 import { renderLiveMeasurementInspector } from './inspectors/live-measurement-inspector.js';
 import { renderStoredInspector } from './inspectors/stored-source-inspector.js';
@@ -96,6 +103,9 @@ export class WebSoundMeterApp extends LitElement {
   @state()
   private isPaused = false;
 
+  @state()
+  private helpModalOpen = false;
+
   private keydownHandler = (e: KeyboardEvent) => {
     dispatchAppKeydown(e, {
       onCaptureTrace: () => {
@@ -138,8 +148,13 @@ export class WebSoundMeterApp extends LitElement {
                 : 'pa-triple';
         this.setLayoutPreset(nextPreset);
       },
+      onOpenHelp: () => {
+        this.helpModalOpen = !this.helpModalOpen;
+      },
       onEscape: () => {
-        if (this.showAdvancedMeasSettings) {
+        if (this.helpModalOpen) {
+          this.helpModalOpen = false;
+        } else if (this.showAdvancedMeasSettings) {
           this.showAdvancedMeasSettings = false;
         } else {
           this.sourceStore.setSelectedSourceId(this.sourceStore.getActiveLiveSourceId());
@@ -611,6 +626,9 @@ export class WebSoundMeterApp extends LitElement {
           this.persistState('replace');
           this.requestUpdate();
         },
+        onOpenHelp: () => {
+          this.helpModalOpen = true;
+        },
       })}
 
       <div class="workspace">
@@ -732,6 +750,19 @@ export class WebSoundMeterApp extends LitElement {
               },
             })}
       </div>
+
+      <foh-help-modal
+        .open=${this.helpModalOpen}
+        appName="WebSoundMeter"
+        .appSummary=${WSM_HELP_SUMMARY}
+        .resources=${WSM_HELP_RESOURCES}
+        .shortcuts=${WSM_HELP_SHORTCUTS}
+        .attribution=${WSM_HELP_ATTRIBUTION}
+        dialogTestId="help-modal"
+        @close-modal=${() => {
+          this.helpModalOpen = false;
+        }}
+      ></foh-help-modal>
     `;
   }
 }

@@ -29,26 +29,32 @@ export function renderSpecBuilderTab(params: {
   return html`
     <div class="form-grid" data-testid="spec-builder-form">
       <div class="field">
-        <label>Model Name</label>
+        <label for="spec-name-input">Model Name</label>
         <input
           type="text"
+          id="spec-name-input"
+          name="spec-model-name"
           data-testid="spec-name-input"
           .value=${draft.name}
           @input=${(ev: Event) => onPatchDraft({ name: (ev.target as HTMLInputElement).value })}
         />
       </div>
       <div class="field">
-        <label>Manufacturer / Series</label>
+        <label for="spec-manufacturer-input">Manufacturer / Series</label>
         <input
           type="text"
+          id="spec-manufacturer-input"
+          name="spec-manufacturer"
           .value=${draft.manufacturer}
           @input=${(ev: Event) =>
             onPatchDraft({ manufacturer: (ev.target as HTMLInputElement).value })}
         />
       </div>
       <div class="field">
-        <label>Enclosure Category</label>
+        <label for="spec-category-select">Enclosure Category</label>
         <select
+          id="spec-category-select"
+          name="spec-category"
           data-testid="spec-category-select"
           .value=${draft.category}
           @change=${(ev: Event) => {
@@ -65,8 +71,10 @@ export function renderSpecBuilderTab(params: {
         </select>
       </div>
       <div class="field">
-        <label>LF Enclosure Radiation</label>
+        <label for="spec-lf-pattern-select">LF Enclosure Radiation</label>
         <select
+          id="spec-lf-pattern-select"
+          name="spec-lf-pattern"
           .value=${draft.lfPattern}
           @change=${(ev: Event) =>
             onPatchDraft({
@@ -81,9 +89,11 @@ export function renderSpecBuilderTab(params: {
       ${draft.category === 'point-source'
         ? html`
             <div class="field">
-              <label>Horizontal Dispersion -6 dB (°)</label>
+              <label for="spec-h-deg">Horizontal Dispersion -6 dB (°)</label>
               <input
                 type="number"
+                id="spec-h-deg"
+                name="spec-h-deg"
                 min="30"
                 max="160"
                 step="5"
@@ -94,9 +104,11 @@ export function renderSpecBuilderTab(params: {
               />
             </div>
             <div class="field">
-              <label>Vertical Dispersion -6 dB (°)</label>
+              <label for="spec-v-deg">Vertical Dispersion -6 dB (°)</label>
               <input
                 type="number"
+                id="spec-v-deg"
+                name="spec-v-deg"
                 min="20"
                 max="140"
                 step="5"
@@ -110,9 +122,11 @@ export function renderSpecBuilderTab(params: {
         : ''}
 
       <div class="field">
-        <label>Low -3 dB Cutoff (Hz)</label>
+        <label for="spec-low-hz">Low -3 dB Cutoff (Hz)</label>
         <input
           type="number"
+          id="spec-low-hz"
+          name="spec-low-hz"
           min="20"
           max="500"
           .value=${String(draft.lowHz)}
@@ -121,9 +135,11 @@ export function renderSpecBuilderTab(params: {
         />
       </div>
       <div class="field">
-        <label>High -3 dB Cutoff (Hz)</label>
+        <label for="spec-high-hz">High -3 dB Cutoff (Hz)</label>
         <input
           type="number"
+          id="spec-high-hz"
+          name="spec-high-hz"
           min="60"
           max="22000"
           .value=${String(draft.highHz)}
@@ -132,9 +148,11 @@ export function renderSpecBuilderTab(params: {
         />
       </div>
       <div class="field">
-        <label>Max Continuous SPL @ 1 m (dB)</label>
+        <label for="spec-max-spl">Max Continuous SPL @ 1 m (dB)</label>
         <input
           type="number"
+          id="spec-max-spl"
+          name="spec-max-spl"
           min="95"
           max="150"
           step="0.5"
