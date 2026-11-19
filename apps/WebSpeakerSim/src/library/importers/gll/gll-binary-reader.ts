@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Little-endian `GllByteReader`, block-bounded buffer iterator, AFMG `BitCompression`
+ * Little-endian `GllByteReader`, block-bounded buffer iterator, GLL `BitCompression`
  * delta decompressor, and Web Streams `zlib` inflator for binary `.gll` containers.
  */
 
@@ -216,7 +216,7 @@ function signExtend16(value: number, bitDepth: number): number {
 }
 
 /**
- * Decompresses AFMG's `BitCompression` spectrum array (`4-bit` group bit-depth headers
+ * Decompresses GLL `BitCompression` spectrum arrays (`4-bit` group bit-depth headers
  * across `fixedStepSize = 8` groups + optional 16-bit wrapping delta integration).
  */
 export function decompressBitArray(
@@ -290,3 +290,4 @@ export async function inflateZlibBlock(compressed: Uint8Array): Promise<Uint8Arr
     return null;
   }
 }
+

@@ -84,7 +84,7 @@ function wrapObjectBuffer(items: readonly Uint8Array[], vcheck = 0, sver = 0): U
   return wrapBlock(b);
 }
 
-/** Encodes an Int16Array with AFMG's 8-sample group `BitCompression` + delta differentiation. */
+/** Encodes an Int16Array with GLL 8-sample group `BitCompression` + delta differentiation. */
 function compressBitArray(samples: Int16Array, stepSize = 8): Uint8Array {
   const deltas = new Int16Array(samples.length);
   if (samples.length > 0) {
@@ -181,7 +181,7 @@ function buildTransferFunctionLsPs(
 }
 
 describe('GLL structured EASE_GLL binary parser & speaker builder', () => {
-  it('round-trips AFMG 8-sample BitCompression with sign extension and wrapping delta integration', () => {
+  it('round-trips GLL 8-sample BitCompression with sign extension and wrapping delta integration', () => {
     const original = new Int16Array([
       0, -25, -80, -210, -450, -900, -1420, -2100, -2050, -1800, 32760, -32760,
     ]);

@@ -91,7 +91,7 @@ Once you have captured your spatial average (or baseline room trace), **press `S
 4. **Fine-Tune Visually on the Chart:**
    - Drag the numbered **EQ handles** directly on the **Magnitude** chart (`Drag` = Freq/Gain, `Shift + Wheel` / `Shift + Drag` = `Q`).
    - Enable **`LR 24 dB/oct`** high-pass/low-pass crossovers or all-pass filters in the inspector to preview both magnitude and phase impact simultaneously.
-   - Copy the final `Frequency`, `Gain (dB)`, and `Q` values straight into your system processor (Lake, Galileo/Compass, L-Acoustics LA Network Manager, d&b R1, or console matrix PEQ), then unpause pink noise for 10 seconds to confirm!
+   - Copy the final `Frequency`, `Gain (dB)`, and `Q` values straight into your loudspeaker system processor or console matrix PEQ, then unpause pink noise for 10 seconds to confirm!
 
 ![Offline Virtual Parametric EQ, LR24 Crossovers & Draggable Chart Handles](../../apps/WebSoundMeter/docs/images/03-virtual-eq-and-crossovers.png)
 
