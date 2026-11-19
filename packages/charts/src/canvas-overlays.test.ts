@@ -5,11 +5,13 @@
 import type { BiquadSpec } from '@foh/dsp';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  computeAdjustedEqQ,
   computeDraggedEqBand,
   drawCalloutFlags,
   drawEqHandles,
   drawFloatingCursorHud,
   findHitEqBandIndex,
+  getEqBandParams,
 } from './canvas-overlays.js';
 import type { ChartAxisBounds, ChartPlotBox } from './chart-scene-types.js';
 import { valueToNormX, valueToNormY } from './coord-math.js';
@@ -73,6 +75,13 @@ describe('canvas-overlays', () => {
       90
     );
     expect(draggedSpl.gainDb).toBe(-4.5);
+
+    // Logarithmic Q adjustment for Shift + Drag / Shift + Wheel
+    expect(getEqBandParams(bands[1])).toEqual({ frequency: 1000, gainDb: 6, q: 2 });
+    expect(computeAdjustedEqQ(2.0, 1.0)).toBe(4.0);
+    expect(computeAdjustedEqQ(2.0, -1.0)).toBe(1.0);
+    expect(computeAdjustedEqQ(0.3, -4.0)).toBe(0.25);
+    expect(computeAdjustedEqQ(30.0, 4.0)).toBe(36.0);
   });
 
   it('paints EQ handles, collision-avoiding callout flags, and floating cursor HUD', () => {

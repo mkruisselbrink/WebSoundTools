@@ -21,11 +21,13 @@ import {
   drawThresholdGuide,
 } from './canvas-grid-painter.js';
 import {
+  computeAdjustedEqQ,
   computeDraggedEqBand,
   drawCalloutFlags,
   drawEqHandles,
   drawFloatingCursorHud,
   findHitEqBandIndex,
+  getEqBandParams,
 } from './canvas-overlays.js';
 import type {
   ChartPadding,
@@ -44,6 +46,8 @@ import { GlTraceRenderer } from './gl-trace-renderer.js';
 
 export const fohChartPanelStyles = css`
   :host {
+    color-scheme: dark;
+    accent-color: var(--foh-accent-bright, #38bdf8);
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -54,8 +58,12 @@ export const fohChartPanelStyles = css`
     border-radius: 6px;
     overflow: hidden;
     position: relative;
-    user-select: none;
     flex: 1 1 0;
+  }
+
+  :where(button, select, input, [tabindex]):focus-visible {
+    outline: 2px solid var(--foh-accent-bright, #38bdf8);
+    outline-offset: 2px;
   }
 
   .chart-header {
@@ -102,6 +110,7 @@ export const fohChartPanelStyles = css`
 
   select,
   button {
+    font: inherit;
     background: var(--foh-bg-surface, #162033);
     color: var(--foh-text-primary, #f8fafc);
     border: 1px solid var(--foh-border-strong, #334155);
@@ -109,18 +118,40 @@ export const fohChartPanelStyles = css`
     padding: 2px 7px;
     font-size: 11px;
     cursor: pointer;
+    user-select: none;
   }
 
-  select:hover,
-  button:hover {
-    border-color: var(--foh-accent, #38bdf8);
+  @media (hover: hover) {
+    select:hover,
+    button:hover {
+      border-color: var(--foh-accent, #38bdf8);
+    }
   }
 
-  .tab-btn[data-active='true'] {
+  @media (pointer: coarse) {
+    select,
+    button {
+      min-block-size: 26px;
+      min-inline-size: 26px;
+    }
+  }
+
+  .tab-btn {
+    position: relative;
+    font-weight: 500;
+  }
+
+  .tab-btn:is([aria-selected='true'], [data-active='true']) {
     background: #0284c7;
     border-color: #38bdf8;
     color: #ffffff;
-    font-weight: 600;
+  }
+
+  .tab-btn:is([aria-selected='true'], [data-active='true'])::after {
+    content: '';
+    position: absolute;
+    inset: auto 2px 0;
+    border-block-end: 2px solid #e0f2fe;
   }
 
   .label-muted {
@@ -150,6 +181,7 @@ export const fohChartPanelStyles = css`
     height: 100%;
     min-height: 120px;
     background: var(--foh-bg-canvas, #090d16);
+    user-select: none;
   }
 
   canvas {
@@ -299,6 +331,10 @@ export abstract class FohChartPanelBase extends LitElement {
   protected draggingEqBandIndex: number | null = null;
   protected chartPadding: ChartPadding = DEFAULT_CHART_PADDING;
 
+  private dragAnchorRelY = 0;
+  private dragAnchorFreq = 1000;
+  private dragAnchorGainDb = 0;
+  private dragAnchorQ = 2.0;
   private glRenderer: GlTraceRenderer | null = null;
   private readonly vertexScratch = new Float32Array(8192 * 3);
   private lastScene: ChartScene | null = null;
@@ -334,7 +370,12 @@ export abstract class FohChartPanelBase extends LitElement {
   }
 
   protected onEqBandDragEnd(): void {
-    // Subclasses can commit or end undo transactions when pointer drag finishes.
+    this.dispatchEvent(
+      new CustomEvent('eq-band-drag-end', {
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   protected firstUpdated(): void {
@@ -426,7 +467,13 @@ export abstract class FohChartPanelBase extends LitElement {
       scene.eqOverlay.referenceZeroDbY
     );
     if (hitIdx !== null) {
+      const band = scene.eqOverlay.bands[hitIdx];
+      const params = getEqBandParams(band);
       this.draggingEqBandIndex = hitIdx;
+      this.dragAnchorRelY = coords.relY;
+      this.dragAnchorFreq = params.frequency;
+      this.dragAnchorGainDb = params.gainDb;
+      this.dragAnchorQ = params.q;
       (e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId);
     }
   };
@@ -437,6 +484,18 @@ export abstract class FohChartPanelBase extends LitElement {
     const scene = this.lastScene ?? this.buildChartScene();
 
     if (this.draggingEqBandIndex !== null && scene.eqOverlay) {
+      if (e.shiftKey) {
+        const octavesDelta = (this.dragAnchorRelY - coords.relY) / 70;
+        const q = computeAdjustedEqQ(this.dragAnchorQ, octavesDelta);
+        this.onEqBandDrag({
+          bandIndex: this.draggingEqBandIndex,
+          frequency: this.dragAnchorFreq,
+          gainDb: this.dragAnchorGainDb,
+          q,
+        });
+        return;
+      }
+
       const { frequency, gainDb } = computeDraggedEqBand(
         coords.relX,
         coords.relY,
@@ -445,6 +504,13 @@ export abstract class FohChartPanelBase extends LitElement {
         scene.axis.bounds,
         scene.eqOverlay.referenceZeroDbY
       );
+      const band = scene.eqOverlay.bands[this.draggingEqBandIndex];
+      this.dragAnchorRelY = coords.relY;
+      this.dragAnchorFreq = frequency;
+      this.dragAnchorGainDb = gainDb;
+      if (band) {
+        this.dragAnchorQ = getEqBandParams(band).q;
+      }
       this.onEqBandDrag({
         bandIndex: this.draggingEqBandIndex,
         frequency,
@@ -496,6 +562,45 @@ export abstract class FohChartPanelBase extends LitElement {
     }
   };
 
+  private handleStageWheel = (e: WheelEvent): void => {
+    if (!e.shiftKey) return;
+    const scene = this.lastScene ?? this.buildChartScene();
+    if (!scene.eqOverlay || scene.eqOverlay.bands.length === 0) return;
+    const coords = this.getPointerRelativeCoords(e);
+    if (!coords) return;
+
+    const hitIdx =
+      this.draggingEqBandIndex ??
+      findHitEqBandIndex(
+        coords.relX,
+        coords.relY,
+        coords.box.width,
+        coords.box.height,
+        scene.eqOverlay.bands,
+        scene.axis.bounds,
+        scene.eqOverlay.referenceZeroDbY,
+        16
+      );
+    if (hitIdx === null) return;
+    const band = scene.eqOverlay.bands[hitIdx];
+    if (!band) return;
+
+    e.preventDefault();
+    const params = getEqBandParams(band);
+    const step = e.deltaY < 0 ? 0.25 : -0.25;
+    const q = computeAdjustedEqQ(params.q, step);
+    this.dragAnchorQ = q;
+    this.onEqBandDrag({
+      bandIndex: hitIdx,
+      frequency: params.frequency,
+      gainDb: params.gainDb,
+      q,
+    });
+    if (this.draggingEqBandIndex === null) {
+      this.onEqBandDragEnd();
+    }
+  };
+
   public render() {
     return html`
       ${this.renderHeader()}
@@ -505,6 +610,7 @@ export abstract class FohChartPanelBase extends LitElement {
         @pointermove=${this.handleStagePointerMove}
         @pointerup=${this.handleStagePointerUp}
         @pointerleave=${this.handleStagePointerLeave}
+        @wheel=${this.handleStageWheel}
       >
         <canvas class="gl-canvas"></canvas>
         <canvas class="overlay-canvas"></canvas>

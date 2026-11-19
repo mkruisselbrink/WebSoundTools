@@ -10,8 +10,8 @@ export const fohPanelsCss = css`
   .foh-form-section {
     margin-bottom: 8px;
     padding: 7px 8px;
-    background: var(--foh-bg-card, #080d19);
-    border: 1px solid var(--foh-border-subtle, #1e293b);
+    background: var(--_foh-bg-card, #080d19);
+    border: 1px solid var(--_foh-border-subtle, #1e293b);
     border-radius: 5px;
   }
 
@@ -28,7 +28,7 @@ export const fohPanelsCss = css`
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--foh-text-muted, #94a3b8);
+    color: var(--_foh-text-muted, #94a3b8);
     margin-bottom: 6px;
   }
 
@@ -53,30 +53,31 @@ export const fohPanelsCss = css`
   .foh-mini-field > span,
   .foh-mini-field > label {
     font-size: 9.5px;
-    color: var(--foh-text-muted, #94a3b8);
-    font-family: var(--foh-font-mono, monospace);
+    color: var(--_foh-text-muted, #94a3b8);
+    font-family: var(--_foh-font-mono, monospace);
   }
 
   .foh-mini-field input,
   .foh-mini-field select {
     width: 100%;
-    background: var(--foh-bg-input, #090d16);
-    color: var(--foh-text-primary, #f8fafc);
-    border: 1px solid var(--foh-border-strong, #334155);
-    border-radius: var(--foh-radius-sm, 4px);
+    font: inherit;
+    background: var(--_foh-bg-input, #090d16);
+    color: var(--_foh-text-primary, #f8fafc);
+    border: 1px solid var(--_foh-border-strong, #334155);
+    border-radius: var(--_foh-radius-sm, 4px);
     padding: 3px 6px;
     font-size: 11px;
   }
 
   .foh-mini-field input[type='number'] {
-    font-family: var(--foh-font-mono, monospace);
+    font-family: var(--_foh-font-mono, monospace);
   }
 
   .foh-eq-card {
     padding: 5px 6px;
-    border: 1px solid var(--foh-border-subtle, #1e293b);
-    border-radius: var(--foh-radius-sm, 4px);
-    background: var(--foh-bg-panel, #0b1120);
+    border: 1px solid var(--_foh-border-subtle, #1e293b);
+    border-radius: var(--_foh-radius-sm, 4px);
+    background: var(--_foh-bg-panel, #0b1120);
     margin-bottom: 5px;
   }
 
@@ -95,17 +96,18 @@ export const fohPanelsCss = css`
   .foh-eq-card-top select {
     flex: 1;
     min-width: 0;
-    background: var(--foh-bg-input, #090d16);
-    color: var(--foh-text-primary, #f8fafc);
-    border: 1px solid var(--foh-border-strong, #334155);
-    border-radius: var(--foh-radius-sm, 4px);
+    font: inherit;
+    background: var(--_foh-bg-input, #090d16);
+    color: var(--_foh-text-primary, #f8fafc);
+    border: 1px solid var(--_foh-border-strong, #334155);
+    border-radius: var(--_foh-radius-sm, 4px);
     padding: 2px 5px;
     font-size: 11px;
   }
 
   .foh-eq-tip {
     font-size: 10px;
-    color: var(--foh-text-muted, #94a3b8);
+    color: var(--_foh-text-muted, #94a3b8);
     margin-bottom: 6px;
   }
 
@@ -128,7 +130,7 @@ export const fohPanelsCss = css`
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--foh-text-muted, #94a3b8);
+    color: var(--_foh-text-muted, #94a3b8);
   }
 
   .foh-tree-actions {
@@ -149,17 +151,19 @@ export const fohPanelsCss = css`
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    padding: 5px 7px;
-    border-radius: var(--foh-radius-sm, 4px);
+    padding: 4px 7px;
+    border-radius: var(--_foh-radius-sm, 4px);
     background: rgba(15, 23, 42, 0.65);
-    border: 1px solid var(--foh-border-subtle, #1e293b);
+    border: 1px solid var(--_foh-border-subtle, #1e293b);
     cursor: pointer;
     font-size: 11.5px;
-    color: var(--foh-text-secondary, #cbd5e1);
+    color: var(--_foh-text-secondary, #cbd5e1);
   }
 
-  .foh-tree-row:hover {
-    background: rgba(30, 41, 59, 0.7);
+  @media (hover: hover) {
+    .foh-tree-row:hover {
+      background: rgba(30, 41, 59, 0.7);
+    }
   }
 
   .foh-tree-row[data-selected='true'] {
@@ -168,13 +172,21 @@ export const fohPanelsCss = css`
     color: #ffffff;
   }
 
-  .foh-tree-row-main {
+  .foh-tree-row-select {
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
     flex: 1;
     overflow: hidden;
+    background: transparent;
+    border: 0;
+    padding: 1px 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .foh-tree-row-title {
@@ -182,5 +194,7 @@ export const fohPanelsCss = css`
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+    flex: 1;
+    min-width: 0;
   }
 `;

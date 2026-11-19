@@ -23,6 +23,25 @@ function getBandFrequencyHz(band: EqHandleBand): number {
   return 'frequencyHz' in band ? band.frequencyHz : band.frequency;
 }
 
+export function getEqBandParams(band: EqHandleBand): {
+  readonly frequency: number;
+  readonly gainDb: number;
+  readonly q: number;
+} {
+  return {
+    frequency: getBandFrequencyHz(band),
+    gainDb: band.gainDb ?? 0,
+    q: band.q ?? Math.SQRT1_2,
+  };
+}
+
+export function computeAdjustedEqQ(baseQ: number, logSteps: number): number {
+  const safeBase = Number.isFinite(baseQ) && baseQ > 0 ? baseQ : Math.SQRT1_2;
+  const raw = safeBase * Math.pow(2, logSteps);
+  const clamped = Math.max(0.25, Math.min(36, raw));
+  return Math.round(clamped * 100) / 100;
+}
+
 export function drawEqHandles(
   ctx: CanvasRenderingContext2D,
   overlay: InteractiveEqOverlay,

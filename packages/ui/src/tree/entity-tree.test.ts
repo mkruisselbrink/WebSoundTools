@@ -1,11 +1,12 @@
 // Copyright (C) 2026 WebSoundTools Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { TemplateResult } from 'lit';
 import { describe, expect, it, vi } from 'vitest';
 import { renderEntityTreeSection } from './entity-tree.js';
 
 describe('entity-tree', () => {
-  it('renders entity rows with checkbox or button visibility toggles, swatches, and badges', () => {
+  it('renders keyboard-selectable entity button rows alongside checkbox or button toggles', () => {
     const onSelect = vi.fn();
     const onToggle = vi.fn();
 
@@ -47,6 +48,9 @@ describe('entity-tree', () => {
         },
       ],
     });
-    expect(tpl.values.length).toBeGreaterThan(0);
+    const rowTemplates = tpl.values[2] as TemplateResult[];
+    expect(rowTemplates).toHaveLength(2);
+    expect(rowTemplates[0].strings.join('')).toContain('foh-tree-row-select');
+    expect(rowTemplates[0].strings.join('')).toContain('aria-pressed=');
   });
 });

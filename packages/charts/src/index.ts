@@ -55,11 +55,13 @@ export {
   type CanvasTraceStyle,
 } from './canvas-grid-painter.js';
 export {
+  computeAdjustedEqQ,
   computeDraggedEqBand,
   drawCalloutFlags,
   drawEqHandles,
   drawFloatingCursorHud,
   findHitEqBandIndex,
+  getEqBandParams,
 } from './canvas-overlays.js';
 export {
   FohChartPanel,

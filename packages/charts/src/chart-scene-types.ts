@@ -149,4 +149,5 @@ export interface EqBandDragDetail {
   readonly bandIndex: number;
   readonly frequency: number;
   readonly gainDb: number;
+  readonly q?: number;
 }

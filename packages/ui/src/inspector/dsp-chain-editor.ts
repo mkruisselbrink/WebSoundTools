@@ -252,6 +252,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
         ${props.onAddEqBand
           ? html`
               <button
+                type="button"
                 class="foh-btn foh-btn-xs"
                 data-testid=${testIds?.addEqBand ?? 'btn-add-eq-band'}
                 ?disabled=${dsp.eqBands.length >= maxBands}
@@ -303,6 +304,7 @@ export function renderDspChainEditor(props: DspChainEditorProps): TemplateResult
               ${props.onRemoveEqBand
                 ? html`
                     <button
+                      type="button"
                       class="foh-btn foh-btn-xs foh-btn-danger"
                       aria-label="Remove EQ Band ${idx + 1}"
                       @click=${() => props.onRemoveEqBand?.(idx, band.id)}
