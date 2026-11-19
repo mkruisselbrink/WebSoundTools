@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../../apps/WebSoundMeter/src/vite-env.d.ts",
+    "../../apps/WebSpeakerSim/src/vite-env.d.ts"
+  ]
+}

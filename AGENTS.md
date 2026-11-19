@@ -9,7 +9,7 @@ Operational rules and invariants for coding agents working in `WebSoundTools`. R
 - **Run a single workspace project's tests:** `npx vitest run --project <name>` (e.g. `@foh/dsp`, `web-sound-meter`, `web-speaker-sim`)
 - **Build production bundles (`dist/` + `sw.js`):** `npm run build`
 - **Run Playwright E2E suites:** `npm run test:e2e` (`WebSoundMeter` on port `5173`, `WebSpeakerSim` on port `5174`)
-- **Regenerate all 22 Retina tutorial & user-guide screenshots:** `npm run docs:screenshots` (`docs/scripts/generate-screenshots.mjs`)
+- **Regenerate all 22 Retina tutorial & user-guide screenshots:** `npm run docs:screenshots` (`docs/scripts/generate-screenshots.ts`)
 
 ## Package Dependency DAG (Strict Layering)
 
@@ -45,7 +45,7 @@ Imports must strictly flow top-down—never introduce cycles or pull DOM/Lit int
 - **Adaptive Plot Auto-Scaling & Magnitude-Gated Group Delay (`@foh/charts`):** Preserve `computeAdaptiveMagnitudeBounds` (`peak + 5 dB` headroom with `30 / 60 / 80 dB` span windows) and `computeAdaptiveGroupDelayBounds` (gating group-delay auto-scale to bins within `50 dB` of peak magnitude so deep `-120 dB` comb-filter phase nulls do not blow out the millisecond scale), as well as non-clipping plot box padding (`left: 52, right: 18, top: 12, bottom: 24`).
 - **Undo/Redo Drag Coalescing (`txKey`), Strict IDB Durability & Shadow-DOM Shortcuts (`@foh/state`, `@foh/ui`):** Pass a deterministic `txKey` to `ReactiveUndoStore` during continuous pointer drags or slider scrubs and call `endTransaction()` on pointer release so a drag records a single `Cmd/Ctrl + Z` step. Keep `IdbRepository` synchronous `resolvedDb` caching and `{ durability: 'strict' }` + `tx.commit?.()` on `readwrite` transactions so immediate `page.reload()` never aborts in-flight writes. Route all global keyboard shortcuts through `@foh/ui`'s `dispatchKeyboardShortcut` (`isEditableShortcutTarget` checks `event.composedPath()` across Shadow DOM boundaries).
 - **Offline PWA Asset Precaching (`@foh/pwa`):** Any new static asset added under `apps/*/public/` must be included in `fohPwaPlugin({ staticPaths: [...] })` in that app's `vite.config.ts` so offline `COOP`/`COEP` precaching (`SharedArrayBuffer` support) serves it when offline.
-- **Playwright Binary File Uploads (No `@types/node` in `tsconfig.base.json`):** Browser/worker code intentionally omits `@types/node`. In Playwright E2E specs, `locator.setInputFiles([{ name, mimeType, buffer }])` requires a runtime Node `Buffer` rather than a raw `Uint8Array`; use `(globalThis as unknown as { Buffer: { from(b: Uint8Array): unknown } }).Buffer.from(bytes)`.
+- **Scoped `@types/node` & Shared Playwright Page Drivers (`tests/e2e/`, `docs/scripts/`):** `tsconfig.base.json` keeps `"types": []` so browser/worker code cannot accidentally reference Node globals, while `apps/*/tests/e2e/tsconfig.json` and `docs/scripts/tsconfig.json` enable `"types": ["node"]` and `"allowImportingTsExtensions": true` for Node 26 native TypeScript execution. Reuse `WsmPageDriver` (`apps/WebSoundMeter/tests/e2e/wsm-page-driver.ts`) and `WssPageDriver` (`apps/WebSpeakerSim/tests/e2e/wss-page-driver.ts`) across both Playwright E2E specs and `docs/scripts/*.ts`.
 - **Neutral Acoustic Terminology in Docs & UI:** In `WebSpeakerSim` docs, tutorials, and UI copy, refer to acoustic principles and standard file formats (`.gll`, `.clf`, `.frd`) rather than unnecessarily naming commercial third-party prediction or processor software.
 
 ## Documentation Pointers

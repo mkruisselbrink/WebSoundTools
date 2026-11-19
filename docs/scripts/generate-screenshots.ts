@@ -6,26 +6,32 @@
  * across `docs/images/`, `docs/tutorials/images/`, `apps/WebSoundMeter/docs/images/`,
  * and `apps/WebSpeakerSim/docs/images/`.
  *
- * Run from the workspace root via:
+ * Executed directly via Node 26 native TypeScript:
  *   npm run docs:screenshots
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium } from '@playwright/test';
-import { captureTutorialScenes } from './tutorial-scenes.mjs';
-import { captureWsmGuideScenes } from './wsm-guide-scenes.mjs';
-import { captureWssGuideScenes } from './wss-guide-scenes.mjs';
+import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { captureTutorialScenes } from './tutorial-scenes.ts';
+import { captureWsmGuideScenes } from './wsm-guide-scenes.ts';
+import { captureWssGuideScenes } from './wss-guide-scenes.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const WSM_PORT = Number(process.env.WSM_SCREENSHOT_PORT || 5373);
 const WSS_PORT = Number(process.env.WSS_SCREENSHOT_PORT || 5374);
 
-export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function createRetinaPage(browser) {
+export interface RetinaSession {
+  readonly context: BrowserContext;
+  readonly page: Page;
+}
+
+export async function createRetinaPage(browser: Browser): Promise<RetinaSession> {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2,
@@ -35,7 +41,10 @@ export async function createRetinaPage(browser) {
   return { context, page };
 }
 
-function startPreviewServer(appFolder, port) {
+function startPreviewServer(
+  appFolder: 'WebSoundMeter' | 'WebSpeakerSim',
+  port: number
+): Promise<ChildProcess> {
   const viteBin = path.join(REPO_ROOT, 'node_modules/.bin/vite');
   const proc = spawn(viteBin, ['preview', '--port', String(port), '--strictPort'], {
     cwd: path.join(REPO_ROOT, 'apps', appFolder),
@@ -49,14 +58,14 @@ function startPreviewServer(appFolder, port) {
       reject(new Error(`Timed out starting ${appFolder} preview on port ${port}: ${stderrBuf}`));
     }, 15000);
 
-    proc.stdout.on('data', (chunk) => {
-      if (String(chunk).includes(String(port))) {
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      if (chunk.toString().includes(String(port))) {
         clearTimeout(timer);
         resolve(proc);
       }
     });
-    proc.stderr.on('data', (chunk) => {
-      stderrBuf += String(chunk);
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderrBuf += chunk.toString();
     });
     proc.on('error', (err) => {
       clearTimeout(timer);
@@ -71,7 +80,7 @@ function startPreviewServer(appFolder, port) {
   });
 }
 
-async function main() {
+async function main(): Promise<void> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wst-screenshots-'));
   console.log('Starting Vite preview servers for WebSoundMeter & WebSpeakerSim...');
   const wsmServer = await startPreviewServer('WebSoundMeter', WSM_PORT);
@@ -80,7 +89,7 @@ async function main() {
   const wsmUrl = `http://localhost:${WSM_PORT}`;
   const wssUrl = `http://localhost:${WSS_PORT}`;
 
-  let browser;
+  let browser: Browser | undefined;
   try {
     browser = await chromium.launch({ headless: true });
 
@@ -117,7 +126,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error(err);
   process.exit(1);
 });

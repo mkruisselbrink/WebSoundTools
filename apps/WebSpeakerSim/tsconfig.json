@@ -6,7 +6,7 @@
   "include": [
     "main.ts",
     "src/**/*.ts",
-    "tests/**/*.ts",
+    "tests/integration/**/*.ts",
     "vite.config.ts"
   ]
 }

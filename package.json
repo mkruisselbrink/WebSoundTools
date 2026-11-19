@@ -11,19 +11,20 @@
   "scripts": {
     "dev:wsm": "npm --workspace web-sound-meter run dev",
     "dev:wss": "npm --workspace web-speaker-sim run dev",
-    "typecheck": "npm --workspaces --if-present run typecheck",
+    "typecheck": "npm --workspaces --if-present run typecheck && tsc --noEmit -p apps/WebSoundMeter/tests/e2e/tsconfig.json && tsc --noEmit -p apps/WebSpeakerSim/tests/e2e/tsconfig.json && tsc --noEmit -p docs/scripts/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "npm --workspace web-sound-meter run build && npm --workspace web-speaker-sim run build",
     "test:e2e": "npm --workspace web-sound-meter run test:e2e && npm --workspace web-speaker-sim run test:e2e",
-    "docs:screenshots": "npm run build && node docs/scripts/generate-screenshots.mjs"
+    "docs:screenshots": "npm run build && node docs/scripts/generate-screenshots.ts"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
     "@types/audioworklet": "^0.0.102",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"
