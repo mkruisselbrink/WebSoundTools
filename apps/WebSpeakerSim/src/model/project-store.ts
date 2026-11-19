@@ -263,6 +263,44 @@ export class ProjectStore {
     );
   }
 
+  public setVenueBounds(
+    patch: {
+      readonly xMin?: number;
+      readonly xMax?: number;
+      readonly yMin?: number;
+      readonly yMax?: number;
+      readonly zMax?: number;
+    },
+    txKey?: string
+  ): void {
+    this.updateScene((s) => {
+      const rawXMin = patch.xMin ?? s.planBounds.xMin;
+      const rawXMax = patch.xMax ?? s.planBounds.xMax;
+      const xMin = Math.min(rawXMin, rawXMax - 4);
+      const xMax = Math.max(rawXMax, xMin + 4);
+
+      const rawYMin = patch.yMin ?? s.planBounds.yMin;
+      const rawYMax = patch.yMax ?? s.planBounds.yMax;
+      const yMin = Math.min(rawYMin, rawYMax - 4);
+      const yMax = Math.max(rawYMax, yMin + 4);
+
+      const zMax = Math.max(2, patch.zMax ?? s.sectionBounds.zMax);
+      const clampedSliceY = Math.max(yMin, Math.min(yMax, s.sectionBounds.sliceYM));
+
+      return {
+        ...s,
+        planBounds: { xMin, xMax, yMin, yMax },
+        sectionBounds: {
+          ...s.sectionBounds,
+          xMin,
+          xMax,
+          zMax,
+          sliceYM: clampedSliceY,
+        },
+      };
+    }, txKey);
+  }
+
   public addDspGroup(partial?: Partial<DspGroup>): DspGroup {
     const idx = this.scene.dspGroups.length;
     const group: DspGroup = {

@@ -9,12 +9,53 @@
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
 import type { SelectedEntity } from '../model/project-store.js';
 import type { ProjectScene } from '../model/project-types.js';
+import { formatMirroredSourceLabel } from '../physics/radiator-expander.js';
 import { expandSubwooferArray } from '../physics/sub-array-designer.js';
 import { DEG_TO_RAD } from '../physics/transform3d.js';
 import { traceRoundRect, type OccupiedPillRect, type ViewportMode } from './cad-grid-ruler.js';
 import { worldToScreen, type ViewportCamera2D, type WorldPoint2D } from './viewport-coords.js';
 
 const AIM_HANDLE_LENGTH_M = 3.2;
+
+function rectOverlapArea(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  occupied: readonly OccupiedPillRect[]
+): number {
+  let area = 0;
+  for (const r of occupied) {
+    const ox = Math.min(x + w, r.x + r.w) - Math.max(x, r.x);
+    const oy = Math.min(y + h, r.y + r.h) - Math.max(y, r.y);
+    if (ox > 0 && oy > 0) {
+      area += ox * oy;
+    }
+  }
+  return area;
+}
+
+function chooseBestRectPlacement(
+  candidates: ReadonlyArray<{ readonly x: number; readonly y: number; readonly penalty?: number }>,
+  w: number,
+  h: number,
+  occupied: readonly OccupiedPillRect[]
+): { readonly x: number; readonly y: number } {
+  let best = candidates[0];
+  let bestScore = Infinity;
+  for (const c of candidates) {
+    const overlap = rectOverlapArea(c.x, c.y, w, h, occupied);
+    const score = overlap + (c.penalty ?? 0);
+    if (overlap === 0 && (c.penalty ?? 0) === 0) {
+      return { x: c.x, y: c.y };
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return { x: best.x, y: best.y };
+}
 
 export function getAimHandleWorldPoint(
   mode: ViewportMode,
@@ -47,6 +88,7 @@ export function drawSubArrays(
     readonly camera: ViewportCamera2D;
     readonly cssWidth: number;
     readonly cssHeight: number;
+    readonly occupiedPills?: OccupiedPillRect[];
   }
 ): void {
   const {
@@ -59,6 +101,7 @@ export function drawSubArrays(
     camera,
     cssWidth,
     cssHeight,
+    occupiedPills,
   } = params;
 
   for (const sa of scene.subArrays) {
@@ -120,10 +163,14 @@ export function drawSubArrays(
     ctx.beginPath();
     ctx.arc(originScr.px, originScr.py, 5, 0, Math.PI * 2);
     ctx.fill();
+    occupiedPills?.push({
+      x: originScr.px - 9,
+      y: originScr.py - 9,
+      w: 18,
+      h: 18,
+    });
 
     ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
-    ctx.fillStyle = '#fde68a';
-    ctx.textBaseline = 'bottom';
     const modeTag =
       sa.mode === 'cardioid-csa'
         ? 'CSA'
@@ -134,13 +181,25 @@ export function drawSubArrays(
             : 'BS';
     const saLabel = `${sa.name} [${sa.boxCount}× ${modeTag}]${sa.muted ? ' (M)' : ''}`;
     const saTw = ctx.measureText(saLabel).width;
-    const saPlaceLeft = originScr.px + 9 + saTw > cssWidth - 6;
-    ctx.textAlign = saPlaceLeft ? 'right' : 'left';
-    const saLx = saPlaceLeft
-      ? Math.max(saTw + 6, originScr.px - 9)
-      : Math.max(6, originScr.px + 9);
-    const saLy = Math.max(14, Math.min(cssHeight - 8, originScr.py - 6));
-    ctx.fillText(saLabel, saLx, saLy);
+    const saTh = 13;
+    const clampSaX = (x: number) => Math.max(6, Math.min(cssWidth - saTw - 6, x));
+    const clampSaY = (y: number) => Math.max(4, Math.min(cssHeight - saTh - 4, y));
+    const saCandidates = [
+      { x: clampSaX(originScr.px + 10), y: clampSaY(originScr.py - 18) },
+      { x: clampSaX(originScr.px + 10), y: clampSaY(originScr.py + 8) },
+      { x: clampSaX(originScr.px - saTw - 10), y: clampSaY(originScr.py - 18), penalty: 6 },
+      { x: clampSaX(originScr.px - saTw * 0.5), y: clampSaY(originScr.py + 16), penalty: 8 },
+    ];
+    const saPos = chooseBestRectPlacement(saCandidates, saTw, saTh, occupiedPills ?? []);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.strokeStyle = 'rgba(6, 9, 17, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(saLabel, saPos.x, saPos.y);
+    ctx.fillStyle = '#fde68a';
+    ctx.fillText(saLabel, saPos.x, saPos.y);
+    occupiedPills?.push({ x: saPos.x - 2, y: saPos.y - 1, w: saTw + 4, h: saTh + 2 });
     ctx.restore();
   }
 }
@@ -156,9 +215,20 @@ export function drawPointSources(
     readonly camera: ViewportCamera2D;
     readonly cssWidth: number;
     readonly cssHeight: number;
+    readonly occupiedPills?: OccupiedPillRect[];
   }
 ): void {
-  const { mode, scene, speakerMap, selected, groupColors, camera, cssWidth, cssHeight } = params;
+  const {
+    mode,
+    scene,
+    speakerMap,
+    selected,
+    groupColors,
+    camera,
+    cssWidth,
+    cssHeight,
+    occupiedPills,
+  } = params;
 
   for (const ps of scene.pointSources) {
     const isSel = selected?.kind === 'point-source' && selected.id === ps.id;
@@ -179,10 +249,11 @@ export function drawPointSources(
         },
         speaker: spk,
         color,
-        label: `${ps.name} (R)`,
+        label: formatMirroredSourceLabel(ps.name),
         isSelected: false,
         isMirroredTwin: true,
         muted: ps.muted,
+        occupiedPills,
       });
     }
 
@@ -199,6 +270,7 @@ export function drawPointSources(
       isSelected: isSel,
       isMirroredTwin: false,
       muted: ps.muted,
+      occupiedPills,
     });
   }
 }
@@ -217,17 +289,22 @@ export function drawVirtualMics(
   }
 ): void {
   const { mode, scene, selected, micSplMap, camera, cssWidth, cssHeight, occupiedPills } = params;
+  const activeMics = scene.virtualMics
+    .filter((mic) => mic.enabled)
+    .map((mic) => ({
+      mic,
+      isSel: selected?.kind === 'virtual-mic' && selected.id === mic.id,
+      screen: worldToScreen(
+        camera,
+        cssWidth,
+        cssHeight,
+        mic.position.x,
+        mode === 'plan' ? mic.position.y : mic.position.z
+      ),
+    }));
 
-  for (const mic of scene.virtualMics) {
-    if (!mic.enabled) continue;
-    const isSel = selected?.kind === 'virtual-mic' && selected.id === mic.id;
-    const p = worldToScreen(
-      camera,
-      cssWidth,
-      cssHeight,
-      mic.position.x,
-      mode === 'plan' ? mic.position.y : mic.position.z
-    );
+  // Pass 1: Draw all mic dots and reserve their circles in occupiedPills so no pill covers a mic dot
+  for (const { mic, isSel, screen: p } of activeMics) {
     ctx.save();
     if (isSel) {
       ctx.strokeStyle = '#ffffff';
@@ -249,7 +326,14 @@ export function drawVirtualMics(
     ctx.beginPath();
     ctx.arc(p.px, p.py, 2.2, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
+    occupiedPills.push({ x: p.px - 9, y: p.py - 9, w: 18, h: 18 });
+  }
+
+  // Pass 2: Place and draw all mic pills against all zones, speakers, sub arrays, and mic dots
+  for (const { mic, screen: p } of activeMics) {
+    ctx.save();
     const splVal = micSplMap.get(mic.id);
     const badge =
       splVal !== undefined && splVal > -100
@@ -261,35 +345,39 @@ export function drawVirtualMics(
     const clampX = (x: number) => Math.max(6, Math.min(cssWidth - bw - 6, x));
     const clampY = (y: number) => Math.max(6, Math.min(cssHeight - bh - 6, y));
     const candidates = [
-      { x: clampX(p.px + 9), y: clampY(p.py - 10), fitsRight: p.px + 9 + bw <= cssWidth - 6 },
-      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - 28), fitsRight: true },
-      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 10), fitsRight: true },
-      { x: clampX(p.px - 9 - bw), y: clampY(p.py - 10), fitsRight: true },
-      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - 48), fitsRight: true },
-      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 30), fitsRight: true },
+      { x: clampX(p.px + 11), y: clampY(p.py - bh * 0.5) },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - bh - 11), penalty: 2 },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 11), penalty: 2 },
+      { x: clampX(p.px - 11 - bw), y: clampY(p.py - bh * 0.5), penalty: 4 },
+      { x: clampX(p.px + 10), y: clampY(p.py - bh - 10), penalty: 6 },
+      { x: clampX(p.px + 10), y: clampY(p.py + 10), penalty: 6 },
+      { x: clampX(p.px - bw - 10), y: clampY(p.py - bh - 10), penalty: 8 },
+      { x: clampX(p.px - bw - 10), y: clampY(p.py + 10), penalty: 8 },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py - bh - 32), penalty: 12 },
+      { x: clampX(p.px - bw * 0.5), y: clampY(p.py + 32), penalty: 12 },
     ];
-    const overlapsAny = (cx: number, cy: number) =>
-      occupiedPills.some(
-        (r) => cx < r.x + r.w && cx + bw > r.x && cy < r.y + r.h && cy + bh > r.y
-      );
-    const chosen =
-      candidates.find((cnd) => cnd.fitsRight && !overlapsAny(cnd.x, cnd.y)) ?? candidates[1];
+    const chosen = chooseBestRectPlacement(candidates, bw, bh, occupiedPills);
     const bx = chosen.x;
     const by = chosen.y;
-    occupiedPills.push({ x: bx - 2, y: by - 2, w: bw + 4, h: bh + 4 });
+    occupiedPills.push({ x: bx - 3, y: by - 3, w: bw + 6, h: bh + 6 });
 
-    if (Math.abs(by + bh * 0.5 - p.py) > 13) {
+    const nearX = Math.max(bx, Math.min(bx + bw, p.px));
+    const nearY = Math.max(by, Math.min(by + bh, p.py));
+    const edgeDist = Math.hypot(nearX - p.px, nearY - p.py);
+    if (edgeDist > 9) {
+      const ux = (nearX - p.px) / edgeDist;
+      const uy = (nearY - p.py) / edgeDist;
       ctx.strokeStyle = mic.color;
-      ctx.globalAlpha = 0.65;
-      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.72;
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
-      ctx.moveTo(p.px, p.py);
-      ctx.lineTo(Math.max(bx + 4, Math.min(bx + bw - 4, p.px)), by < p.py ? by + bh : by);
+      ctx.moveTo(p.px + ux * 7, p.py + uy * 7);
+      ctx.lineTo(nearX, nearY);
       ctx.stroke();
       ctx.globalAlpha = 1.0;
     }
 
-    ctx.fillStyle = 'rgba(6, 9, 17, 0.88)';
+    ctx.fillStyle = 'rgba(6, 9, 17, 0.90)';
     ctx.strokeStyle = mic.color;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -320,9 +408,20 @@ function drawSinglePointSourceGlyph(
     isSelected: boolean;
     isMirroredTwin: boolean;
     muted: boolean;
+    occupiedPills?: OccupiedPillRect[];
   }
 ): void {
-  const { mode, camera, cssWidth, cssHeight, position, orientation, speaker, color } = params;
+  const {
+    mode,
+    camera,
+    cssWidth,
+    cssHeight,
+    position,
+    orientation,
+    speaker,
+    color,
+    occupiedPills,
+  } = params;
   const p = worldToScreen(
     camera,
     cssWidth,
@@ -412,16 +511,31 @@ function drawSinglePointSourceGlyph(
   ctx.stroke();
   ctx.restore();
 
+  occupiedPills?.push({ x: p.px - 9, y: p.py - 9, w: 18, h: 18 });
+
   ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
-  ctx.fillStyle = '#f8fafc';
-  ctx.textBaseline = 'bottom';
   const psLabel = `${params.label}${params.muted ? ' (M)' : ''}`;
   const psTw = ctx.measureText(psLabel).width;
-  const placeLeft = p.px + 10 + psTw > cssWidth - 6;
-  ctx.textAlign = placeLeft ? 'right' : 'left';
-  const lx = placeLeft ? Math.max(psTw + 6, p.px - 10) : Math.max(6, p.px + 10);
-  const ly = Math.max(14, Math.min(cssHeight - 8, p.py - 6));
-  ctx.fillText(psLabel, lx, ly);
+  const psTh = 13;
+  const clampPsX = (x: number) => Math.max(6, Math.min(cssWidth - psTw - 6, x));
+  const clampPsY = (y: number) => Math.max(4, Math.min(cssHeight - psTh - 4, y));
+  const psCandidates = [
+    { x: clampPsX(p.px + 10), y: clampPsY(p.py - 18) },
+    { x: clampPsX(p.px + 10), y: clampPsY(p.py + 8) },
+    { x: clampPsX(p.px - psTw - 10), y: clampPsY(p.py - 18), penalty: 4 },
+    { x: clampPsX(p.px - psTw * 0.5), y: clampPsY(p.py - 24), penalty: 6 },
+    { x: clampPsX(p.px - psTw * 0.5), y: clampPsY(p.py + 12), penalty: 6 },
+  ];
+  const psPos = chooseBestRectPlacement(psCandidates, psTw, psTh, occupiedPills ?? []);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.strokeStyle = 'rgba(6, 9, 17, 0.9)';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(psLabel, psPos.x, psPos.y);
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillText(psLabel, psPos.x, psPos.y);
+  occupiedPills?.push({ x: psPos.x - 2, y: psPos.y - 1, w: psTw + 4, h: psTh + 2 });
 
   ctx.restore();
 }

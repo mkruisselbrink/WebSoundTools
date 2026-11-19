@@ -76,6 +76,7 @@ export function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): Tem
         dsp,
         maxEqBands: 8,
         muteLabel: 'Mute Group',
+        tipText: 'Tip: Drag EQ handles on Magnitude chart; Shift + Drag or Wheel for Q.',
         testIds: {
           gainDb: 'grp-gain-db',
           delayMs: 'grp-delay-ms',

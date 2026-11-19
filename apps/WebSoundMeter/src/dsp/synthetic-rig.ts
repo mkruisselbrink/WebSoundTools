@@ -109,7 +109,8 @@ export const SIMULATOR_PRESETS: Record<SimulatorPresetId, SimulatorRigConfig> = 
   'sub-top-misaligned': {
     id: 'sub-top-misaligned',
     name: '3. Sub + Top Crossover (Misaligned)',
-    description: '2-way system at 100 Hz LR24 crossover with Subwoofer delayed +4.5 ms and polarity inverted.',
+    description:
+      '2-way system at 100 Hz LR24 crossover with Subwoofer delayed +5.0 ms (180° out of phase at 100 Hz).',
     propagationDelayMs: 7.0,
     gainDb: 0.0,
     polarity: 1,
@@ -120,9 +121,9 @@ export const SIMULATOR_PRESETS: Record<SimulatorPresetId, SimulatorRigConfig> = 
     subCrossover: {
       enabled: true,
       crossoverFreqHz: 100,
-      subDelayMs: 4.5,
-      subGainDb: 2.0,
-      subPolarity: -1,
+      subDelayMs: 5.0,
+      subGainDb: 0.0,
+      subPolarity: 1,
     },
     reflections: [],
     ambientNoiseDbFs: -60.0,

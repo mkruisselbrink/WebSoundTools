@@ -66,9 +66,25 @@ export function paintViewportCadOverlay(
   drawMetricGrid(ctx, camera, cssWidth, cssHeight, mode);
 
   const occupiedPills: OccupiedPillRect[] = [];
+  if (opts.colormap && opts.effectiveSplRange) {
+    occupiedPills.push({
+      x: Math.max(0, cssWidth - 206),
+      y: Math.max(0, cssHeight - 42),
+      w: 204,
+      h: 40,
+    });
+  }
   drawDatumOrSliceLine(ctx, scene, camera, cssWidth, cssHeight, mode, occupiedPills);
 
-  drawSurfaces(ctx, { mode, scene, selected, camera, cssWidth, cssHeight });
+  drawSurfaces(ctx, {
+    mode,
+    scene,
+    selected,
+    camera,
+    cssWidth,
+    cssHeight,
+    occupiedPills,
+  });
 
   const c = computeSpeedOfSoundMpS(scene.atmosphere);
   drawSubArrays(ctx, {
@@ -81,6 +97,7 @@ export function paintViewportCadOverlay(
     camera,
     cssWidth,
     cssHeight,
+    occupiedPills,
   });
 
   drawPointSources(ctx, {
@@ -92,6 +109,7 @@ export function paintViewportCadOverlay(
     camera,
     cssWidth,
     cssHeight,
+    occupiedPills,
   });
 
   drawVirtualMics(ctx, {

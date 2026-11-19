@@ -146,7 +146,12 @@ export class WssChartPanel extends FohChartPanelBase {
     if (!grp) return;
     const nextBands = grp.dsp.eqBands.map((b, idx) =>
       idx === detail.bandIndex
-        ? { ...b, frequencyHz: detail.frequency, gainDb: detail.gainDb }
+        ? {
+            ...b,
+            frequencyHz: detail.frequency,
+            gainDb: detail.gainDb,
+            ...(detail.q !== undefined ? { q: detail.q } : {}),
+          }
         : b
     );
     this.store.updateDspGroup(
@@ -158,6 +163,7 @@ export class WssChartPanel extends FohChartPanelBase {
 
   protected onEqBandDragEnd(): void {
     this.store?.endTransaction();
+    super.onEqBandDragEnd();
   }
 
   protected buildChartScene(): ChartScene {
@@ -185,6 +191,32 @@ export class WssChartPanel extends FohChartPanelBase {
     );
   }
 
+  private handleTablistKeyDown = (ev: KeyboardEvent): void => {
+    if (typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype) {
+      return;
+    }
+    const count = PLOT_TABS.length;
+    const currentIdx = PLOT_TABS.findIndex((t) => t.id === this.plotType);
+    let nextIdx = -1;
+    if (ev.key === 'ArrowRight') {
+      nextIdx = (currentIdx + 1) % count;
+    } else if (ev.key === 'ArrowLeft') {
+      nextIdx = (currentIdx - 1 + count) % count;
+    } else if (ev.key === 'Home') {
+      nextIdx = 0;
+    } else if (ev.key === 'End') {
+      nextIdx = count - 1;
+    }
+    if (nextIdx < 0) return;
+    ev.preventDefault();
+    this.plotType = PLOT_TABS[nextIdx].id;
+    this.clearCursor();
+    void this.updateComplete.then(() => {
+      const buttons = this.renderRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+      buttons[nextIdx]?.focus();
+    });
+  };
+
   protected renderHeader(): TemplateResult {
     const responses = this.snapshot?.virtualMics ?? [];
     const mics = this.store?.scene.virtualMics ?? [];
@@ -192,25 +224,40 @@ export class WssChartPanel extends FohChartPanelBase {
 
     return html`
       <div class="chart-header">
-        <div class="tab-group">
-          ${PLOT_TABS.map(
-            (tab) => html`
-              <button
-                class="tab-btn"
-                data-active=${String(this.plotType === tab.id)}
-                @click=${() => {
-                  this.plotType = tab.id;
-                  this.clearCursor();
-                }}
-              >
-                ${tab.shortLabel}
-              </button>
-            `
-          )}
+        <div class="header-left">
+          <div
+            class="tab-group"
+            role="tablist"
+            focusgroup="tablist nomemory"
+            aria-label="Acoustic response plot view"
+            @keydown=${this.handleTablistKeyDown}
+          >
+            ${PLOT_TABS.map((tab) => {
+              const selected = this.plotType === tab.id;
+              return html`
+                <button
+                  type="button"
+                  role="tab"
+                  class="tab-btn"
+                  aria-selected=${String(selected)}
+                  data-active=${String(selected)}
+                  ?focusgroupstart=${selected}
+                  tabindex=${selected ? '0' : '-1'}
+                  @click=${() => {
+                    this.plotType = tab.id;
+                    this.clearCursor();
+                  }}
+                >
+                  ${tab.shortLabel}
+                </button>
+              `;
+            })}
+          </div>
           ${this.plotType === 'magnitude'
             ? html`
-                <span class="span-label">Span:</span>
+                <label class="span-label" for="wss-mag-span-select">Span:</label>
                 <select
+                  id="wss-mag-span-select"
                   class="span-select"
                   data-testid="chart-mag-span-select"
                   title="Vertical dB span for Magnitude plot"
@@ -237,7 +284,7 @@ export class WssChartPanel extends FohChartPanelBase {
           ${responses.map(
             (r) => html`
               <span class="legend-item">
-                <span class="dot" style="background:${colorMap.get(r.micId) ?? '#38bdf8'}"></span>
+                <span class="dot" aria-hidden="true" style="background:${colorMap.get(r.micId) ?? '#38bdf8'}"></span>
                 ${r.micName} (${r.broadbandSplADb.toFixed(1)} dBA · t₀ ${r.referenceDelayMs.toFixed(1)} ms)
               </span>
             `

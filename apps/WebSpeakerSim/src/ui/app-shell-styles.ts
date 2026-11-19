@@ -14,31 +14,32 @@ export const appShellStyles = [
   fohPanelsCss,
   css`
     :host {
-      --bg-app: var(--foh-bg-app);
-      --bg-panel: var(--foh-bg-panel);
-      --bg-header: var(--foh-bg-header);
-      --bg-elevated: var(--foh-bg-elevated);
-      --bg-input: var(--foh-bg-input);
-      --border-subtle: var(--foh-border-subtle);
-      --border-strong: var(--foh-border-strong);
-      --text-primary: var(--foh-text-primary);
-      --text-secondary: var(--foh-text-secondary);
-      --text-muted: var(--foh-text-muted);
-      --accent: var(--foh-accent);
-      --accent-bright: var(--foh-accent-bright);
-      --success: var(--foh-success);
-      --warning: var(--foh-warning);
-      --danger: var(--foh-danger);
-      --font-mono: var(--foh-font-mono);
+      --bg-app: var(--_foh-bg-app);
+      --bg-panel: var(--_foh-bg-panel);
+      --bg-header: var(--_foh-bg-header);
+      --bg-elevated: var(--_foh-bg-elevated);
+      --bg-input: var(--_foh-bg-input);
+      --border-subtle: var(--_foh-border-subtle);
+      --border-strong: var(--_foh-border-strong);
+      --text-primary: var(--_foh-text-primary);
+      --text-secondary: var(--_foh-text-secondary);
+      --text-muted: var(--_foh-text-muted);
+      --accent: var(--_foh-accent);
+      --accent-bright: var(--_foh-accent-bright);
+      --success: var(--_foh-success);
+      --warning: var(--_foh-warning);
+      --danger: var(--_foh-danger);
+      --font-mono: var(--_foh-font-mono);
 
       display: flex;
       flex-direction: column;
-      width: 100vw;
+      width: 100%;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
-      background: var(--foh-bg-app);
-      color: var(--foh-text-primary);
-      font-family: var(--foh-font-sans);
+      background: var(--_foh-bg-app);
+      color: var(--_foh-text-primary);
+      font-family: var(--_foh-font-sans);
       font-size: 12px;
       box-sizing: border-box;
     }
@@ -106,21 +107,21 @@ export const appShellStyles = [
   select,
   input[type='text'],
   input[type='number'] {
+    font: inherit;
     background: var(--bg-input);
     color: var(--text-primary);
     border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 3px 6px;
     font-size: 11.5px;
-    outline: none;
   }
 
   input[type='number'] {
     font-family: var(--font-mono);
   }
 
-  select:focus,
-  input:focus {
+  select:focus-visible,
+  input:focus-visible {
     border-color: var(--accent-bright);
   }
 
@@ -129,6 +130,7 @@ export const appShellStyles = [
     align-items: center;
     justify-content: center;
     gap: 4px;
+    font: inherit;
     background: var(--bg-elevated);
     color: var(--text-secondary);
     border: 1px solid var(--border-strong);
@@ -171,10 +173,19 @@ export const appShellStyles = [
     color: #ffffff;
   }
 
-  .btn[data-active='true'] {
+  .btn:is([aria-pressed='true'], [data-active='true']) {
     background: var(--accent);
     border-color: var(--accent-bright);
     color: #ffffff;
+  }
+
+  @media (pointer: coarse) {
+    .btn,
+    .btn-xs,
+    select {
+      min-block-size: 28px;
+      min-inline-size: 28px;
+    }
   }
 
   .btn-xs {

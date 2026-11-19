@@ -6,20 +6,26 @@
     <meta name="theme-color" content="#060911" />
     <meta
       name="description"
-      content="Browser-based dual-channel electro-acoustic transfer function, phase, coherence, impulse response, Virtual EQ, and RTA/SPL analyzer."
+      content="Offline-capable multi-channel dual-FFT acoustic analyzer for transfer function, phase, coherence, impulse response, virtual crossover & EQ modeling, RTA, and Live Show SPL compliance + feedback watch."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-    <title>WebSoundMeter — Acoustic System Tuning & RTA/SPL Analyzer</title>
+    <title>WebSoundMeter — Multi-Channel Acoustic Analyzer & Show SPL Meter</title>
     <style>
+      :root {
+        color-scheme: dark;
+        accent-color: #38bdf8;
+      }
       html,
       body {
         margin: 0;
         padding: 0;
         width: 100%;
-        height: 100%;
+        height: 100vh;
+        height: 100dvh;
         background: #060911;
+        color: #f8fafc;
         overflow: hidden;
       }
     </style>

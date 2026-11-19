@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it } from 'vitest';
+import { MeasurementPipeline } from '../dsp/analyzer-pipeline.js';
+import { SignalGenerator } from '../dsp/signal-generator.js';
+import { SyntheticAcousticRig } from '../dsp/synthetic-rig.js';
+import { synthesizeRoomMatchEqBands } from './auto-eq-matcher.js';
 import {
   applyPatchToEqConfig,
   computeEqualizerSourceData,
@@ -242,6 +246,71 @@ describe('SourceData, UnionSource & EqualizerSource', () => {
     // At 500..2000 Hz, normalized TF magnitude sits right around 0 dB!
     const idx1k = Math.round(1000 / (48000 / 1024));
     expect(20 * Math.log10(predictedOverlay.freqData.magnitude[idx1k])).toBeCloseTo(0.0, 1);
+  });
+
+  it('synthesizes subtractive EQ cuts for broad resonances while ignoring deep comb nulls', () => {
+    const roomTrace = computeEqualizerSourceData(
+      {
+        id: 'room-mode-plus-null',
+        name: 'Room Mode + Comb Null',
+        color: '#38bdf8',
+        visible: true,
+        bands: [
+          { type: 'peaking', frequency: 180, q: 2.0, gainDb: 7.0, enabled: true },
+          { type: 'peaking', frequency: 440, q: 12.0, gainDb: -18.0, enabled: true },
+          { type: 'highshelf', frequency: 9000, q: 0.707, gainDb: -4.5, enabled: true },
+        ],
+      },
+      null,
+      2049,
+      48000
+    );
+
+    const matchedBands = synthesizeRoomMatchEqBands(roomTrace);
+    const peakingCuts = matchedBands.filter(
+      (b) => b.type === 'peaking' && b.enabled !== false && (b.gainDb ?? 0) < -1
+    );
+    expect(peakingCuts.length).toBeGreaterThanOrEqual(1);
+    expect(
+      peakingCuts.some((b) => b.frequency >= 140 && b.frequency <= 230 && (b.gainDb ?? 0) <= -3)
+    ).toBe(true);
+
+    // Must never attempt to boost narrow acoustic comb dips
+    expect(
+      matchedBands.some((b) => b.type === 'peaking' && (b.gainDb ?? 0) > 0)
+    ).toBe(false);
+  });
+
+  it('produces a deep 100 Hz destructive crossover null in Preset 3 (sub-top-misaligned)', () => {
+    const sr = 48000;
+    const gen = new SignalGenerator(sr, { enabled: true, type: 'pink', levelDbFs: -12 });
+    const rig = new SyntheticAcousticRig(sr, 'sub-top-misaligned');
+    const pipe = new MeasurementPipeline({
+      sampleRate: sr,
+      fftSize: 4096,
+      delayMs: 7.0,
+      octaveSmoothing: 'off',
+    });
+
+    const chunkR = new Float32Array(2048);
+    const chunkM = new Float32Array(2048);
+    let lastSnap = pipe.computeTransform();
+    for (let block = 0; block < 28; block++) {
+      gen.fillBuffer(chunkR);
+      rig.processBlock(chunkR, chunkM);
+      pipe.writeSamples(chunkM, chunkR);
+      lastSnap = pipe.computeTransform();
+    }
+
+    const binHz = sr / 4096;
+    const idx100 = Math.round(100 / binHz);
+    const idx1k = Math.round(1000 / binHz);
+    const mag100Db = 20 * Math.log10(Math.max(1e-6, lastSnap.freqData.magnitude[idx100]));
+    const mag1kDb = 20 * Math.log10(Math.max(1e-6, lastSnap.freqData.magnitude[idx1k]));
+
+    expect(mag1kDb).toBeGreaterThan(-1.5);
+    expect(mag1kDb).toBeLessThan(1.5);
+    expect(mag100Db).toBeLessThan(-15);
   });
 });
 

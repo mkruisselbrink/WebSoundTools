@@ -13,11 +13,12 @@ export const appShellStyles = [
     :host {
       display: flex;
       flex-direction: column;
-      width: 100vw;
+      width: 100%;
       height: 100vh;
-      background: var(--foh-bg-app);
-      color: var(--foh-text-primary);
-      font-family: var(--foh-font-sans);
+      height: 100dvh;
+      background: var(--_foh-bg-app, #060911);
+      color: var(--_foh-text-primary, #f8fafc);
+      font-family: var(--_foh-font-sans, system-ui, sans-serif);
       overflow: hidden;
       box-sizing: border-box;
     }
@@ -111,6 +112,7 @@ export const appShellStyles = [
   input[type='number'],
   input[type='text'],
   button {
+    font: inherit;
     background: #0f172a;
     color: #f8fafc;
     border: 1px solid #334155;
@@ -296,7 +298,7 @@ export const appShellStyles = [
 
   .prop-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px 8px;
     font-size: 11px;
   }
@@ -305,6 +307,16 @@ export const appShellStyles = [
     display: flex;
     flex-direction: column;
     gap: 3px;
+    min-width: 0;
+  }
+
+  .prop-field select,
+  .prop-field input[type='number'],
+  .prop-field input[type='text'] {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .prop-field.full-width {
@@ -314,6 +326,97 @@ export const appShellStyles = [
   .prop-field label {
     color: #94a3b8;
     font-size: 10px;
+  }
+
+  .dbfs-meter-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dbfs-meter-row {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 58px 34px;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dbfs-meter-label {
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  .dbfs-meter-track {
+    position: relative;
+    height: 6px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .dbfs-meter-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.08s linear;
+  }
+
+  .dbfs-meter-peak {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #f8fafc;
+    opacity: 0.85;
+  }
+
+  .dbfs-meter-val {
+    text-align: right;
+    color: #cbd5e1;
+  }
+
+  .dbfs-clip-badge {
+    text-align: center;
+    padding: 0 3px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    background: #1e293b;
+    color: #475569;
+  }
+
+  .dbfs-clip-badge.clip {
+    background: rgba(239, 68, 68, 0.25);
+    border: 1px solid #ef4444;
+    color: #f87171;
+  }
+
+  .union-source-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+    padding: 4px 6px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+  }
+
+  .union-check-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #e2e8f0;
+    cursor: pointer;
+    min-width: 0;
   }
 
   .eq-band-row {

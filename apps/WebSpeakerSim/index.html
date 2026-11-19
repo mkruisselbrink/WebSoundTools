@@ -6,19 +6,26 @@
     <meta name="theme-color" content="#060911" />
     <meta
       name="description"
-      content="Browser-based 3D live-sound loudspeaker placement, subwoofer array design, and direct-field SPL/phase prediction tool."
+      content="Offline-capable synchronized Plan & Side Section venue simulator over a 3D direct-field + ground-reflection solver, point-source & cardioid/end-fire/arc subwoofer arrays, .gll/.clf/.frd importers, and Virtual Mic .frd export."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-    <title>WebSpeakerSim — Live Sound Loudspeaker & SPL Prediction</title>
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>WebSpeakerSim — 3D Venue Loudspeaker & Subwoofer SPL Predictor</title>
     <style>
+      :root {
+        color-scheme: dark;
+        accent-color: #38bdf8;
+      }
       html,
       body {
         margin: 0;
         padding: 0;
         width: 100%;
-        height: 100%;
+        height: 100vh;
+        height: 100dvh;
         background: #060911;
+        color: #f8fafc;
         overflow: hidden;
       }
     </style>

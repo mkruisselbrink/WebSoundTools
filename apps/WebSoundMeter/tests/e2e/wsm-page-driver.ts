@@ -8,13 +8,20 @@
  */
 
 import type { CoherenceBlankingMode } from '@foh/charts';
-import type { CrossoverTopology } from '@foh/dsp';
+import type { CrossoverTopology, OctaveSmoothingType } from '@foh/dsp';
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { PlotType } from '../../src/charts/plot-types.js';
 import type { SimulatorPresetId } from '../../src/dsp/synthetic-rig.js';
 import type { UnionOperation } from '../../src/sources/union-source.js';
+import {
+  WSM_DYNAMIC_TEST_IDS,
+  WSM_TEST_IDS,
+  type WsmTestId,
+} from '../../src/ui/test-ids.ts';
 import type { WorkspaceMode } from '../../src/ui/url-state.js';
 import type { LayoutPreset } from '../../src/ui/workspace-store.js';
+
+export { WSM_TEST_IDS, type WsmTestId };
 
 export class WsmPageDriver {
   readonly page: Page;
@@ -25,22 +32,28 @@ export class WsmPageDriver {
     this.app = page.locator('web-sound-meter-app');
   }
 
+  byTestId(id: WsmTestId): Locator {
+    return this.app.getByTestId(id);
+  }
+
   async goto(urlOrPath: string = '/'): Promise<void> {
     await this.page.goto(urlOrPath);
     await expect(this.app).toBeVisible();
   }
 
   async waitForLiveSignal(): Promise<void> {
-    const splValue = this.app.getByTestId('spl-main-value');
+    const splValue = this.byTestId(WSM_TEST_IDS.splMainValue);
     await expect(splValue).not.toHaveText('0.0', { timeout: 6000 });
   }
 
   async installMockUsbHardwareInterface(
     deviceId: string = 'usb-4ch-interface',
-    label: string = 'Focusrite Scarlett 4i4 USB (4ch)'
+    label: string = 'Focusrite Scarlett 4i4 USB (4ch)',
+    options?: { readonly withFeedbackRings?: boolean }
   ): Promise<void> {
+    const withRings = Boolean(options?.withFeedbackRings);
     await this.page.addInitScript(
-      ({ id, name }) => {
+      ({ id, name, injectRings }) => {
         if (navigator.mediaDevices) {
           navigator.mediaDevices.enumerateDevices = async () =>
             [
@@ -67,36 +80,181 @@ export class WsmPageDriver {
             const ac = new AudioContext({ sampleRate: 48000 });
             const dest = ac.createMediaStreamDestination();
             dest.channelCount = 4;
-            const osc = ac.createOscillator();
-            const gain = ac.createGain();
-            osc.frequency.value = 1000;
-            gain.gain.value = 0.08;
-            osc.connect(gain).connect(dest);
-            osc.start();
+            dest.channelCountMode = 'explicit';
+
+            // Deterministic 2-second pink noise buffer for correlated M/R hardware loopback
+            const len = ac.sampleRate * 2;
+            const buf = ac.createBuffer(1, len, ac.sampleRate);
+            const data = buf.getChannelData(0);
+            let seed = 0x2468ace1;
+            let b0 = 0;
+            let b1 = 0;
+            let b2 = 0;
+            for (let i = 0; i < len; i++) {
+              seed ^= seed << 13;
+              seed ^= seed >>> 17;
+              seed ^= seed << 5;
+              const white = (seed >>> 0) / 2147483648.0 - 1.0;
+              b0 = 0.99765 * b0 + white * 0.099046;
+              b1 = 0.96300 * b1 + white * 0.2965164;
+              b2 = 0.57000 * b2 + white * 1.0526913;
+              data[i] = (b0 + b1 + b2 + white * 0.1848) * 0.065;
+            }
+
+            const noiseSrc = ac.createBufferSource();
+            noiseSrc.buffer = buf;
+            noiseSrc.loop = true;
+
+            const delayM = ac.createDelay(0.05);
+            delayM.delayTime.value = 0.0062;
+            const roomBoom = ac.createBiquadFilter();
+            roomBoom.type = 'peaking';
+            roomBoom.frequency.value = 175;
+            roomBoom.Q.value = 2.0;
+            roomBoom.gain.value = 4.5;
+            const airShelf = ac.createBiquadFilter();
+            airShelf.type = 'highshelf';
+            airShelf.frequency.value = 9000;
+            airShelf.gain.value = -3.5;
+
+            const merger = ac.createChannelMerger(4);
+            // Ch 1 (index 0): Measurement Mic M; Ch 2 (index 1): Loopback Reference R
+            noiseSrc.connect(delayM).connect(roomBoom).connect(airShelf).connect(merger, 0, 0);
+            noiseSrc.connect(merger, 0, 1);
+
+            if (injectRings) {
+              const osc1 = ac.createOscillator();
+              const g1 = ac.createGain();
+              osc1.frequency.value = 2480;
+              g1.gain.value = 0.085;
+              osc1.connect(g1).connect(merger, 0, 0);
+              osc1.start();
+
+              const osc2 = ac.createOscillator();
+              const g2 = ac.createGain();
+              osc2.frequency.value = 630;
+              g2.gain.value = 0.065;
+              osc2.connect(g2).connect(merger, 0, 0);
+              osc2.start();
+            }
+
+            merger.connect(dest);
+            noiseSrc.start();
             return dest.stream;
           };
         }
       },
-      { id: deviceId, name: label }
+      { id: deviceId, name: label, injectRings: withRings }
+    );
+  }
+
+  async installSeededShowSplHistory(options?: {
+    readonly slotIds?: readonly string[];
+    readonly baseSplDbA?: number;
+  }): Promise<void> {
+    const slotIds = options?.slotIds ?? ['live-measurement'];
+    const baseSpl = options?.baseSplDbA ?? 94.5;
+    await this.page.addInitScript(
+      ({ ids, centerDb }) => {
+        const flagKey = '__wst_seeded_spl_v1';
+        if (sessionStorage.getItem(flagKey)) return;
+        sessionStorage.setItem(flagKey, '1');
+
+        const req = indexedDB.open('web-sound-meter-db', 3);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          for (const store of [
+            'stored-traces',
+            'eq-sources',
+            'union-sources',
+            'calibration-curves',
+            'spl-show-logs',
+          ]) {
+            if (!db.objectStoreNames.contains(store)) {
+              db.createObjectStore(store, { keyPath: 'id' });
+            }
+          }
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('spl-show-logs', 'readwrite');
+          const store = tx.objectStore('spl-show-logs');
+          const n = 900;
+          const nowMs = Date.now();
+          ids.forEach((slotId, slotIdx) => {
+            const slotOffset = slotIdx * -4.2;
+            const energyA: number[] = new Array(n);
+            const energyC: number[] = new Array(n);
+            const energyZ: number[] = new Array(n);
+            const shortTermDbA: number[] = new Array(n);
+            const shortTermDbC: number[] = new Array(n);
+            const peakDb: number[] = new Array(n);
+
+            for (let i = 0; i < n; i++) {
+              // Concert dynamics arc: warm-up -> verse/chorus swells -> interlude dip -> headliner push
+              const prog = i / n;
+              const songWave = Math.sin(i * 0.045) * 2.4 + Math.cos(i * 0.13) * 1.3;
+              const setArc =
+                prog < 0.25
+                  ? -3.5 + prog * 12
+                  : prog > 0.55 && prog < 0.68
+                    ? -4.0
+                    : prog >= 0.68
+                      ? 1.2 + (prog - 0.68) * 6.5
+                      : 0.2;
+              const dbA = centerDb + slotOffset + setArc + songWave;
+              const dbC = dbA + 11.8 + Math.sin(i * 0.07) * 1.1;
+              const pk = dbC + 8.5 + Math.abs(Math.sin(i * 0.29)) * 3.2;
+
+              shortTermDbA[i] = dbA;
+              shortTermDbC[i] = dbC;
+              peakDb[i] = pk;
+              energyA[i] = Math.pow(10, (dbA - 100) / 10);
+              energyC[i] = Math.pow(10, (dbC - 100) / 10);
+              energyZ[i] = Math.pow(10, (dbC + 0.8 - 100) / 10);
+            }
+
+            store.put({
+              id: slotId,
+              savedAtMs: nowMs,
+              sampleRate: 48000,
+              splOffsetDb: 100,
+              tierBCount: n,
+              tierBHead: n,
+              energyA,
+              energyC,
+              energyZ,
+              shortTermDbA,
+              shortTermDbC,
+              peakDb,
+            });
+          });
+        };
+      },
+      { ids: [...slotIds], centerDb: baseSpl }
     );
   }
 
   async setMode(mode: WorkspaceMode): Promise<void> {
-    await this.app
-      .getByTestId(mode === 'show' ? 'btn-mode-show' : 'btn-mode-tuning')
-      .click();
+    await this.byTestId(
+      mode === 'show' ? WSM_TEST_IDS.modeShowBtn : WSM_TEST_IDS.modeTuningBtn
+    ).click();
   }
 
   async selectLayout(layout: LayoutPreset): Promise<void> {
-    await this.app.getByTestId('select-layout').selectOption(layout);
+    await this.byTestId(WSM_TEST_IDS.layoutSelect).selectOption(layout);
   }
 
   async selectInputSource(optionValue: string): Promise<void> {
-    await this.app.getByTestId('select-input-mode').selectOption(optionValue);
+    await this.byTestId(WSM_TEST_IDS.inputModeSelect).selectOption(optionValue);
+  }
+
+  async toggleGenerator(): Promise<void> {
+    await this.byTestId(WSM_TEST_IDS.generatorToggleBtn).click();
   }
 
   chartPanel(index: number): Locator {
-    return this.app.getByTestId(`chart-panel-${index}`);
+    return this.app.getByTestId(WSM_DYNAMIC_TEST_IDS.chartPanel(index));
   }
 
   async setChartPlotType(panelIndex: number, plotType: PlotType): Promise<void> {
@@ -109,36 +267,57 @@ export class WsmPageDriver {
     threshold?: number
   ): Promise<void> {
     const panel = this.chartPanel(panelIndex);
-    await panel.getByTestId('select-coherence-mode').selectOption(mode);
+    await panel.getByTestId(WSM_TEST_IDS.coherenceModeSelect).selectOption(mode);
     if (mode !== 'off' && threshold !== undefined) {
       await panel
-        .getByTestId('select-coherence-threshold')
+        .getByTestId(WSM_TEST_IDS.coherenceThresholdSelect)
         .selectOption(String(threshold));
     }
   }
 
   async selectLiveSlotPreset(preset: SimulatorPresetId): Promise<void> {
-    await this.app.getByTestId('select-live-slot-preset').selectOption(preset);
+    await this.byTestId(WSM_TEST_IDS.liveSlotPresetSelect).selectOption(preset);
   }
 
   async setReferenceDelayMs(delayMs: number): Promise<void> {
-    const input = this.app.getByTestId('input-ref-delay-ms');
+    const input = this.byTestId(WSM_TEST_IDS.refDelayMsInput);
     await input.fill(String(delayMs));
     await input.dispatchEvent('change');
   }
 
   async applyAutoDelay(): Promise<void> {
-    await this.app.getByTestId('btn-apply-delay').click();
+    await this.byTestId(WSM_TEST_IDS.applyDelayBtn).click();
   }
 
   async toggleAdvancedMeasurementSettings(): Promise<void> {
-    await this.app.getByTestId('btn-toggle-advanced-meas').click();
+    await this.byTestId(WSM_TEST_IDS.toggleAdvancedMeasBtn).click();
+  }
+
+  async setOctaveSmoothing(smoothing: OctaveSmoothingType): Promise<void> {
+    const advBtn = this.byTestId(WSM_TEST_IDS.toggleAdvancedMeasBtn);
+    const expanded = await advBtn.getAttribute('aria-expanded');
+    if (expanded !== 'true') {
+      await advBtn.click();
+    }
+    await this.byTestId(WSM_TEST_IDS.smoothingSelect).selectOption(smoothing);
+    if (expanded !== 'true') {
+      await advBtn.click();
+    }
+  }
+
+  async setSourceVisibilityByName(name: string, visible: boolean): Promise<void> {
+    const checkbox = this.app.getByLabel(`Toggle visibility for ${name}`);
+    if (visible) {
+      await checkbox.check();
+    } else {
+      await checkbox.uncheck();
+    }
   }
 
   async addLiveMeasurement(name?: string): Promise<void> {
-    await this.app.getByTestId('btn-add-meas').click();
+    await this.byTestId(WSM_TEST_IDS.addMeasBtn).click();
     if (name !== undefined) {
-      const input = this.app.getByTestId('input-live-slot-name');
+      const input = this.byTestId(WSM_TEST_IDS.liveSlotNameInput);
       await expect(input).toBeVisible();
       await input.fill(name);
       await input.dispatchEvent('change');
@@ -146,7 +325,7 @@ export class WsmPageDriver {
   }
 
   async captureStoredTrace(renameTo?: string): Promise<void> {
-    await this.app.getByTestId('btn-capture-trace').click();
+    await this.byTestId(WSM_TEST_IDS.captureTraceBtn).click();
     if (renameTo !== undefined) {
       const nameInput = this.app.getByLabel('Stored Trace Name');
       await expect(nameInput).toBeVisible();
@@ -156,7 +335,7 @@ export class WsmPageDriver {
   }
 
   async importFrdFile(filePath: string): Promise<void> {
-    await this.app.getByTestId('input-import-frd').setInputFiles(filePath);
+    await this.byTestId(WSM_TEST_IDS.importFrdInput).setInputFiles(filePath);
   }
 
   async uploadCalibrationText(fileName: string, content: string): Promise<void> {
@@ -171,15 +350,15 @@ export class WsmPageDriver {
     autoFlatten?: boolean;
     hpfTopology?: CrossoverTopology;
   }): Promise<void> {
-    await this.app.getByTestId('btn-add-eq').click();
+    await this.byTestId(WSM_TEST_IDS.addEqBtn).click();
     if (options?.autoFlatten) {
-      const btn = this.app.getByTestId('btn-auto-flatten-eq');
+      const btn = this.byTestId(WSM_TEST_IDS.autoFlattenEqBtn);
       await expect(btn).toBeVisible();
       await btn.click();
     }
     if (options?.hpfTopology) {
-      const eqInspector = this.app.getByTestId('inspector-eq-source');
-      await eqInspector.locator('select').nth(1).selectOption(options.hpfTopology);
+      const eqInspector = this.byTestId(WSM_TEST_IDS.eqSourceInspector);
+      await eqInspector.getByTestId(WSM_TEST_IDS.eqHpfTopology).selectOption(options.hpfTopology);
     }
   }
 
@@ -187,30 +366,67 @@ export class WsmPageDriver {
     operation?: UnionOperation;
     sourceAPattern?: RegExp;
     sourceBPattern?: RegExp;
+    sourcePatterns?: readonly RegExp[];
   }): Promise<void> {
-    await this.app.getByTestId('btn-add-union').click();
-    const unionCard = this.app.getByTestId('inspector-union-source');
+    await this.byTestId(WSM_TEST_IDS.addUnionBtn).click();
+    const unionCard = this.byTestId(WSM_TEST_IDS.unionSourceInspector);
     await expect(unionCard).toBeVisible();
 
     if (options?.operation) {
       await unionCard.getByLabel('Union Math Operation').selectOption(options.operation);
     }
-    if (options?.sourceAPattern) {
-      await this.selectOptionMatching(
-        unionCard.getByLabel('Union Source A'),
-        options.sourceAPattern
-      );
-    }
-    if (options?.sourceBPattern) {
-      await this.selectOptionMatching(
-        unionCard.getByLabel('Union Source B'),
-        options.sourceBPattern
-      );
+
+    const isBinary =
+      options?.operation === 'diff-db' ||
+      options?.operation === 'subtract' ||
+      options?.operation === 'apply';
+
+    if (isBinary) {
+      if (options?.sourceAPattern) {
+        await this.selectOptionMatching(
+          unionCard.getByLabel('Union Source A'),
+          options.sourceAPattern
+        );
+      }
+      if (options?.sourceBPattern) {
+        await this.selectOptionMatching(
+          unionCard.getByLabel('Union Source B'),
+          options.sourceBPattern
+        );
+      }
+    } else if (options?.sourcePatterns && options.sourcePatterns.length > 0) {
+      const rows = unionCard.locator('.union-check-row');
+      const count = await rows.count();
+      // First check all matching rows so at least 1 stays checked before unchecking non-matches
+      for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        const text = (await row.textContent())?.trim() ?? '';
+        if (options.sourcePatterns.some((p) => p.test(text))) {
+          await row.locator('input[type="checkbox"]').check();
+        }
+      }
+      for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        const text = (await row.textContent())?.trim() ?? '';
+        if (!options.sourcePatterns.some((p) => p.test(text))) {
+          await row.locator('input[type="checkbox"]').uncheck();
+        }
+      }
+    } else if (options?.sourceBPattern) {
+      const rows = unionCard.locator('.union-check-row');
+      const count = await rows.count();
+      for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        const text = (await row.textContent())?.trim() ?? '';
+        if (options.sourceBPattern.test(text)) {
+          await row.locator('input[type="checkbox"]').check();
+        }
+      }
     }
   }
 
   async addShowLiveMic(): Promise<void> {
-    await this.app.getByTestId('btn-show-add-meas').click();
+    await this.byTestId(WSM_TEST_IDS.showAddMeasBtn).click();
   }
 
   async selectShowSlotPreset(slotIndex: number, preset: SimulatorPresetId): Promise<void> {
@@ -221,8 +437,8 @@ export class WsmPageDriver {
   }
 
   async setShowSplThresholds(warningDb: number, limitDb: number): Promise<void> {
-    const warnInput = this.app.getByTestId('input-spl-warn-db');
-    const limitInput = this.app.getByTestId('input-spl-limit-db');
+    const warnInput = this.byTestId(WSM_TEST_IDS.splWarnDbInput);
+    const limitInput = this.byTestId(WSM_TEST_IDS.splLimitDbInput);
     await warnInput.fill(String(warningDb));
     await warnInput.dispatchEvent('change');
     await limitInput.fill(String(limitDb));

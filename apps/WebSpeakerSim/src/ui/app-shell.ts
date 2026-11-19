@@ -128,7 +128,10 @@ export class WebSpeakerSimApp extends LitElement {
     }
 
     this.store = new ProjectStore(initialScene);
-    if (savedSession?.colormap && !urlState.presetId) {
+    if (
+      savedSession?.colormap &&
+      (!urlState.presetId || savedSession.activePresetId === urlState.presetId)
+    ) {
       this.store.setColormap(savedSession.colormap);
     }
     if (urlState.bandSelection) {
@@ -419,10 +422,17 @@ export class WebSpeakerSimApp extends LitElement {
       ></wss-speaker-library-modal>
 
       ${this.projectsModalOpen ? this.renderProjectsModal() : ''}
-      ${this.toastMessage
+      ${this.toastMessage && !this.speakerLibraryOpen && !this.projectsModalOpen
         ? html`<foh-toast
             data-testid="toast-banner"
             .message=${this.toastMessage}
+            @dismiss-toast=${() => {
+              this.toastMessage = '';
+              if (this.toastTimer !== null) {
+                clearTimeout(this.toastTimer);
+                this.toastTimer = null;
+              }
+            }}
           ></foh-toast>`
         : ''}
     `;
@@ -441,6 +451,7 @@ export class WebSpeakerSimApp extends LitElement {
       >
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
           <button
+            type="button"
             class="btn btn-primary"
             data-testid="btn-save-project-db"
             @click=${() => void this.saveCurrentProjectToDb()}
@@ -448,6 +459,7 @@ export class WebSpeakerSimApp extends LitElement {
             Save Current Scene ("${this.store.scene.name}")
           </button>
           <button
+            type="button"
             class="btn btn-danger"
             @click=${() => {
               clearWorkspaceSession();
@@ -478,6 +490,7 @@ export class WebSpeakerSimApp extends LitElement {
                       </div>
                       <div style="display:flex;gap:6px">
                         <button
+                          type="button"
                           class="btn btn-primary"
                           data-testid="btn-load-proj-${proj.id}"
                           @click=${() => {
@@ -490,6 +503,7 @@ export class WebSpeakerSimApp extends LitElement {
                           Load
                         </button>
                         <button
+                          type="button"
                           class="btn btn-danger"
                           @click=${async () => {
                             await this.repository.deleteProject(proj.id);

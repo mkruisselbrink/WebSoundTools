@@ -10,17 +10,38 @@ import type { MagnitudeSpanMode } from '@foh/charts';
 import { expect, type Download, type Locator, type Page } from '@playwright/test';
 import type { SimPlotType } from '../../src/charts/wss-chart-adapter.js';
 import type {
+  PresetDspGroupId,
+  PresetPointSourceId,
+  PresetSubArrayId,
+  PresetSurfaceId,
+  PresetVirtualMicId,
+  VenuePresetId,
+} from '../../src/library/demo-presets.js';
+import type {
   ColormapPaletteId,
   ColormapRangeMode,
   IsolineStepDb,
 } from '../../src/model/project-store.js';
 import type { SubArrayMode } from '../../src/model/project-types.js';
 import type { ViewportLayoutMode } from '../../src/model/url-state.js';
+import {
+  WSS_DYNAMIC_TEST_IDS,
+  WSS_TEST_IDS,
+  type WssTestId,
+} from '../../src/ui/test-ids.ts';
+import type { BandOptionKey } from '../../src/ui/topbar/topbar-view.js';
 
-export type VenuePresetId =
-  | 'club-cardioid-pa'
-  | 'festival-endfire-delays'
-  | 'theater-raked-balcony';
+export {
+  WSS_TEST_IDS,
+  type BandOptionKey,
+  type PresetDspGroupId,
+  type PresetPointSourceId,
+  type PresetSubArrayId,
+  type PresetSurfaceId,
+  type PresetVirtualMicId,
+  type VenuePresetId,
+  type WssTestId,
+};
 
 const CHART_TAB_LABELS: Record<SimPlotType, string> = {
   magnitude: 'Magnitude (dB)',
@@ -37,130 +58,180 @@ export class WssPageDriver {
     this.page = page;
   }
 
+  byTestId(id: WssTestId): Locator {
+    return this.page.getByTestId(id);
+  }
+
   async goto(urlOrPath: string = '/'): Promise<void> {
     await this.page.goto(urlOrPath);
     await this.waitForSimulationReady();
   }
 
   async waitForSimulationReady(): Promise<void> {
-    const metrics = this.page.getByTestId('coverage-metrics');
+    const metrics = this.byTestId(WSS_TEST_IDS.coverageMetrics);
     await expect(metrics).toBeVisible({ timeout: 8000 });
     await expect(metrics).toContainText('Mean');
     await expect(metrics).toContainText('dB');
   }
 
   async selectVenuePreset(presetId: VenuePresetId): Promise<void> {
-    await this.page.getByTestId('preset-select').selectOption(presetId);
+    await this.byTestId(WSS_TEST_IDS.presetSelect).selectOption(presetId);
     await this.waitForSimulationReady();
   }
 
-  async selectBand(bandKey: string): Promise<void> {
-    await this.page.getByTestId('band-select').selectOption(bandKey);
+  async selectBand(bandKey: BandOptionKey): Promise<void> {
+    await this.byTestId(WSS_TEST_IDS.bandSelect).selectOption(bandKey);
   }
 
   async setColormapRange(rangeMode: ColormapRangeMode): Promise<void> {
-    await this.page.getByTestId('colormap-range-select').selectOption(rangeMode);
+    await this.byTestId(WSS_TEST_IDS.colormapRangeSelect).selectOption(rangeMode);
   }
 
   async setColormapPalette(palette: ColormapPaletteId): Promise<void> {
-    await this.page.getByTestId('colormap-palette-select').selectOption(palette);
+    await this.byTestId(WSS_TEST_IDS.colormapPaletteSelect).selectOption(palette);
   }
 
   async setIsolineStep(stepDb: IsolineStepDb): Promise<void> {
-    await this.page.getByTestId('isoline-select').selectOption(String(stepDb));
+    await this.byTestId(WSS_TEST_IDS.isolineSelect).selectOption(String(stepDb));
   }
 
   async toggleSteppedColormap(): Promise<void> {
-    await this.page.getByTestId('btn-colormap-stepped').click();
+    await this.byTestId(WSS_TEST_IDS.colormapSteppedBtn).click();
   }
 
   async setViewportLayout(mode: ViewportLayoutMode): Promise<void> {
-    await this.page.getByTestId(`layout-${mode}`).click();
+    const id: WssTestId =
+      mode === 'split'
+        ? WSS_TEST_IDS.layoutSplitBtn
+        : mode === 'plan'
+          ? WSS_TEST_IDS.layoutPlanBtn
+          : WSS_TEST_IDS.layoutSectionBtn;
+    await this.byTestId(id).click();
   }
 
   async selectChartTab(tab: SimPlotType): Promise<void> {
     await this.page
       .locator('wss-chart-panel')
-      .getByRole('button', { name: CHART_TAB_LABELS[tab] })
+      .getByRole('tab', { name: CHART_TAB_LABELS[tab] })
       .click();
   }
 
   async setMagnitudeSpan(span: MagnitudeSpanMode): Promise<void> {
-    await this.page.getByTestId('chart-mag-span-select').selectOption(span);
+    await this.byTestId(WSS_TEST_IDS.chartMagSpanSelect).selectOption(span);
   }
 
   treeRow(prefix: 'ps' | 'sa' | 'grp' | 'surf' | 'mic', id: string): Locator {
-    return this.page.getByTestId(`tree-${prefix}-${id}`);
+    return this.page.getByTestId(WSS_DYNAMIC_TEST_IDS.treeRow(prefix, id));
   }
 
-  async selectPointSource(id: string): Promise<void> {
+  async selectPointSource(id: PresetPointSourceId): Promise<void> {
     await this.treeRow('ps', id).click();
   }
 
-  async togglePointSourceMute(id: string): Promise<void> {
-    // <foh-entity-tree> renders an explicit aria-label="Toggle <name>" on the row's action button.
-    await this.treeRow('ps', id).locator('button').click();
+  async togglePointSourceMute(id: PresetPointSourceId): Promise<void> {
+    await this.treeRow('ps', id).locator('button.foh-tree-toggle-btn').click();
   }
 
-  async selectSubArray(id: string): Promise<void> {
+  async selectSubArray(id: PresetSubArrayId): Promise<void> {
     await this.treeRow('sa', id).click();
   }
 
   async setSubArrayMode(mode: SubArrayMode): Promise<void> {
-    await this.page.getByTestId('sa-mode-select').selectOption(mode);
+    await this.byTestId(WSS_TEST_IDS.saModeSelect).selectOption(mode);
   }
 
   async applyQuarterWaveSpacing(): Promise<void> {
-    await this.page.getByTestId('btn-sa-quarter-wave').click();
+    await this.byTestId(WSS_TEST_IDS.saQuarterWaveBtn).click();
   }
 
   async selectFirstDspGroup(): Promise<void> {
     await this.page.locator('[data-testid^="tree-grp-"]').first().click();
-    await expect(this.page.getByTestId('inspector-dsp-group')).toBeVisible();
+    await expect(this.byTestId(WSS_TEST_IDS.dspGroupInspector)).toBeVisible();
   }
 
   async addEqBand(): Promise<void> {
-    await this.page.getByTestId('btn-add-eq-band').click();
+    await this.byTestId(WSS_TEST_IDS.addEqBandBtn).click();
   }
 
-  async selectVirtualMic(id: string): Promise<void> {
+  async selectVirtualMic(id: PresetVirtualMicId): Promise<void> {
     await this.treeRow('mic', id).click();
-    await expect(this.page.getByTestId('inspector-virtual-mic')).toBeVisible();
+    await expect(this.byTestId(WSS_TEST_IDS.virtualMicInspector)).toBeVisible();
   }
 
   async applyAutoTimeAlignment(options?: {
-    referenceGroupId?: string;
-    targetGroupId?: string;
+    referenceGroupId?: PresetDspGroupId;
+    targetGroupId?: PresetDspGroupId;
   }): Promise<void> {
     if (options?.referenceGroupId) {
-      await this.page
-        .getByTestId('align-ref-select')
-        .selectOption(options.referenceGroupId);
+      await this.byTestId(WSS_TEST_IDS.alignRefSelect).selectOption(options.referenceGroupId);
     }
     if (options?.targetGroupId) {
-      await this.page
-        .getByTestId('align-target-select')
-        .selectOption(options.targetGroupId);
+      await this.byTestId(WSS_TEST_IDS.alignTargetSelect).selectOption(options.targetGroupId);
     }
-    await this.page.getByTestId('btn-apply-alignment').click();
+    await this.byTestId(WSS_TEST_IDS.applyAlignmentBtn).click();
   }
 
   async exportVirtualMicFrd(savePath: string): Promise<Download> {
     const [download] = await Promise.all([
       this.page.waitForEvent('download'),
-      this.page.getByTestId('btn-export-mic-frd').click(),
+      this.byTestId(WSS_TEST_IDS.exportMicFrdBtn).click(),
     ]);
     await download.saveAs(savePath);
     return download;
   }
 
   async openSpeakerLibraryModal(): Promise<void> {
-    await this.page.getByTestId('btn-speaker-library').click();
-    await expect(this.page.getByTestId('speaker-library-modal')).toBeVisible();
+    await this.byTestId(WSS_TEST_IDS.speakerLibraryBtn).click();
+    await expect(this.byTestId(WSS_TEST_IDS.speakerLibraryModal)).toBeVisible();
   }
 
   async closeSpeakerLibraryModal(): Promise<void> {
-    await this.page.getByTestId('btn-close-library-modal').click();
+    await this.byTestId(WSS_TEST_IDS.closeLibraryModalBtn).click();
+  }
+
+  async selectSurface(id: PresetSurfaceId): Promise<void> {
+    await this.treeRow('surf', id).click();
+    await expect(this.byTestId(WSS_TEST_IDS.surfaceInspector)).toBeVisible();
+  }
+
+  async selectEnvironment(): Promise<void> {
+    await this.byTestId(WSS_TEST_IDS.treeEnvironment).click();
+    await expect(this.byTestId(WSS_TEST_IDS.environmentInspector)).toBeVisible();
+  }
+
+  async dismissToast(): Promise<void> {
+    await this.page.evaluate(() => {
+      const app = document.querySelector('web-speaker-sim-app') as unknown as {
+        toastMessage?: string;
+        requestUpdate?: () => void;
+      } | null;
+      if (app) {
+        app.toastMessage = '';
+        app.requestUpdate?.();
+      }
+    });
+  }
+
+  async dragAcousticRulerOnPlan(
+    fromNorm: { readonly x: number; readonly y: number },
+    toNorm: { readonly x: number; readonly y: number }
+  ): Promise<void> {
+    const vp = this.byTestId(WSS_TEST_IDS.viewportPlan).locator('.canvas-stage');
+    const box = await vp.boundingBox();
+    if (!box) return;
+    const x0 = box.x + box.width * fromNorm.x;
+    const y0 = box.y + box.height * fromNorm.y;
+    const x1 = box.x + box.width * toNorm.x;
+    const y1 = box.y + box.height * toNorm.y;
+
+    await this.page.keyboard.down('Shift');
+    await this.page.mouse.move(x0, y0);
+    await this.page.mouse.down();
+    await this.page.mouse.move(x1, y1, { steps: 8 });
+  }
+
+  async releaseAcousticRuler(): Promise<void> {
+    await this.page.mouse.up();
+    await this.page.keyboard.up('Shift');
   }
 }
-

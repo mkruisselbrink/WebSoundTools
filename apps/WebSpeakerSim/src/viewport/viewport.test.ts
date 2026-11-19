@@ -7,6 +7,7 @@ import {
   ProjectStore,
   resolveEffectiveSplRange,
 } from '../model/project-store.js';
+import { formatMirroredSourceLabel } from '../physics/radiator-expander.js';
 import { getAimHandleWorldPoint } from './canvas-cad-painter.js';
 import { evaluateSplLutRgb } from './gl-heatmap-renderer.js';
 import {
@@ -116,6 +117,22 @@ describe('viewport coordinates, LUT, and hit-testing', () => {
       kind: 'virtual-mic',
       id: mic.id,
     });
+  });
+
+  it('formats mirrored L/R source labels naturally and updates venue grid bounds with clamping', () => {
+    expect(formatMirroredSourceLabel('Main L')).toBe('Main R');
+    expect(formatMirroredSourceLabel('Front Fill L')).toBe('Front Fill R');
+    expect(formatMirroredSourceLabel('Proscenium Left')).toBe('Proscenium Right');
+    expect(formatMirroredSourceLabel('Delay Tower')).toBe('Delay Tower (Mirror)');
+
+    const store = new ProjectStore();
+    store.setSliceYM(6.5);
+    store.setVenueBounds({ xMin: -6, xMax: 34, yMin: -12, yMax: 4, zMax: 9.5 });
+    expect(store.scene.planBounds).toEqual({ xMin: -6, xMax: 34, yMin: -12, yMax: 4 });
+    expect(store.scene.sectionBounds.xMin).toBe(-6);
+    expect(store.scene.sectionBounds.xMax).toBe(34);
+    expect(store.scene.sectionBounds.zMax).toBe(9.5);
+    expect(store.scene.sectionBounds.sliceYM).toBe(4);
   });
 });
 

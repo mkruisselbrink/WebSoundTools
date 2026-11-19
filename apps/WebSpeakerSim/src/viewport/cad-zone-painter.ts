@@ -7,7 +7,7 @@
 
 import type { SelectedEntity } from '../model/project-store.js';
 import type { ProjectScene } from '../model/project-types.js';
-import type { ViewportMode } from './cad-grid-ruler.js';
+import type { OccupiedPillRect, ViewportMode } from './cad-grid-ruler.js';
 import { worldToScreen, type ViewportCamera2D } from './viewport-coords.js';
 
 export function drawSurfaces(
@@ -19,9 +19,10 @@ export function drawSurfaces(
     readonly camera: ViewportCamera2D;
     readonly cssWidth: number;
     readonly cssHeight: number;
+    readonly occupiedPills?: OccupiedPillRect[];
   }
 ): void {
-  const { mode, scene, selected, camera, cssWidth, cssHeight } = params;
+  const { mode, scene, selected, camera, cssWidth, cssHeight, occupiedPills } = params;
 
   for (const surf of scene.surfaces) {
     if (!surf.enabled) continue;
@@ -55,10 +56,18 @@ export function drawSurfaces(
       ctx.stroke();
 
       ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-      ctx.fillStyle = isStage ? '#fcd34d' : '#e2e8f0';
+      const tw = ctx.measureText(surf.name).width;
+      const lx = Math.max(6, Math.min(cssWidth - tw - 6, c0.px + 6));
+      const ly = Math.max(6, Math.min(cssHeight - 16, c0.py + 5));
+      ctx.strokeStyle = 'rgba(6, 9, 17, 0.85)';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(surf.name, c0.px + 6, c0.py + 5);
+      ctx.strokeText(surf.name, lx, ly);
+      ctx.fillStyle = isStage ? '#fcd34d' : '#e2e8f0';
+      ctx.fillText(surf.name, lx, ly);
+      occupiedPills?.push({ x: lx - 2, y: ly - 1, w: tw + 4, h: 13 });
       ctx.restore();
     } else {
       const sliceOffset = Math.abs(scene.sectionBounds.sliceYM - surf.yCenter);
@@ -101,11 +110,20 @@ export function drawSurfaces(
       ctx.stroke();
       ctx.setLineDash([]);
 
+      const secLabel = `${surf.name} (+${surf.earHeightM.toFixed(2)}m)`;
       ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-      ctx.fillStyle = isStage ? '#fcd34d' : '#bae6fd';
+      const tw = ctx.measureText(secLabel).width;
+      const lx = Math.max(6, Math.min(cssWidth - tw - 6, e0.px + 4));
+      const ly = Math.max(15, Math.min(cssHeight - 6, e0.py - 3));
+      ctx.strokeStyle = 'rgba(6, 9, 17, 0.85)';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(`${surf.name} (+${surf.earHeightM.toFixed(2)}m)`, e0.px + 4, e0.py - 3);
+      ctx.strokeText(secLabel, lx, ly);
+      ctx.fillStyle = isStage ? '#fcd34d' : '#bae6fd';
+      ctx.fillText(secLabel, lx, ly);
+      occupiedPills?.push({ x: lx - 2, y: ly - 12, w: tw + 4, h: 13 });
       ctx.restore();
     }
   }

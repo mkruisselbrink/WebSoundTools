@@ -1,7 +1,8 @@
 {
-  "name": "WebSoundMeter — Acoustic System Tuning & RTA/SPL Analyzer",
+  "id": "./",
+  "name": "WebSoundMeter — Multi-Channel Acoustic Analyzer & Show SPL Meter",
   "short_name": "WebSoundMeter",
-  "description": "Browser-based dual-channel electro-acoustic transfer function, phase, coherence, impulse response, Virtual EQ, and RTA/SPL analyzer.",
+  "description": "Offline-capable multi-channel dual-FFT acoustic analyzer for transfer function, phase, coherence, impulse response, virtual crossover & EQ modeling, RTA, and Live Show SPL compliance + feedback watch.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -28,6 +29,28 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "./screenshots/01-pa-tuning-and-transfer-function.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "PA System Tuning: Magnitude, Phase & Impulse Response with Auto Delay Finder"
+    },
+    {
+      "src": "./screenshots/02-virtual-eq-and-spatial-average.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Virtual Parametric EQ, Linkwitz-Riley Crossovers & Target-Aware Auto-Match Room"
+    },
+    {
+      "src": "./screenshots/03-live-show-spl-and-feedback.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Live Show Monitoring: Rolling LAeq15m Compliance & Narrowband Feedback Watch"
+    }
   ]
 }
-

@@ -12,6 +12,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:5174',
+    actionTimeout: 6000,
     trace: 'on-first-retry',
   },
   projects: [
@@ -21,7 +22,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --port 5174',
+    command: `"${process.execPath}" ../../node_modules/.bin/vite --port 5174`,
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
     timeout: 30000,

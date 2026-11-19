@@ -46,6 +46,23 @@ export interface ActiveRadiator {
   readonly dspChain: CompiledDspChain;
 }
 
+export function formatMirroredSourceLabel(name: string): string {
+  const trimmed = name.trim();
+  if (/\bLeft\b/i.test(trimmed)) {
+    return trimmed.replace(/\bLeft\b/i, (m) => (m[0] === 'l' ? 'right' : 'Right'));
+  }
+  if (/\bRight\b/i.test(trimmed)) {
+    return trimmed.replace(/\bRight\b/i, (m) => (m[0] === 'r' ? 'left' : 'Left'));
+  }
+  if (/(^|\s|[-_])L(\s*)$/.test(trimmed)) {
+    return trimmed.replace(/(^|\s|[-_])L(\s*)$/, '$1R$2');
+  }
+  if (/(^|\s|[-_])R(\s*)$/.test(trimmed)) {
+    return trimmed.replace(/(^|\s|[-_])R(\s*)$/, '$1L$2');
+  }
+  return `${trimmed} (Mirror)`;
+}
+
 export function expandSceneRadiators(
   scene: ProjectScene,
   speakerMap: ReadonlyMap<string, SpeakerDefinition>
@@ -140,7 +157,7 @@ export function expandSceneRadiators(
     if (ps.mirrorLeftRight && Math.abs(ps.position.y) > 1e-3) {
       pushRadiator({
         id: `${ps.id}:mirror`,
-        label: `${ps.name} (R)`,
+        label: formatMirroredSourceLabel(ps.name),
         speakerId: ps.speakerId,
         dspGroupId: ps.dspGroupId,
         rawPosition: { x: ps.position.x, y: -ps.position.y, z: ps.position.z },

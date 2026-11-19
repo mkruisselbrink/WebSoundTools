@@ -8,6 +8,7 @@ import { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import {
   applyFeedbackNotchToEqList,
   mergeFeedbackTracksIntoRingLog,
+  synthesizeRoomMatchEqBands,
 } from './auto-eq-matcher.js';
 import {
   EqualizerSourceConfig,
@@ -16,7 +17,6 @@ import {
   computeEqualizerSourceData,
   createDefaultEqBands,
   createDefaultEqDspConfig,
-  createRoomModeFlattenEqBands,
   normalizeEqSourceConfig,
   syncEqConfigWithBands,
 } from './eq-source.js';
@@ -622,12 +622,18 @@ export class SourceStore {
   }
 
   autoFlattenRoomModesWithEq(eqId: string): void {
+    const allSources = this.getAllSources();
     this.authoredStore.update((s) => ({
       ...s,
       eqSources: updateInList(
         s.eqSources,
         eqId,
-        (eq) => syncEqConfigWithBands(eq, createRoomModeFlattenEqBands()),
+        (eq) => {
+          const target = eq.targetSourceId
+            ? allSources.find((src) => src.id === eq.targetSourceId) ?? null
+            : null;
+          return syncEqConfigWithBands(eq, synthesizeRoomMatchEqBands(target));
+        },
         this.persistence.saveEq
       ),
     }));
@@ -688,7 +694,12 @@ export class SourceStore {
     this.notify();
   }
 
-  dragActiveEqBand(bandIndex: number, frequency: number, gainDb: number): void {
+  dragActiveEqBand(
+    bandIndex: number,
+    frequency: number,
+    gainDb: number,
+    q?: number
+  ): void {
     const activeEq =
       this.eqSources.find((eq) => eq.id === this.selectedSourceId) ?? this.eqSources[0];
     if (!activeEq) return;
@@ -699,7 +710,9 @@ export class SourceStore {
         eqSources: s.eqSources.map((eq) => {
           if (eq.id !== activeEq.id) return eq;
           const bands = eq.bands.map((b, i) =>
-            i === bandIndex ? { ...b, frequency, gainDb } : b
+            i === bandIndex
+              ? { ...b, frequency, gainDb, ...(q !== undefined ? { q } : {}) }
+              : b
           );
           const updated = syncEqConfigWithBands(eq, bands);
           this.scheduleDebouncedEqSave(updated);
@@ -709,6 +722,10 @@ export class SourceStore {
       `drag-eq-${activeEq.id}-${bandIndex}`
     );
     this.notify();
+  }
+
+  endEqBandDrag(): void {
+    this.authoredStore.endTransaction();
   }
 
   private scheduleDebouncedEqSave(updated: EqualizerSourceConfig): void {

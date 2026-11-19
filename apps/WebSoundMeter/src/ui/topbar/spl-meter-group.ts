@@ -104,6 +104,7 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
         <option value="Fast">Fast</option>
         <option value="Slow">Slow</option>
         <option value="Impulse">Impulse</option>
+        <option value="Leq">Leq</option>
       </select>
       <div class="spl-main-value" data-testid="spl-main-value">
         ${currentSpl.toFixed(1)} dB${props.splWeighting}

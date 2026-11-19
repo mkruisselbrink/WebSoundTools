@@ -10,8 +10,42 @@ import { DEFAULT_SOURCE_DSP_CONFIG } from '@foh/dsp';
 import type { ProjectScene } from '../model/project-types.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../physics/transform3d.js';
 
+export type VenuePresetId =
+  | 'club-cardioid-pa'
+  | 'festival-endfire-delays'
+  | 'theater-raked-balcony';
+
+export const PRESET_ENTITY_IDS = {
+  pointSources: ['ps-main-l', 'ps-fill-l', 'ps-delay-l', 'ps-pros-l', 'ps-balc-l'],
+  subArrays: ['sa-center-cardioid', 'sa-endfire-c', 'sa-arc'],
+  dspGroups: [
+    'grp-mains',
+    'grp-fills',
+    'grp-subs',
+    'grp-delays',
+    'grp-proscenium',
+    'grp-balcony-fills',
+    'grp-arc-subs',
+  ],
+  surfaces: ['surf-floor', 'surf-stage', 'surf-field', 'surf-orchestra', 'surf-balcony'],
+  virtualMics: [
+    'mic-foh',
+    'mic-front',
+    'mic-stage-vox',
+    'mic-rear',
+    'mic-orch-mid',
+    'mic-balcony',
+  ],
+} as const;
+
+export type PresetPointSourceId = (typeof PRESET_ENTITY_IDS.pointSources)[number];
+export type PresetSubArrayId = (typeof PRESET_ENTITY_IDS.subArrays)[number];
+export type PresetDspGroupId = (typeof PRESET_ENTITY_IDS.dspGroups)[number];
+export type PresetSurfaceId = (typeof PRESET_ENTITY_IDS.surfaces)[number];
+export type PresetVirtualMicId = (typeof PRESET_ENTITY_IDS.virtualMics)[number];
+
 export interface DemoVenuePreset {
-  readonly id: string;
+  readonly id: VenuePresetId;
   readonly name: string;
   readonly summary: string;
   readonly createScene: () => ProjectScene;

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "tsc --noEmit -p tests/e2e/tsconfig.json && playwright test"
   },
   "dependencies": {
     "@foh/acoustics": "0.1.0",

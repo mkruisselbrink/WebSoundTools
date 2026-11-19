@@ -25,6 +25,11 @@ type LibraryModalTab = 'catalog' | 'spec-builder' | 'import';
 @customElement('wss-speaker-library-modal')
 export class WssSpeakerLibraryModal extends LitElement {
   static styles = css`
+    :where(button, select, input, a, [tabindex]):focus-visible {
+      outline: 2px solid #38bdf8;
+      outline-offset: 2px;
+    }
+
     .tabs {
       display: flex;
       gap: 6px;
@@ -34,20 +39,29 @@ export class WssSpeakerLibraryModal extends LitElement {
     }
 
     .tab-btn {
+      position: relative;
+      font: inherit;
       background: #162033;
       color: #cbd5e1;
       border: 1px solid #263554;
       border-radius: 4px;
       padding: 4px 10px;
       font-size: 11.5px;
+      font-weight: 500;
       cursor: pointer;
     }
 
-    .tab-btn[data-active='true'] {
+    .tab-btn:is([aria-selected='true'], [data-active='true']) {
       background: #0284c7;
       border-color: #38bdf8;
       color: #ffffff;
-      font-weight: 600;
+    }
+
+    .tab-btn:is([aria-selected='true'], [data-active='true'])::after {
+      content: '';
+      position: absolute;
+      inset: auto 2px 0;
+      border-block-end: 2px solid #e0f2fe;
     }
 
     .body {
@@ -287,34 +301,80 @@ export class WssSpeakerLibraryModal extends LitElement {
         closeButtonTestId="btn-close-library-modal"
         @close-modal=${() => this.close()}
       >
-        <div class="tabs" slot="subheader">
+        <div
+          class="tabs"
+          slot="subheader"
+          role="tablist"
+          focusgroup="tablist nomemory"
+          aria-label="Loudspeaker library sections"
+          @keydown=${(ev: KeyboardEvent) => {
+            if (typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype) {
+              return;
+            }
+            const order: readonly LibraryModalTab[] = ['catalog', 'spec-builder', 'import'];
+            const idx = order.indexOf(this.activeTab);
+            let next = -1;
+            if (ev.key === 'ArrowRight') next = (idx + 1) % order.length;
+            else if (ev.key === 'ArrowLeft') next = (idx - 1 + order.length) % order.length;
+            else if (ev.key === 'Home') next = 0;
+            else if (ev.key === 'End') next = order.length - 1;
+            if (next < 0) return;
+            ev.preventDefault();
+            this.activeTab = order[next];
+            void this.updateComplete.then(() => {
+              this.renderRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+            });
+          }}
+        >
           <button
+            type="button"
+            role="tab"
+            id="spk-lib-tab-catalog"
             class="tab-btn"
             data-testid="tab-catalog"
+            aria-selected=${String(this.activeTab === 'catalog')}
             data-active=${String(this.activeTab === 'catalog')}
+            ?focusgroupstart=${this.activeTab === 'catalog'}
+            tabindex=${this.activeTab === 'catalog' ? '0' : '-1'}
             @click=${() => (this.activeTab = 'catalog')}
           >
             Catalog (${allSpeakers.length})
           </button>
           <button
+            type="button"
+            role="tab"
+            id="spk-lib-tab-spec-builder"
             class="tab-btn"
             data-testid="tab-spec-builder"
+            aria-selected=${String(this.activeTab === 'spec-builder')}
             data-active=${String(this.activeTab === 'spec-builder')}
+            ?focusgroupstart=${this.activeTab === 'spec-builder'}
+            tabindex=${this.activeTab === 'spec-builder' ? '0' : '-1'}
             @click=${() => (this.activeTab = 'spec-builder')}
           >
             Datasheet Spec Builder
           </button>
           <button
+            type="button"
+            role="tab"
+            id="spk-lib-tab-import"
             class="tab-btn"
             data-testid="tab-import-file"
+            aria-selected=${String(this.activeTab === 'import')}
             data-active=${String(this.activeTab === 'import')}
+            ?focusgroupstart=${this.activeTab === 'import'}
+            tabindex=${this.activeTab === 'import' ? '0' : '-1'}
             @click=${() => (this.activeTab = 'import')}
           >
             Import .gll / .clf / .frd / .json
           </button>
         </div>
 
-        <div class="body">
+        <div
+          class="body"
+          role="tabpanel"
+          aria-labelledby="spk-lib-tab-${this.activeTab}"
+        >
           ${this.activeTab === 'catalog'
             ? renderCatalogTab({
                 allSpeakers,

@@ -31,7 +31,9 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         <span>WebSoundMeter</span>
         <div class="mode-toggle-group" role="group" aria-label="Workspace Mode">
           <button
+            type="button"
             class=${mode === 'tuning' ? 'active' : ''}
+            aria-pressed=${String(mode === 'tuning')}
             data-testid="btn-mode-tuning"
             title="System Tuning & Alignment Mode"
             @click=${() => props.onWorkspaceModeChange?.('tuning')}
@@ -39,7 +41,9 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
             🛠 Tuning
           </button>
           <button
+            type="button"
             class=${mode === 'show' ? 'active show-active' : ''}
+            aria-pressed=${String(mode === 'show')}
             data-testid="btn-mode-show"
             title="Live Show Monitoring Mode (locks out Signal Generator & expands SPL / Feedback Watch)"
             @click=${() => props.onWorkspaceModeChange?.('show')}

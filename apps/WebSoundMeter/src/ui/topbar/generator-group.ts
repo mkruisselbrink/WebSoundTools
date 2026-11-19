@@ -25,10 +25,12 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
   const outputChannelIndices = Array.from({ length: props.availableOutputChannels }, (_, i) => i);
 
   return html`
-    <div class="toolbar-group">
+    <div class="toolbar-group" role="group" aria-label="Signal Generator">
       <span class="toolbar-label">Gen</span>
       <button
+        type="button"
         data-testid="btn-generator-toggle"
+        aria-pressed=${String(props.genConfig.enabled)}
         class="btn-toggle-gen ${props.genConfig.enabled ? 'btn-accent' : ''}"
         @click=${props.onToggleGenerator}
       >

@@ -42,7 +42,7 @@ export function renderEqInspector(
           <button
             class="btn-accent"
             data-testid="btn-auto-flatten-eq"
-            title="Load corrective inverse EQ matching the PA Room Modes simulator preset"
+            title="Synthesize subtractive parametric EQ bands for broad resonances on the target trace"
             @click=${() => handlers.onAutoFlatten(eq.id)}
           >
             Auto-Match Room
@@ -88,7 +88,7 @@ export function renderEqInspector(
         maxEqBands: 12,
         allowNegativeDelay: true,
         muteLabel: 'Bypass / Mute Output',
-        tipText: 'Tip: Drag green EQ handles directly on the Magnitude chart!',
+        tipText: 'Tip: Drag EQ handles for Freq/Gain; Shift + Drag or Wheel for Q.',
         testIds: {
           gainDb: 'eq-dsp-gain',
           delayMs: 'eq-dsp-delay',

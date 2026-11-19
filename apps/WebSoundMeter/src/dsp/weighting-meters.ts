@@ -34,6 +34,9 @@ export type EpochEnergySnapshot = Record<WeightingCurve, EpochCurveEnergy>;
 export interface BroadbandLevelsSnapshot {
   readonly levelsDb: Record<WeightingCurve, Record<MeterIntegrationTime, number>>;
   readonly peaksDb: Record<WeightingCurve, number>;
+  /** Raw pre-gain ADC input RMS & Peak levels in dBFS for preamp gain-staging */
+  readonly inputRmsDbFs?: number;
+  readonly inputPeakDbFs?: number;
   readonly referenceRmsDb: number;
   readonly referencePeakDb: number;
   /** Offset added to dBFS to display calibrated dB SPL (default 100 dB or user-calibrated) */
@@ -155,6 +158,7 @@ export class BroadbandMeterBank {
   private readonly meterZ: SingleCurveMeter;
   private readonly meterA: SingleCurveMeter;
   private readonly meterC: SingleCurveMeter;
+  private readonly meterInputRaw: SingleCurveMeter;
   private readonly meterRef: SingleCurveMeter;
 
   constructor(sampleRate: number = 48000, splOffsetDb: number = 0.0) {
@@ -163,6 +167,7 @@ export class BroadbandMeterBank {
     this.meterZ = new SingleCurveMeter('Z', sampleRate);
     this.meterA = new SingleCurveMeter('A', sampleRate);
     this.meterC = new SingleCurveMeter('C', sampleRate);
+    this.meterInputRaw = new SingleCurveMeter('Z', sampleRate);
     this.meterRef = new SingleCurveMeter('Z', sampleRate);
   }
 
@@ -172,6 +177,7 @@ export class BroadbandMeterBank {
       this.meterZ.setSampleRate('Z', sampleRate);
       this.meterA.setSampleRate('A', sampleRate);
       this.meterC.setSampleRate('C', sampleRate);
+      this.meterInputRaw.setSampleRate('Z', sampleRate);
       this.meterRef.setSampleRate('Z', sampleRate);
     }
   }
@@ -188,13 +194,15 @@ export class BroadbandMeterBank {
     this.meterZ.reset();
     this.meterA.reset();
     this.meterC.reset();
+    this.meterInputRaw.reset();
     this.meterRef.reset();
   }
 
-  processSample(sampleM: number, sampleR: number): void {
+  processSample(sampleM: number, sampleR: number, rawInputM: number = sampleM): void {
     this.meterZ.processSample(sampleM);
     this.meterA.processSample(sampleM);
     this.meterC.processSample(sampleM);
+    this.meterInputRaw.processSample(rawInputM);
     this.meterRef.processSample(sampleR);
   }
 
@@ -204,7 +212,7 @@ export class BroadbandMeterBank {
     length: number = samplesM.length
   ): void {
     for (let i = 0; i < length; i++) {
-      this.processSample(samplesM[i], samplesR[i]);
+      this.processSample(samplesM[i], samplesR[i], samplesM[i]);
     }
   }
 
@@ -218,6 +226,7 @@ export class BroadbandMeterBank {
 
   getSnapshot(rollingLeq?: RollingLeqSnapshot): BroadbandLevelsSnapshot {
     const offset = this.splOffsetDb;
+    const rawInLevels = this.meterInputRaw.getLevelsDb(0);
     const refLevels = this.meterRef.getLevelsDb(0);
     return {
       levelsDb: {
@@ -230,6 +239,8 @@ export class BroadbandMeterBank {
         A: this.meterA.getPeakDb(offset),
         C: this.meterC.getPeakDb(offset),
       },
+      inputRmsDbFs: rawInLevels.Fast,
+      inputPeakDbFs: this.meterInputRaw.getPeakDb(0),
       referenceRmsDb: refLevels.Fast,
       referencePeakDb: this.meterRef.getPeakDb(0),
       splOffsetDb: offset,

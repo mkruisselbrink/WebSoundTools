@@ -19,6 +19,7 @@ import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
 } from '../../dsp/synthetic-rig.js';
+import type { BroadbandLevelsSnapshot } from '../../dsp/weighting-meters.js';
 import { StoredCalibrationFile } from '../../sources/session-storage.js';
 import {
   renderAdvancedMeasurementSettings,
@@ -28,6 +29,7 @@ import {
 export interface LiveMeasurementInspectorHandlers {
   readonly slot?: LiveMeasurementSlotConfig;
   readonly delayEstimate?: DelayEstimate;
+  readonly levels?: BroadbandLevelsSnapshot;
   readonly audioInputMode?: InputSourceMode;
   readonly availableChannels?: number;
   readonly globalReferenceChannel?: number;
@@ -52,6 +54,45 @@ export interface LiveMeasurementInspectorHandlers {
   readonly onResetAveraging: () => void;
   readonly onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => void;
   readonly onCalibrationUpload: (e: Event) => void;
+}
+
+function renderDbfsMeterRow(
+  label: string,
+  rmsDbFs: number | undefined,
+  peakDbFs: number | undefined,
+  testIdPrefix: string
+): TemplateResult {
+  const rms = rmsDbFs !== undefined && Number.isFinite(rmsDbFs) ? rmsDbFs : -140;
+  const peak = peakDbFs !== undefined && Number.isFinite(peakDbFs) ? peakDbFs : -140;
+  const toPct = (db: number) => Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+  const rmsPct = toPct(rms);
+  const peakPct = toPct(peak);
+  const isClip = peak >= -0.5;
+  const fillColor =
+    rms >= -3 ? '#ef4444' : rms >= -12 ? '#f59e0b' : '#10b981';
+  const displayVal = rms > -99 ? `${rms.toFixed(1)} dB` : '— dB';
+
+  return html`
+    <div class="dbfs-meter-row" data-testid="${testIdPrefix}-row">
+      <span class="dbfs-meter-label">${label}</span>
+      <div class="dbfs-meter-track">
+        <div
+          class="dbfs-meter-fill"
+          style="width:${rmsPct.toFixed(1)}%;background:${fillColor};"
+        ></div>
+        ${peak > -60
+          ? html`<div class="dbfs-meter-peak" style="left:calc(${peakPct.toFixed(1)}% - 1px);"></div>`
+          : nothing}
+      </div>
+      <span class="dbfs-meter-val" data-testid="${testIdPrefix}-rms">${displayVal}</span>
+      <span
+        class="dbfs-clip-badge ${isClip ? 'clip' : ''}"
+        data-testid="${testIdPrefix}-clip"
+      >
+        ${isClip ? 'CLIP' : 'OK'}
+      </span>
+    </div>
+  `;
 }
 
 export function renderLiveMeasurementInspector(
@@ -174,6 +215,34 @@ export function renderLiveMeasurementInspector(
             `
           : nothing}
 
+        <div class="prop-field full-width">
+          <label>Preamp Headroom (dBFS)</label>
+          <div class="dbfs-meter-strip" data-testid="input-dbfs-meter-strip">
+            ${renderDbfsMeterRow(
+              'Meas M',
+              handlers.levels?.inputRmsDbFs ??
+                (handlers.levels
+                  ? handlers.levels.levelsDb.Z.Fast -
+                    handlers.levels.splOffsetDb -
+                    cfg.gainDb
+                  : undefined),
+              handlers.levels?.inputPeakDbFs ??
+                (handlers.levels
+                  ? handlers.levels.peaksDb.Z -
+                    handlers.levels.splOffsetDb -
+                    cfg.gainDb
+                  : undefined),
+              'meter-meas-in'
+            )}
+            ${renderDbfsMeterRow(
+              'Ref R',
+              handlers.levels?.referenceRmsDb,
+              handlers.levels?.referencePeakDb,
+              'meter-ref-in'
+            )}
+          </div>
+        </div>
+
         <div class="prop-field">
           <label>Ref Delay (ms)</label>
           <input
@@ -249,7 +318,7 @@ export function renderLiveMeasurementInspector(
               })}
           >
             <option value="foh-normal">FOH Normal (Balanced)</option>
-            <option value="monitor-sensitive">Monitor Sensitive (Fast)</option>
+            <option value="monitor-sensitive">Monitor / Wedge Sensitive</option>
             <option value="custom">Custom Thresholds</option>
             <option value="off">Off</option>
           </select>

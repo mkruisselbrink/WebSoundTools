@@ -18,8 +18,23 @@ import type { ViewportLayoutMode } from '../../model/url-state.js';
 import type { SimulationSnapshot } from '../../physics/sim-controller.js';
 import { DEFAULT_GROUND_REFLECTOR } from '../../physics/transform3d.js';
 
+export const SINGLE_BAND_FREQUENCIES_HZ = [
+  31.5, 63, 80, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+] as const;
+
+export type SingleBandHz = (typeof SINGLE_BAND_FREQUENCIES_HZ)[number];
+
+export type BandOptionKey =
+  | 'pink-A'
+  | 'pink-C'
+  | 'pink-Z'
+  | 'music-A'
+  | 'music-C'
+  | 'sub-band'
+  | `hz-${SingleBandHz}`;
+
 export interface BandOptionEntry {
-  readonly key: string;
+  readonly key: BandOptionKey;
   readonly label: string;
   readonly selection: AnalysisBandSelection;
 }
@@ -97,7 +112,7 @@ export const ANALYSIS_BAND_OPTIONS: readonly BandOptionEntry[] = [
       spectrumShape: 'pink',
     },
   },
-  ...[31.5, 63, 80, 125, 250, 500, 1000, 2000, 4000, 8000, 16000].map(
+  ...SINGLE_BAND_FREQUENCIES_HZ.map(
     (hz): BandOptionEntry => ({
       key: `hz-${hz}`,
       label: `${hz >= 1000 ? `${hz / 1000} kHz` : `${hz} Hz`} (Single Band)`,
@@ -164,19 +179,20 @@ export function renderTopbar(
           )}
         </select>
 
-        <button class="btn" data-testid="btn-projects" @click=${cb.onOpenProjectsModal}>
+        <button type="button" class="btn" data-testid="btn-projects" @click=${cb.onOpenProjectsModal}>
           Projects
         </button>
-        <button class="btn" data-testid="btn-export-project" @click=${cb.onExportProjectJson}>
+        <button type="button" class="btn" data-testid="btn-export-project" @click=${cb.onExportProjectJson}>
           Export
         </button>
-        <button class="btn" data-testid="btn-import-project" @click=${cb.onTriggerImportProjectJson}>
+        <button type="button" class="btn" data-testid="btn-import-project" @click=${cb.onTriggerImportProjectJson}>
           Import
         </button>
 
-        <span class="tb-divider"></span>
+        <span class="tb-divider" role="separator" aria-orientation="vertical"></span>
 
         <button
+          type="button"
           class="btn"
           data-testid="btn-undo"
           ?disabled=${!store.canUndo}
@@ -186,6 +202,7 @@ export function renderTopbar(
           Undo
         </button>
         <button
+          type="button"
           class="btn"
           data-testid="btn-redo"
           ?disabled=${!store.canRedo}
@@ -298,8 +315,10 @@ export function renderTopbar(
         </select>
 
         <button
+          type="button"
           class="btn"
           data-testid="btn-colormap-stepped"
+          aria-pressed=${String(cmap.stepped)}
           data-active=${String(cmap.stepped)}
           title="Toggle discrete dB isobar color bands vs. smooth gradient"
           @click=${() => store.setColormap({ stepped: !cmap.stepped })}
@@ -308,8 +327,10 @@ export function renderTopbar(
         </button>
 
         <button
+          type="button"
           class="btn"
           data-testid="btn-ground-bounce"
+          aria-pressed=${String(groundEnabled)}
           data-active=${String(groundEnabled)}
           title="Toggle 1st-Order Ground Reflection (G)"
           @click=${() => store.setGroundReflection(!groundEnabled)}
@@ -318,6 +339,7 @@ export function renderTopbar(
         </button>
 
         <button
+          type="button"
           class="btn btn-primary"
           data-testid="btn-speaker-library"
           title="Open Loudspeaker Library, Spec Builder & .gll/.clf/.frd Importer (L)"
@@ -357,33 +379,43 @@ export function renderTopbar(
             `
           : ''}
 
+        <div class="topbar-group" role="group" aria-label="Viewport layout">
+          <button
+            type="button"
+            class="btn"
+            data-testid="layout-split"
+            aria-pressed=${String(layoutMode === 'split')}
+            data-active=${String(layoutMode === 'split')}
+            @click=${() => cb.onSetLayoutMode('split')}
+          >
+            Split
+          </button>
+          <button
+            type="button"
+            class="btn"
+            data-testid="layout-plan"
+            aria-pressed=${String(layoutMode === 'plan')}
+            data-active=${String(layoutMode === 'plan')}
+            @click=${() => cb.onSetLayoutMode('plan')}
+          >
+            Plan
+          </button>
+          <button
+            type="button"
+            class="btn"
+            data-testid="layout-section"
+            aria-pressed=${String(layoutMode === 'section')}
+            data-active=${String(layoutMode === 'section')}
+            @click=${() => cb.onSetLayoutMode('section')}
+          >
+            Section
+          </button>
+        </div>
         <button
-          class="btn"
-          data-testid="layout-split"
-          data-active=${String(layoutMode === 'split')}
-          @click=${() => cb.onSetLayoutMode('split')}
-        >
-          Split
-        </button>
-        <button
-          class="btn"
-          data-testid="layout-plan"
-          data-active=${String(layoutMode === 'plan')}
-          @click=${() => cb.onSetLayoutMode('plan')}
-        >
-          Plan
-        </button>
-        <button
-          class="btn"
-          data-testid="layout-section"
-          data-active=${String(layoutMode === 'section')}
-          @click=${() => cb.onSetLayoutMode('section')}
-        >
-          Section
-        </button>
-        <button
+          type="button"
           class="btn"
           data-testid="btn-toggle-charts"
+          aria-pressed=${String(chartDrawerExpanded)}
           data-active=${String(chartDrawerExpanded)}
           @click=${cb.onToggleChartDrawer}
         >

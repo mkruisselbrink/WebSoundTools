@@ -214,9 +214,9 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
       </div>
 
       <div class="header-right">
-        <button title="Zoom In Y Axis" @click=${() => props.onZoomY(0.75)}>Y+</button>
-        <button title="Zoom Out Y Axis" @click=${() => props.onZoomY(1.333)}>Y−</button>
-        <button title="Reset Axis Range" @click=${props.onResetZoom}>Reset</button>
+        <button type="button" title="Zoom In Y Axis" aria-label="Y+ Zoom In" @click=${() => props.onZoomY(0.75)}>Y+</button>
+        <button type="button" title="Zoom Out Y Axis" aria-label="Y− Zoom Out" @click=${() => props.onZoomY(1.333)}>Y−</button>
+        <button type="button" title="Reset Axis Range" @click=${props.onResetZoom}>Reset</button>
       </div>
     </div>
   `;

@@ -26,7 +26,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
   return html`
     <div data-testid="inspector-environment">
       <div class="insp-header">
-        <span class="insp-title">Atmosphere, Colormap & Venue</span>
+        <span class="insp-title">Atmosphere, Colormap & Venue Bounds</span>
       </div>
 
       <div class="form-section">
@@ -249,17 +249,92 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
       </div>
 
       <div class="form-section">
-        <div class="form-section-title">Side Section Slice</div>
-        <div class="field-row">
-          <span class="field-label">Slice Y (m)</span>
-          <input
-            type="number"
-            step="0.5"
-            data-testid="env-slice-y"
-            .value=${String(Number(scene.sectionBounds.sliceYM.toFixed(2)))}
-            @input=${(ev: Event) =>
-              store.setSliceYM(numVal(ev, scene.sectionBounds.sliceYM), 'env-slice')}
-          />
+        <div class="form-section-title">Venue Grid Bounds & Section Slice (m)</div>
+        <div class="xy-grid">
+          <label class="mini-field">
+            <span>X Min (m)</span>
+            <input
+              type="number"
+              step="1"
+              data-testid="env-bounds-xmin"
+              .value=${String(scene.planBounds.xMin)}
+              @change=${(ev: Event) =>
+                store.setVenueBounds(
+                  { xMin: numVal(ev, scene.planBounds.xMin) },
+                  'env-bounds'
+                )}
+            />
+          </label>
+          <label class="mini-field">
+            <span>X Max (m)</span>
+            <input
+              type="number"
+              step="1"
+              data-testid="env-bounds-xmax"
+              .value=${String(scene.planBounds.xMax)}
+              @change=${(ev: Event) =>
+                store.setVenueBounds(
+                  { xMax: numVal(ev, scene.planBounds.xMax) },
+                  'env-bounds'
+                )}
+            />
+          </label>
+          <label class="mini-field">
+            <span>Y Min (m)</span>
+            <input
+              type="number"
+              step="1"
+              data-testid="env-bounds-ymin"
+              .value=${String(scene.planBounds.yMin)}
+              @change=${(ev: Event) =>
+                store.setVenueBounds(
+                  { yMin: numVal(ev, scene.planBounds.yMin) },
+                  'env-bounds'
+                )}
+            />
+          </label>
+          <label class="mini-field">
+            <span>Y Max (m)</span>
+            <input
+              type="number"
+              step="1"
+              data-testid="env-bounds-ymax"
+              .value=${String(scene.planBounds.yMax)}
+              @change=${(ev: Event) =>
+                store.setVenueBounds(
+                  { yMax: numVal(ev, scene.planBounds.yMax) },
+                  'env-bounds'
+                )}
+            />
+          </label>
+        </div>
+        <div class="xy-grid" style="margin-top:6px">
+          <label class="mini-field">
+            <span>Ceiling Z Max (m)</span>
+            <input
+              type="number"
+              step="0.5"
+              min="2"
+              data-testid="env-bounds-zmax"
+              .value=${String(scene.sectionBounds.zMax)}
+              @change=${(ev: Event) =>
+                store.setVenueBounds(
+                  { zMax: numVal(ev, scene.sectionBounds.zMax) },
+                  'env-bounds'
+                )}
+            />
+          </label>
+          <label class="mini-field">
+            <span>Slice Y (m)</span>
+            <input
+              type="number"
+              step="0.5"
+              data-testid="env-slice-y"
+              .value=${String(Number(scene.sectionBounds.sliceYM.toFixed(2)))}
+              @input=${(ev: Event) =>
+                store.setSliceYM(numVal(ev, scene.sectionBounds.sliceYM), 'env-slice')}
+            />
+          </label>
         </div>
       </div>
     </div>

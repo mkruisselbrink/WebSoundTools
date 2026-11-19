@@ -44,7 +44,7 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
   };
 
   return html`
-    <div class="toolbar-group">
+    <div class="toolbar-group" role="group" aria-label="Audio Input Routing">
       <span class="toolbar-label">Input</span>
       <select
         aria-label="Audio Input Source"
@@ -110,7 +110,9 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
         : nothing}
 
       <button
+        type="button"
         data-testid="btn-pause"
+        aria-pressed=${String(props.isPaused)}
         class="btn-toggle-pause ${props.isPaused ? 'btn-active' : ''}"
         title="Pause / Resume Live Measurement (Shortcut: Space)"
         @click=${props.onTogglePause}

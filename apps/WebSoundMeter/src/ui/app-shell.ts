@@ -110,6 +110,42 @@ export class WebSoundMeterApp extends LitElement {
         void this.handleTogglePause();
       },
       onAddLiveSource: () => this.handleAddLiveSource(),
+      onAddEqSource: () => {
+        if (this.workspace.workspaceMode !== 'tuning') return;
+        this.sourceStore.addVirtualEqSource();
+        this.persistState('replace');
+      },
+      onAddUnionSource: () => {
+        if (this.workspace.workspaceMode !== 'tuning') return;
+        this.sourceStore.addUnionSource();
+        this.persistState('replace');
+      },
+      onResetAveraging: () => {
+        const activeId = this.sourceStore.getActiveLiveSourceId();
+        this.engine?.resetAveraging(activeId);
+      },
+      onSelectLayoutCount: (count) => {
+        const isShow = this.workspace.workspaceMode === 'show';
+        const nextPreset: LayoutPreset =
+          count === 1
+            ? 'single'
+            : count === 2
+              ? isShow
+                ? 'show-dual'
+                : 'tf-dual'
+              : isShow
+                ? 'show-triple'
+                : 'pa-triple';
+        this.setLayoutPreset(nextPreset);
+      },
+      onEscape: () => {
+        if (this.showAdvancedMeasSettings) {
+          this.showAdvancedMeasSettings = false;
+        } else {
+          this.sourceStore.setSelectedSourceId(this.sourceStore.getActiveLiveSourceId());
+          this.persistState('replace');
+        }
+      },
       onUndo: () => {
         if (this.sourceStore.undo()) {
           this.persistState('replace');
@@ -326,7 +362,7 @@ export class WebSoundMeterApp extends LitElement {
     const modeChanged = this.workspace.audioInputMode !== mode;
     this.workspace.audioInputMode = mode;
     if (mode === 'hardware') {
-      if (this.workspace.workspaceMode === 'show' && this.genConfig.enabled) {
+      if ((modeChanged || this.workspace.workspaceMode === 'show') && this.genConfig.enabled) {
         this.updateGenerator({ enabled: false });
       }
       this.selectedDeviceId = deviceId;
@@ -355,10 +391,10 @@ export class WebSoundMeterApp extends LitElement {
   };
 
   private handleEqBandDrag = (
-    e: CustomEvent<{ bandIndex: number; frequency: number; gainDb: number }>
+    e: CustomEvent<{ bandIndex: number; frequency: number; gainDb: number; q?: number }>
   ): void => {
-    const { bandIndex, frequency, gainDb } = e.detail;
-    this.sourceStore.dragActiveEqBand(bandIndex, frequency, gainDb);
+    const { bandIndex, frequency, gainDb, q } = e.detail;
+    this.sourceStore.dragActiveEqBand(bandIndex, frequency, gainDb, q);
   };
 
   private handleCalibrationUpload = (slotId: string, e: Event): void => {
@@ -404,6 +440,7 @@ export class WebSoundMeterApp extends LitElement {
     const liveHandlers = {
       slot: liveSlot,
       delayEstimate: activeLiveSource?.delayEstimate,
+      levels: activeLiveSource?.levels,
       audioInputMode: this.workspace.audioInputMode,
       availableChannels: this.availableChannels,
       globalReferenceChannel: this.globalReferenceChannel,
@@ -597,6 +634,7 @@ export class WebSoundMeterApp extends LitElement {
                   this.engine?.setSplHistoryWindow(e.detail.windowSec);
                 }}
                 @eq-band-drag=${this.handleEqBandDrag}
+                @eq-band-drag-end=${() => this.sourceStore.endEqBandDrag()}
               ></chart-panel>
             `
           )}

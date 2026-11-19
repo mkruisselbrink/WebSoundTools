@@ -1,7 +1,8 @@
 {
-  "name": "WebSpeakerSim — Live Sound Loudspeaker & SPL Prediction",
+  "id": "./",
+  "name": "WebSpeakerSim — 3D Venue Loudspeaker & Subwoofer SPL Predictor",
   "short_name": "WebSpeakerSim",
-  "description": "Browser-based 3D live-sound loudspeaker placement, subwoofer array design, and direct-field SPL/phase prediction tool.",
+  "description": "Offline-capable synchronized Plan & Side Section venue simulator over a 3D direct-field + ground-reflection solver, point-source & cardioid/end-fire/arc subwoofer arrays, .gll/.clf/.frd importers, and Virtual Mic .frd export.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -15,7 +16,41 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./screenshots/01-plan-and-section-spl-prediction.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Synchronized Plan & Side Section 3D SPL Prediction with Coverage Metrics"
+    },
+    {
+      "src": "./screenshots/02-cardioid-subwoofer-array-63hz.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Cardioid Subwoofer Array (CSA) Stage Rejection & 63 Hz Isobar Contours"
+    },
+    {
+      "src": "./screenshots/03-virtual-mic-alignment-and-library.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Virtual Measurement Microphones, Auto Time-Alignment & .FRD Target Export"
     }
   ]
 }
-

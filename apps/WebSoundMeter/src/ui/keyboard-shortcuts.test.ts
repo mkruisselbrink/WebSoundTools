@@ -106,6 +106,36 @@ describe('keyboard-shortcuts', () => {
       )
     ).toBe(true);
     expect(onRedo).toHaveBeenCalledTimes(1);
+
+    const onAddEqSource = vi.fn();
+    const onAddUnionSource = vi.fn();
+    const onResetAveraging = vi.fn();
+    const onSelectLayoutCount = vi.fn();
+    const onEscape = vi.fn();
+
+    for (const key of ['e', 'u', 'r', '1', '2', '3', 'Escape']) {
+      expect(
+        dispatchAppKeydown(
+          { key, target: { tagName: 'DIV' }, preventDefault },
+          {
+            onCaptureTrace,
+            onFindAndApplyDelay,
+            onAddEqSource,
+            onAddUnionSource,
+            onResetAveraging,
+            onSelectLayoutCount,
+            onEscape,
+          }
+        )
+      ).toBe(true);
+    }
+    expect(onAddEqSource).toHaveBeenCalledTimes(1);
+    expect(onAddUnionSource).toHaveBeenCalledTimes(1);
+    expect(onResetAveraging).toHaveBeenCalledTimes(1);
+    expect(onSelectLayoutCount).toHaveBeenNthCalledWith(1, 1);
+    expect(onSelectLayoutCount).toHaveBeenNthCalledWith(2, 2);
+    expect(onSelectLayoutCount).toHaveBeenNthCalledWith(3, 3);
+    expect(onEscape).toHaveBeenCalledTimes(1);
   });
 });
 
