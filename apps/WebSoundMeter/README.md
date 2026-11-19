@@ -11,12 +11,12 @@
   - **Global Reference (`Ref`) with Per-Measurement Override:** Configure a global reference channel (`Internal Gen` or `In Ch 1..N`) in the Topbar while allowing individual live measurements to override their reference channel under **Advanced Settings**.
   - **Preamp Headroom Metering (`dBFS` + `CLIP`):** Live pre-gain RMS/Peak `dBFS` bars and `-0.5 dBFS` clip indicators on both Measurement (`Meas M`) and Reference (`Ref R`) taps.
   - **Dual-Real Packed Radix-2 FFT** (`1024` to `32768` points) transforming both Measurement and Reference channels in a single complex FFT pass.
-  - **Transfer Function Estimators:** $H_1(f) = \langle G_{rm}(f) \rangle / \langle G_{rr}(f) \rangle$ cross-spectral estimator for uncorrelated room noise rejection, plus $|M(f)|/|R(f)|$ ratio mode with complex unit-vector phase averaging.
-  - **Magnitude-Squared Coherence ($\gamma^2$):** Independent rolling cross-spectral window with `Alpha Fade`, `Hard Cutoff` (`γ² ≥ 20%..95%`), or `Off` blanking modes.
+  - **Transfer Function Estimators:** $H_1(f) = \langle G_{rm}(f) \rangle / \langle G_{rr}(f) \rangle$ cross-spectral estimator for uncorrelated room noise rejection, plus $\lvert M(f) \rvert / \lvert R(f) \rvert$ ratio mode with complex unit-vector phase averaging.
+  - **Magnitude-Squared Coherence (`γ²`):** Independent rolling cross-spectral window with `Alpha Fade`, `Hard Cutoff` (`γ² ≥ 20%..95%`), or `Off` blanking modes.
   - **Regularized Deconvolution:** Tikhonov-regularized inverse FFT impulse response (`Linear` and logarithmic `ETC dB`), step response, polarity detection, and parabolic sub-sample **Auto Delay Finder**.
-  - **Fractional-Octave Smoothing:** $O(1)$ prefix-sum `1/48`, `1/24`, `1/12`, `1/6`, `1/3`, and `1/1` octave magnitude and complex phase smoothing.
+  - **Fractional-Octave Smoothing:** `O(1)` prefix-sum `1/48`, `1/24`, `1/12`, `1/6`, `1/3`, and `1/1` octave magnitude and complex phase smoothing.
 - **IEC 61672 Broadband Metering & Live Show Compliance:**
-  - Simultaneous **A**, **C**, and **Z** frequency weightings with **Fast** ($125\text{ ms}$), **Slow** ($1000\text{ ms}$), **Impulse** ($35\text{ ms}$), **Leq**, and **Peak** readouts.
+  - Simultaneous **A**, **C**, and **Z** frequency weightings with **Fast** (`125 ms`), **Slow** (`1000 ms`), **Impulse** (`35 ms`), **Leq**, and **Peak** readouts.
   - **Show Mode (`🎚 Show`):** Hardware generator safety lockout, `4`-hour rolling `LAeq1m` / `LAeq5m` / `LAeq15m` / `LAeq60m` & `LCeq − LAeq` tracking with `IndexedDB` crash checkpoints, UTC CSV compliance export, and multi-stage narrowband **Feedback Watch** with one-click `Notch EQ` insertion.
 - **Built-in Demo Simulator & Signal Generator:**
   - Zero-setup synthetic acoustic rig modeling multi-tap reflections, propagation delay, room modes, HF air absorption, sub/top Linkwitz-Riley crossovers, and live feedback rings (`6` presets).

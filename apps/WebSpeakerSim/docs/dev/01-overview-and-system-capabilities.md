@@ -33,7 +33,7 @@ Every source group (and optional per-cabinet trim) passes through a deterministi
 
 ### 2.4 Dual-Resolution Acoustic Evaluation
 To maintain interactive 60 FPS manipulation while preserving fine frequency-domain phase accuracy, `WebSpeakerSim` runs two complementary solvers inside `src/physics/sim.worker.ts`:
-1. **Spatial Heatmap Solver (`SummationSolver`):** Evaluates complex pressure summation across a 2D receptor mesh on all active audience surfaces (Plan View) and along a movable vertical cut plane (Section View). Supports coarse-to-fine progressive refinement (`1.0 m` interactive drag pass $\rightarrow$ `0.25 m` settled pass) across selectable single bands (`Sub`, `1/3`-octave, `1/1`-octave) or broadband **Z / A / C-weighted** program spectra.
+1. **Spatial Heatmap Solver (`SummationSolver`):** Evaluates complex pressure summation across a 2D receptor mesh on all active audience surfaces (Plan View) and along a movable vertical cut plane (Section View). Supports coarse-to-fine progressive refinement (`1.0 m` interactive drag pass → `0.25 m` settled pass) across selectable single bands (`Sub`, `1/3`-octave, `1/1`-octave) or broadband **Z / A / C-weighted** program spectra.
 2. **Virtual Microphone Solver (`VirtualMicSolver`):** Evaluates 240+ logarithmically spaced frequency bins from `20 Hz` to `20 kHz` at discrete probe coordinates `(x, y, z)`, producing predicted **Magnitude ($\text{dB SPL}$)**, **Wrapped/Unwrapped Phase ($^\circ$)**, **Group Delay ($\text{ms}$)**, and **Discrete Arrival Impulses**.
 
 ---

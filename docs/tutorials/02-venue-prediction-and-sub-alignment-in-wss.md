@@ -19,7 +19,7 @@ Load **`Live Club — 12" Mains + Cardioid Subs + Front Fills`** from the **`Ven
 
 Broadband heatmaps include omnidirectional sub-bass that masks high-frequency vocal dead spots. Always inspect horn aiming at **`2 kHz` or `4 kHz`** first:
 
-1. In the **Point Sources** tree on the right, click **`On` $\rightarrow$ `Muted`** next to **`Front Fill L`**.
+1. In the **Point Sources** tree on the right, click **`On`** → **`Muted`** next to **`Front Fill L`**.
 2. Set **`Band`** in the top bar to **`4 kHz (Single Band)`**, set **`Contours`** to **`Off`**, and click **`Stepped`** so discrete isobar color bands reveal high-frequency coverage clearly.
 3. Click **`Main L`** (`X = 0.4 m, Y = +4.5 m, Z = 3.8 m`). Because **`Symmetric L/R Pair`** is checked, its mirrored twin **`Main R`** (`Y = -4.5 m`) tracks every position and angle edit automatically.
 
@@ -31,7 +31,7 @@ Notice two key details:
 
 ### Unmuting Stage-Lip Front Fills & Checking Broadband Evenness
 
-1. Click **`Muted` $\rightarrow$ `On`** next to **`Front Fill L`** (`8"` stage-lip enclosures laid horizontally with `Roll = 90°` at `Z = 1.05 m`, `Y = ±1.6 m`, and **`Tilt = +4°`**—angling gently upward from the `1.05 m` stage lip toward `1.65 m` standing ear height).
+1. Click **`Muted`** → **`On`** next to **`Front Fill L`** (`8"` stage-lip enclosures laid horizontally with `Roll = 90°` at `Z = 1.05 m`, `Y = ±1.6 m`, and **`Tilt = +4°`**—angling gently upward from the `1.05 m` stage lip toward `1.65 m` standing ear height).
 2. Switch **`Band`** to **`Broadband Pink (dBA)`**, click **`Stepped`** off, set **`Scale`** to **`Auto ±6 dB`** with **`2 dB`** contours, and open the **`SPL Histogram`** tab in the bottom chart drawer.
 
 ![Balanced Broadband Club Coverage & Audience SPL Histogram](../../apps/WebSpeakerSim/docs/images/03-frontfills-coverage-histogram.png)
@@ -52,9 +52,9 @@ Subwoofers stacked along the downstage edge sit closer to vocal and drum microph
 Notice **`Stage Rej: -4.6 dB`** in the top bar—at `63 Hz`, the stage deck is `4.6 dB` *louder* than the audience average.
 
 3. Switch **`Array Mode`** to **`Cardioid Stack (CSA)`**, verify **`Tune Freq (Hz)`** is **`63`**, and click **`Set λ/4 (1.36m)`**:
-   - Rear-facing cabinets (`#2` and `#4` at `X = -0.18 m`) rotate `180°`, invert polarity (`Ø Inv`), and apply quarter-wave electronic delay ($\tau = d / c = 3.96\text{ ms}$ for $d = 1.36\text{ m}$ at $c = 343.2\text{ m/s}$):
-     - **Forward (`+X` toward audience):** Rear-box wave travels an extra distance $+d$ ($+d/c$ acoustic lag) plus $+d/c$ electronic delay $= \lambda / 2$ ($180^\circ$ total lag). Combined with the $180^\circ$ polarity flip, $180^\circ + 180^\circ = 360^\circ$—arriving **in phase** with the front boxes.
-     - **Backward (`-X` onto stage):** Because the rear box sits $d$ closer to the stage ($-d/c$ acoustic lead), its $+d/c$ electronic delay brings both waves to the stage at the **exact same instant** ($0^\circ$ time offset), where the $180^\circ$ polarity flip cancels them out of phase.
+   - Rear-facing cabinets (`#2` and `#4` at `X = -0.18 m`) rotate `180°`, invert polarity (`Ø Inv`), and apply quarter-wave electronic delay ($\tau = d / c = 3.96\text{ ms}$ for `d = 1.36 m` at `c = 343.2 m/s`):
+     - **Forward (`+X` toward audience):** Rear-box wave travels an extra distance `+d` (`+d/c` acoustic lag) plus `+d/c` electronic delay (`λ / 2`, or `180°` total lag). Combined with the `180°` polarity flip, `180° + 180° = 360°`—arriving **in phase** with the front boxes.
+     - **Backward (`-X` onto stage):** Because the rear box sits `d` closer to the stage (`-d/c` acoustic lead), its `+d/c` electronic delay brings both waves to the stage at the **exact same instant** (`0°` time offset), where the `180°` polarity flip cancels them out of phase.
 
 ![Cardioid Stack Carving a 63 Hz Null Across the Stage Deck](../../apps/WebSpeakerSim/docs/images/05-subs-cardioid-63hz.png)
 

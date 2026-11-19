@@ -338,4 +338,128 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
 
     expect(issues).toEqual([]);
   });
+
+  it('enforces GitHub-safe GFM table pipes, Mermaid blocks, balanced backticks/math, and alert headers', () => {
+    const syntaxIssues: string[] = [];
+
+    for (const mdFile of allMarkdownFiles) {
+      const relSource = path.relative(REPO_ROOT, mdFile);
+      const lines = fs.readFileSync(mdFile, 'utf8').split('\n');
+      let inFence = false;
+      let fenceLang = '';
+      let expectedTableCols = -1;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineNo = i + 1;
+        const fenceMatch = /^(?:`{3,}|~{3,})(.*)$/.exec(line.trim());
+
+        if (fenceMatch) {
+          if (!inFence) {
+            inFence = true;
+            fenceLang = fenceMatch[1].trim();
+          } else {
+            inFence = false;
+            fenceLang = '';
+          }
+          expectedTableCols = -1;
+          continue;
+        }
+
+        if (inFence) {
+          if (fenceLang === 'mermaid') {
+            if (line.includes('\\"')) {
+              syntaxIssues.push(
+                `${relSource}:${lineNo}: Mermaid block contains backslash-escaped quote (\\") which fails GitHub Mermaid parsing`
+              );
+            }
+            if (line.includes('\\n')) {
+              syntaxIssues.push(
+                `${relSource}:${lineNo}: Mermaid block contains literal \\n in label`
+              );
+            }
+            if (/<\s*br\s*\/?\s*>/i.test(line)) {
+              syntaxIssues.push(
+                `${relSource}:${lineNo}: Mermaid block contains HTML <br> tag in label`
+              );
+            }
+          }
+          continue;
+        }
+
+        // GitHub alerts require the [!TYPE] tag alone on its first blockquote line
+        const alertMatch = /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*)$/.exec(line);
+        if (alertMatch && alertMatch[2].trim().length > 0) {
+          syntaxIssues.push(
+            `${relSource}:${lineNo}: GitHub alert [!] must be followed by a newline, not inline text`
+          );
+        }
+
+        // GFM splits table cells on unescaped '|' BEFORE inline code spans or $math$
+        const trimmed = line.trim();
+        if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+          const cols = trimmed.replace(/\\\|/g, '').split('|').length - 2;
+          if (expectedTableCols === -1) {
+            expectedTableCols = cols;
+          } else if (cols !== expectedTableCols) {
+            syntaxIssues.push(
+              `${relSource}:${lineNo}: GFM table column mismatch (expected ${expectedTableCols}, got ${cols} — escape '|' as '\\|' or '\\lvert' inside table cells)`
+            );
+          }
+        } else {
+          expectedTableCols = -1;
+        }
+
+        const backtickCount = (line.match(/`/g) ?? []).length;
+        if (backtickCount % 2 !== 0) {
+          syntaxIssues.push(`${relSource}:${lineNo}: unbalanced inline backticks`);
+        }
+
+        // Strip inline code spans and escaped \$ before checking $...$ math pairs & flanking
+        const withoutCode = line.replace(/`[^`]*`/g, '').replace(/\\\$/g, '');
+        const dollarCount = (withoutCode.match(/\$/g) ?? []).length;
+        if (dollarCount % 2 !== 0) {
+          syntaxIssues.push(`${relSource}:${lineNo}: unbalanced '$' inline math delimiters`);
+        }
+        if (/\$\s*\\(?:rightarrow|leftarrow|leftrightarrow)\s*\$/.test(withoutCode)) {
+          syntaxIssues.push(
+            `${relSource}:${lineNo}: use Unicode arrows (→, ←, ↔) in prose instead of standalone LaTeX arrow spans`
+          );
+        }
+
+        const mathRegex = /\$\$[^$]+\$\$|\$[^$]+\$/g;
+        let mm: RegExpExecArray | null;
+        while ((mm = mathRegex.exec(withoutCode)) !== null) {
+          if (mm[0].startsWith('$$')) continue;
+          const inner = mm[0].slice(1, -1);
+          const before = mm.index > 0 ? withoutCode[mm.index - 1] : '';
+          const after =
+            mm.index + mm[0].length < withoutCode.length
+              ? withoutCode[mm.index + mm[0].length]
+              : '';
+          if (inner.startsWith(' ') || inner.endsWith(' ')) {
+            syntaxIssues.push(
+              `${relSource}:${lineNo}: inline math "${mm[0]}" has leading/trailing space inside '$'`
+            );
+          }
+          if (/[A-Za-z0-9-]/.test(before)) {
+            syntaxIssues.push(
+              `${relSource}:${lineNo}: opening '$' preceded by '${before}' in "${before}${mm[0]}" breaks GitHub MathJax`
+            );
+          }
+          if (/[A-Za-z0-9]/.test(after)) {
+            syntaxIssues.push(
+              `${relSource}:${lineNo}: closing '$' followed by '${after}' in "${mm[0]}${after}" breaks GitHub MathJax`
+            );
+          }
+        }
+      }
+
+      if (inFence) {
+        syntaxIssues.push(`${relSource}: unclosed fenced code block at EOF`);
+      }
+    }
+
+    expect(syntaxIssues).toEqual([]);
+  });
 });

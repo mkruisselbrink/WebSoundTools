@@ -7,7 +7,7 @@
 ## 1. Problem Statement & Acoustic Goals
 
 During soundcheck ("ringing out" stage monitors or FOH) and during a live performance, acoustic feedback occurs when loop gain at a frequency $f_0$ approaches or exceeds $0\text{ dB}$ ($1.0\times$) with $0^\circ \pmod{360^\circ}$ phase shift:
-- **Pre-Feedback Ringing ($G_{\text{loop}} \approx -6\text{ to }-1\text{ dB}$)**: High-$Q$ regenerative resonance that colors vocals with a metallic "ring" or overhang after transients.
+- **Pre-Feedback Ringing ($G_{\text{loop}} \approx -6\text{ to }-1\text{ dB}$)**: High-`Q` regenerative resonance that colors vocals with a metallic "ring" or overhang after transients.
 - **Runaway Feedback / Howling ($G_{\text{loop}} \ge 0\text{ dB}$)**: Sustained or growing narrowband sinusoid that requires immediate fader or EQ intervention.
 
 ### 1.1 Why Traditional Single-Channel RTA Peak Finders Fail During a Show
@@ -189,6 +189,6 @@ In the **Live Show Sidebar** (and as a collapsible section in the **Live Measure
 
 To make `FeedbackDetector` 100% deterministically testable in Vitest unit/integration tests and Playwright E2E tests without physical microphones or loudspeakers:
 - Extend `SimulatorRigConfig` in `src/dsp/synthetic-rig.ts` with an optional `simulatedFeedbackRings?: Array<{ frequencyHz: number; q: number; gainDb: number; injectIntoReference?: boolean; includeHarmonics?: boolean }>`:
-  - **`injectIntoReference: false` (Acoustic Feedback)**: A high-$Q$ biquad resonator (`q = 25`, `gainDb = +18 dB`) or phase-locked sinusoid is applied **only** in the simulated acoustic path ($M$), modeling true acoustic feedback and triggering `FeedbackDetector` (`'acoustic-feedback'`).
+  - **`injectIntoReference: false` (Acoustic Feedback)**: A high-`Q` biquad resonator (`q = 25`, `gainDb = +18 dB`) or phase-locked sinusoid is applied **only** in the simulated acoustic path ($M$), modeling true acoustic feedback and triggering `FeedbackDetector` (`'acoustic-feedback'`).
   - **`injectIntoReference: true` (Program Lead Tone in $R$ and $M$)**: The tone is injected into the generator/reference feed ($R$) before the split to $M$, verifying that Stage 4 ($M/R$ discriminator) suppresses false alarms.
   - **`includeHarmonics: true` (Single-Channel Musical Instrument Fallback)**: Injects $f_0$, $2f_0$, and $3f_0$ with Reference channel disabled ($R = 0$), verifying that the Stage 3 Harmonic Series Veto rejects musical instruments even when no Reference channel is connected.

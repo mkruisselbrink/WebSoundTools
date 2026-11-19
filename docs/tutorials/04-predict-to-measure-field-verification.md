@@ -1,4 +1,4 @@
-# Tutorial 04: Predict-to-Measure Field Verification (`WebSpeakerSim` $\rightarrow$ `WebSoundMeter`)
+# Tutorial 04: Predict-to-Measure Field Verification (`WebSpeakerSim` → `WebSoundMeter`)
 
 A venue prediction is only half the story until you hang the PA and verify that the physical rig matches your design. Because **WebSpeakerSim** and **WebSoundMeter** share the exact same `@foh/dsp` filter evaluation and `@foh/acoustics` `.FRD` parser/interpolator, you can export predicted Virtual Microphone responses straight onto the gig and compute a smoothed **`Measured − Predicted`** error curve in seconds.
 

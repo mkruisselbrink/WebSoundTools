@@ -14,7 +14,7 @@ Once system tuning is complete and doors are about to open, **WebSoundMeter** (`
 
 ## 2. Ringing Out Monitors & Vocal Mics Before Doors
 
-Acoustic feedback begins as a high-$Q$, persistent narrowband sinusoid before turning into a loud howl. Rather than flagging every sustained guitar or synth note, **WebSoundMeter** runs a **5-stage discriminator** (prominence above local spectral median, sub-bin parabolic frequency stability, temporal persistence, amplitude kurtosis, and harmonic overtone rejection) to isolate runaway feedback rings:
+Acoustic feedback begins as a high-`Q`, persistent narrowband sinusoid before turning into a loud howl. Rather than flagging every sustained guitar or synth note, **WebSoundMeter** runs a **5-stage discriminator** (prominence above local spectral median, sub-bin parabolic frequency stability, temporal persistence, amplitude kurtosis, and harmonic overtone rejection) to isolate runaway feedback rings:
 
 1. **Patching for Ring-Out:**
    - **FOH / Room Mic:** Keep your calibrated measurement mic on `In Ch 1` (`FB Watch: FOH Normal`).

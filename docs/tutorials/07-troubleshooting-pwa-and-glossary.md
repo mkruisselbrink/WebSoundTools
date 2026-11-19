@@ -25,14 +25,14 @@ Live venues rarely have reliable Wi-Fi at Front of House. Both **WebSoundMeter**
 
 ### "I selected my USB audio interface, why is everything silent / Paused?"
 - After reloading a browser tab in **Hardware** mode, browsers block `AudioContext` startup until you click **`Resume`** (or press **`Space`**).
-- On **macOS**, check **System Settings $\rightarrow$ Privacy & Security $\rightarrow$ Microphone** and ensure your browser is switched **ON**.
+- On **macOS**, check **System Settings → Privacy & Security → Microphone** and ensure your browser is switched **ON**.
 
-### "Why is Coherence ($\gamma^2$) low (`< 30%`) across the entire spectrum?"
+### "Why is Coherence (`γ²`) low (`< 30%`) across the entire spectrum?"
 Check these four common culprits in order:
 1. **Uncompensated long propagation delay:** At `4096`-point FFT (`~85 ms` window @ `48 kHz`), if your mic is `25 m` (`73 ms`) away and **`Ref Delay`** is `0 ms`, almost none of the `85 ms` measurement window overlaps the reference frame. Click **`Find & Apply Delay`** (`D`) (or switch **`FFT Size`** to `8192` / `16384` for `30 m+` arena throws).
 2. **Silent or wrong Reference channel:** Check the **`Ref R`** bar under **`Preamp Headroom (dBFS)`**. If `Ref R` reads `— dB`, verify **`Ref`** in the topbar matches the physical input jack receiving your loopback cable (e.g., `In Ch 2`), and check **`Out`** on the generator (`Out Ch 1+2`).
 3. **OS Voice Isolation enabled:** An orange mic icon in the macOS menu bar set to *Voice Isolation* strips pink noise as "background noise." Switch it to **`Standard`**.
-4. **Severe clipping:** If **`Meas M`** or **`Ref R`** shows red **`CLIP`**, non-linear ADC distortion collapses $\gamma^2$; turn down the interface preamp gain.
+4. **Severe clipping:** If **`Meas M`** or **`Ref R`** shows red **`CLIP`**, non-linear ADC distortion collapses `γ²`; turn down the interface preamp gain.
 
 ### "Why does my Phase trace drift slowly at `10–20 kHz`?"
 You are measuring with **two separate hardware clocks** (for example, a USB microphone on **`Ref: Internal Gen`** while playing pink noise out of a laptop headphone jack). A `50 ppm` clock mismatch shifts arrival time by `50 µs` per second (`~360°` every `20 seconds` at `1 kHz`, and `10×` faster at `10 kHz`). Use a **2-channel audio interface with a physical TRS loopback cable** so ADC and DAC share a single crystal clock.
@@ -50,14 +50,14 @@ By design: serial-numbered `.cal` files correct frequency-domain **Transfer Func
 | Term | Meaning in `WebSoundTools` |
 | :--- | :--- |
 | **`dBFS`** | *Decibels relative to Full Scale* (`0 dBFS` = digital ADC/DAC clipping). Used on `Meas M` / `Ref R` preamp headroom meters and generator output level. |
-| **`dB SPL` (`dBA` / `dBC` / `dBZ`)** | Sound Pressure Level relative to $20\text{ }\mu\text{Pa}$. `A`-weighting rolls off low bass below `500 Hz` (human mid-level ear sensitivity); `C`-weighting stays flat down to `~31.5 Hz` (sub-bass energy); `Z`-weighting is flat unweighted (`20 Hz – 20 kHz`). |
-| **`H1` Transfer Function** | Cross-spectral estimator $H_1(f) = \langle G_{RM}(f) \rangle / \langle G_{RR}(f) \rangle$. Rejects uncorrelated crowd/room noise arriving at the measurement mic $M$. |
-| **Coherence ($\gamma^2$)** | $\gamma^2(f) = |G_{RM}(f)|^2 / (G_{RR}(f) G_{MM}(f)) \in [0, 1]$. Measures causal linearity between reference $R$ and mic $M$ at frequency $f$. |
-| **`Impulse (ETC dB)`** | *Energy-Time Curve* ($20\log_{10}|h(t)|$). Plots impulse response magnitude in dB so early wall/floor reflections (`-10` to `-35 dB`) stand out clearly by arrival time (`ms`). |
+| **`dB SPL` (`dBA` / `dBC` / `dBZ`)** | Sound Pressure Level relative to `20 µPa`. `A`-weighting rolls off low bass below `500 Hz` (human mid-level ear sensitivity); `C`-weighting stays flat down to `~31.5 Hz` (sub-bass energy); `Z`-weighting is flat unweighted (`20 Hz – 20 kHz`). |
+| **`H1` Transfer Function** | Cross-spectral estimator $H_1(f) = \langle G_{RM}(f) \rangle / \langle G_{RR}(f) \rangle$. Rejects uncorrelated crowd/room noise arriving at the measurement mic `M`. |
+| **Coherence (`γ²`)** | $\gamma^2(f) = \lvert G_{RM}(f) \rvert^2 / (G_{RR}(f) G_{MM}(f)) \in [0, 1]$. Measures causal linearity between reference `R` and mic `M` at frequency `f`. |
+| **`Impulse (ETC dB)`** | *Energy-Time Curve* ($20\log_{10}\lvert h(t) \rvert$). Plots impulse response magnitude in dB so early wall/floor reflections (`-10` to `-35 dB`) stand out clearly by arrival time (`ms`). |
 | **Group Delay (`ms`)** | $\tau_g(f) = -\frac{1}{2\pi}\frac{d\phi}{df}$. Frequency-dependent transit time through crossovers, bass-reflex ports, and propagation paths. |
-| **`LR24` (`Linkwitz-Riley 24 dB/oct`)** | Two cascaded `12 dB/oct` Butterworth filters ($-6.02\text{ dB}$ at $f_c$). High-pass (`+180°`) and low-pass (`-180°`) outputs are $0^\circ$ in phase at $f_c$ and sum flat (`0 dB`) when time-aligned. |
-| **`CSA` (`Cardioid Subwoofer Array`)** | Directional sub stack where rear-facing (`180°` rotated) cabinets are polarity-inverted (`Ø`) and delayed by $\tau = d/c$ ($\lambda/4$ spacing gives maximum $+6\text{ dB}$ forward sum and deep rear stage cancellation at $f_{\text{tune}}$). |
-| **End-Fire Sub Array** | Forward-facing longitudinal sub line spaced by $d$ with progressive frontward delay $\tau_k = k \cdot d/c$, summing coherently along `+X` while canceling off-axis and upstage. |
+| **`LR24` (`Linkwitz-Riley 24 dB/oct`)** | Two cascaded `12 dB/oct` Butterworth filters (`-6.02 dB` at cutoff). High-pass (`+180°`) and low-pass (`-180°`) outputs are `0°` in phase at crossover and sum flat (`0 dB`) when time-aligned. |
+| **`CSA` (`Cardioid Subwoofer Array`)** | Directional sub stack where rear-facing (`180°` rotated) cabinets are polarity-inverted (`Ø`) and delayed by `τ = d / c` (`λ / 4` spacing gives maximum `+6 dB` forward sum and deep rear stage cancellation at `f_tune`). |
+| **End-Fire Sub Array** | Forward-facing longitudinal sub line spaced by `d` with progressive frontward delay $\tau_k = k \cdot d / c$, summing coherently along `+X` while canceling off-axis and upstage. |
 | **`LAeq,T` (`LAeq1m` / `LAeq15m` / `LAeq60m`)** | Energy-equivalent continuous `A`-weighted sound level integrated over a sliding `1`-, `15`-, or `60`-minute window—the standard metric in concert noise ordinances. |
 | **`LC−LA`** | Difference between `1`-minute `LCeq` and `LAeq` in dB; quantifies low-frequency sub-bass weight relative to midrange vocal/instrument energy. |
 

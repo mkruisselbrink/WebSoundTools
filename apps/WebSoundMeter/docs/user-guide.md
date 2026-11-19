@@ -65,12 +65,12 @@ Every chart panel header stays locked to a single `32 px` row; hovering inside a
 
 | Plot Type | Domain & Scale | Header Controls & Behavior |
 | :--- | :--- | :--- |
-| **`Magnitude (TF)`** | `20 Hz – 20 kHz` (log), `dB` | Relative transfer-function gain (`|H(f)|`). Supports coherence blanking (`Coh: Alpha Fade`, `Coh: Hard Cutoff`, `Coh: Off`), threshold (`γ² ≥ 20%..95%`), **`FB Watch`** callouts, and interactive **Virtual EQ** handles. |
+| **`Magnitude (TF)`** | `20 Hz – 20 kHz` (log), `dB` | Relative transfer-function gain (`\|H(f)\|`). Supports coherence blanking (`Coh: Alpha Fade`, `Coh: Hard Cutoff`, `Coh: Off`), threshold (`γ² ≥ 20%..95%`), **`FB Watch`** callouts, and interactive **Virtual EQ** handles. |
 | **`Phase`** | `20 Hz – 20 kHz` (log), `-180° .. +180°` | Wrapped transfer-function phase with clean wrap-break suppression and coherence blanking (`Alpha Fade` / `Hard Cutoff` / `Off`). |
 | **`Group Delay`** | `20 Hz – 20 kHz` (log), `ms` | Rate of phase change ($-\frac{1}{2\pi}\frac{d\phi}{df}$) with coherence blanking. |
-| **`Coherence`** | `20 Hz – 20 kHz` (log), `0% .. 100%` | Magnitude-squared coherence $\gamma^2(f)$ measuring causal linearity between Reference and Measurement. |
+| **`Coherence`** | `20 Hz – 20 kHz` (log), `0% .. 100%` | Magnitude-squared coherence `γ²(f)` measuring causal linearity between Reference and Measurement. |
 | **`Impulse (Linear)`** | `-10 ms .. +30 ms`, normalized amplitude | Regularized inverse-FFT impulse response showing arrival timing and polarity (`+` upward vs. `-` downward spike). |
-| **`Impulse (ETC dB)`** | `-10 ms .. +30 ms`, `-60 .. 0 dB` | Logarithmic Energy-Time Curve ($20 \log_{10}|h(t)|$) revealing early boundary reflections `-10` to `-40 dB` below the direct arrival. |
+| **`Impulse (ETC dB)`** | `-10 ms .. +30 ms`, `-60 .. 0 dB` | Logarithmic Energy-Time Curve ($20 \log_{10} \lvert h(t) \rvert$) revealing early boundary reflections `-10` to `-40 dB` below the direct arrival. |
 | **`Step Response`** | `-10 ms .. +30 ms`, cumulative amplitude | Running integral of the impulse response showing low-frequency decay and driver polarity transitions. |
 | **`Spectrum (RTA)`** | `20 Hz – 20 kHz` (log), `dBFS` | Live spectrum selectable between **`1/3 Oct Bars`**, **`1/6 Oct Bars`**, **`1/12 Oct Bars`**, or **`Narrowband Line`**, with **`Peak Hold`** and **`FB Watch`** toggles. |
 | **`SPL / Leq History`** | `-1m .. 0s` up to `-4h .. 0s`, `dB` | Rolling level timeline across **`1 min`**, **`5 min`** (`4 Hz` resolution), **`15 min`**, **`60 min`**, or **`4 hours`** (`1 Hz` resolution), with trace modes (`Compliance (LAeq15m + LAeq1m + Pk)`, `dBA (Fast + LAeq1m)`, `dBA vs dBC (Leq1m)`, `Multi-Mic (LAeq1m per Mic)`) and **`Limits`** guide toggle. |
@@ -132,7 +132,7 @@ Transform and smoothing settings are synchronized across all live slots so multi
 | **`Power Average (RMS)`** | Multi-source checkboxes (`2..N`) | Phase-blind energy average ($10\log_{10}(\frac{1}{N}\sum 10^{L_i/10})$) across wide audience seating for room EQ. |
 | **`Vector Sum (A + B)`** | Multi-source checkboxes (`2..N`) | Predicts combined acoustic summation of separately measured Sub + Top + Fill passes. |
 | **`Minimum Envelope`** / **`Maximum Envelope`** | Multi-source checkboxes (`2..N`) | Per-bin minimum or maximum magnitude envelope across multiple seat captures. |
-| **`Vector Subtract (A - B)`** | `Source A` & `Source B` dropdowns | Complexphasor difference ($A - B$). |
+| **`Vector Subtract (A - B)`** | `Source A` & `Source B` dropdowns | Complex phasor difference (`A − B`). |
 | **`dB Difference (A / B)`** | `Source A` & `Source B` dropdowns | Magnitude ratio in dB ($L_A - L_B$) and phase difference ($\phi_A - \phi_B$) for Predict-to-Measure verification. |
 | **`Apply Filter (A × B)`** | `Source A` & `Source B` dropdowns | Multiplies transfer functions ($A \cdot B$, summing dB and phase). |
 

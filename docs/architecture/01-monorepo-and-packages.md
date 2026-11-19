@@ -13,14 +13,14 @@ graph TD
   WSM["apps/WebSoundMeter"]
   WSS["apps/WebSpeakerSim"]
 
-  CHARTS["@foh/charts<br/>WebGL2 + 2D Acoustic Plotter"]
-  UI["@foh/ui<br/>FOH Design System, Trees & DSP Editor"]
-  CANVAS["@foh/canvas<br/>HiDPI DualCanvasController & WebGL2 Utils"]
+  CHARTS["@foh/charts — WebGL2 + 2D Acoustic Plotter"]
+  UI["@foh/ui — FOH Design System, Trees & DSP Editor"]
+  CANVAS["@foh/canvas — HiDPI DualCanvasController & WebGL2 Utils"]
 
-  ACOUSTICS["@foh/acoustics<br/>ISO 9613-1, IEC 61672, ISO 266, .frd I/O"]
-  DSP["@foh/dsp<br/>Biquads, Crossovers, FFT, Windows, Smoothing"]
-  STATE["@foh/state<br/>ReactiveUndoStore, IDB, Autosave, URL Sync"]
-  PWA["@foh/pwa<br/>Offline SW Core, COOP/COEP & Vite Plugin"]
+  ACOUSTICS["@foh/acoustics — ISO 9613-1, IEC 61672, ISO 266, .frd I/O"]
+  DSP["@foh/dsp — Biquads, Crossovers, FFT, Windows, Smoothing"]
+  STATE["@foh/state — ReactiveUndoStore, IDB, Autosave, URL Sync"]
+  PWA["@foh/pwa — Offline SW Core, COOP/COEP & Vite Plugin"]
 
   WSM --> CHARTS
   WSM --> UI
@@ -64,7 +64,7 @@ A foundational boundary separates **worker-safe computation** from **Lit / DOM r
 | Package | Directory | Core Exports & Invariants |
 | :--- | :--- | :--- |
 | **`@foh/dsp`** | `packages/dsp` | RBJ 2nd-order & 1st-order bilinear biquads (`peaking`, `lowshelf`, `highshelf`, `lowpass`, `highpass`, `bandpass`, `notch`, `allpass`), Butterworth & Linkwitz-Riley (`12`/`18`/`24`/`48 dB/oct`) crossovers, `SourceDspConfig` chain compiler, Radix-2 & dual-real packed FFT, window tables, $O(N)$ prefix-sum fractional-octave smoothing, and unwrapped group delay. Analytical frequency evaluation defaults to `DSP_REFERENCE_SAMPLE_RATE_HZ = 192000` to prevent bilinear Nyquist cramping near `16–20 kHz`, whereas stateful time-domain `BiquadFilter` / `BiquadCascade` processors require an explicit runtime `sampleRateHz`. |
-| **`@foh/acoustics`** | `packages/acoustics` | ISO 9613-1 atmospheric absorption & speed of sound $c(T, RH, P)$, wavelength/period helpers ($\lambda$, $\lambda/4$, $\text{ms} \leftrightarrow \text{m}$), dual IEC 61672-1 A/C/Z weighting APIs (analytical dB curves for `WebSpeakerSim` + pre-warped bilinear time-domain biquads for `WebSoundMeter`), ISO 266 octave/fractional-octave grids & band aggregators, musical note/cents lookup, and 2/3-column `.frd` / `.cal` / `.csv` curve parsing, serialization & phase-unwrapped log interpolation. |
+| **`@foh/acoustics`** | `packages/acoustics` | ISO 9613-1 atmospheric absorption & speed of sound $c(T, RH, P)$, wavelength/period helpers (`λ`, `λ/4`, `ms ↔ m`), dual IEC 61672-1 A/C/Z weighting APIs (analytical dB curves for `WebSpeakerSim` + pre-warped bilinear time-domain biquads for `WebSoundMeter`), ISO 266 octave/fractional-octave grids & band aggregators, musical note/cents lookup, and 2/3-column `.frd` / `.cal` / `.csv` curve parsing, serialization & phase-unwrapped log interpolation. |
 | **`@foh/state`** | `packages/state` | `ReactiveUndoStore<TState>` with 60-deep history and `txKey` slider/drag transaction coalescing (`350 ms` window), `IdbRepository` with configurable `'memory'` or `'noop'` fallback for headless environments, `workspace-autosave` (`localStorage`), and `url-search-sync` (`URLSearchParams` / `history.replaceState`). |
 | **`@foh/pwa`** | `packages/pwa` | Three explicit entrypoints: `@foh/pwa/client` (`registerAppServiceWorker`), `@foh/pwa/sw` (Network-First asset/navigation caching with `Cross-Origin-Opener-Policy: same-origin` & `Cross-Origin-Embedder-Policy: require-corp` header injection for offline `SharedArrayBuffer` support), and `@foh/pwa/vite` (`fohPwaPlugin` emitting hashed `dist/sw.js` precache manifests). |
 | **`@foh/canvas`** | `packages/canvas` | `DualCanvasController` Lit `ReactiveController` managing `ResizeObserver`, DPR clamping, synchronized WebGL2 + HiDPI 2D overlay backing stores, and `requestAnimationFrame` paint coalescing; WebGL2 shader compilation/scissor helpers; and RGBA color utilities. |

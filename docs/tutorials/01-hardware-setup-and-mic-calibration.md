@@ -17,7 +17,7 @@ To measure loudspeaker **Magnitude, Phase, Coherence, and Impulse Response** (du
 3. **Cables:**
    - **1× Balanced XLR Mic Cable** reaching FOH or audience positions from your interface.
    - **1× Balanced XLR or 1/4" TRS Cable** from **Interface Output 1** to your **System Processor / Console Matrix Input**.
-   - **1× Short Balanced 1/4" TRS-to-TRS Patch Cable** for the **Physical Reference Loopback** from **Interface Output 2 $\rightarrow$ Interface Input 2**.
+   - **1× Short Balanced 1/4" TRS-to-TRS Patch Cable** for the **Physical Reference Loopback** from **Interface Output 2 → Interface Input 2**.
 4. *(Optional, for statutory SPL compliance)* **Acoustic SPL Calibrator (`94.0 dB` or `114.0 dB SPL @ 1 kHz`):**
    - Class 1 or Class 2 calibrator with a `1/2"` or `1/4"` capsule adapter.
 
@@ -27,7 +27,7 @@ To measure loudspeaker **Magnitude, Phase, Coherence, and Impulse Response** (du
 
 ### Setup A: Standard 2-Channel Dual-FFT Rig (Recommended)
 
-A **physical loopback** sends the exact same reference waveform through your interface's **DAC $\rightarrow$ analog output stage $\rightarrow$ analog input stage $\rightarrow$ ADC**, automatically canceling USB buffer latency, DAC/ADC reconstruction filter phase shift, and sample-clock drift.
+A **physical loopback** sends the exact same reference waveform through your interface's **DAC → analog output stage → analog input stage → ADC**, automatically canceling USB buffer latency, DAC/ADC reconstruction filter phase shift, and sample-clock drift.
 
 ```mermaid
 flowchart LR
@@ -38,13 +38,13 @@ flowchart LR
     IN2["Line In 2 (+48V OFF / TRS)"]
   end
 
-  PA["System Processor / Console Matrix\n(Mains + Subs)"]
-  MIC["Measurement Condenser Mic\n(FOH / Audience Position)"]
+  PA["System Processor / Console Matrix (Mains + Subs)"]
+  MIC["Measurement Condenser Mic (FOH / Audience)"]
 
   OUT1 -->|"Balanced TRS / XLR"| PA
   PA -.->|"Acoustic Flight Path (Air Delay τ)"| MIC
   MIC -->|"XLR Mic Cable"| IN1
-  OUT2 ==>|"Short Balanced 1/4\" TRS Patch Cable\n(Timing & Phase Reference R)"| IN2
+  OUT2 ==>|"Short 1/4-in TRS Patch (Reference R)"| IN2
 ```
 
 | Interface Port | Signal Role | Connector & Switch Settings |
@@ -55,7 +55,7 @@ flowchart LR
 | **Output 2 (`Out Ch 2`)** | **Reference Loopback Send** | Balanced TRS patch directly back into **Input 2** (with Generator Output set to **`Out Ch 1+2`**, or split Output 1 via a passive Y-cable) |
 
 > [!CAUTION]
-> **Protect your interface output stage from +48V phantom power:** If your 2-channel interface has a single global `+48V` switch that powers both Input 1 and Input 2 XLR pins simultaneously, plug your Output 2 $\rightarrow$ Input 2 loopback into the **center 1/4" TRS jack** of the combo input (never the 3-pin XLR outer ring). Combo jacks apply `+48V` only to the XLR pins, keeping the 1/4" TRS line input isolated.
+> **Protect your interface output stage from +48V phantom power:** If your 2-channel interface has a single global `+48V` switch that powers both Input 1 and Input 2 XLR pins simultaneously, plug your Output 2 → Input 2 loopback into the **center 1/4" TRS jack** of the combo input (never the 3-pin XLR outer ring). Combo jacks apply `+48V` only to the XLR pins, keeping the 1/4" TRS line input isolated.
 
 ### Setup B: Multi-Microphone Spatial Rig (`Up to 7 Mics + 1 Loopback`)
 
@@ -87,8 +87,8 @@ Laptop operating systems often enable conference-call voice processing that roll
   1. Open **Audio MIDI Setup**, select your USB Audio Interface on both Input and Output, and set **Format** to **`48,000 Hz`** (`24-bit`).
   2. Once the browser opens the microphone, click the **orange Microphone icon** in the macOS Menu Bar and ensure **Mic Mode** is set to **`Standard`** (not *Voice Isolation*).
 - **Windows 11:**
-  1. Open **Settings $\rightarrow$ System $\rightarrow$ Sound $\rightarrow$ More sound settings**.
-  2. Double-click your USB interface under **Recording $\rightarrow$ Advanced**: set Default Format to **`24 bit, 48000 Hz`**, and uncheck *Enable audio enhancements*.
+  1. Open **Settings → System → Sound → More sound settings**.
+  2. Double-click your USB interface under **Recording → Advanced**: set Default Format to **`24 bit, 48000 Hz`**, and uncheck *Enable audio enhancements*.
 
 ---
 
@@ -99,7 +99,7 @@ Laptop operating systems often enable conference-call voice processing that roll
 3. In the **Top Bar**:
    - Set **`INPUT`** to **`Hardware: <Your USB Audio Interface>`** and allow microphone permission.
    - Set **`Ref`** to **`In Ch 2`** (or `In Ch 4` on a 4-channel rig).
-   - Set **`GEN`** signal to **`Pink Noise (-3 dB/oct)`** at **`-12 dBFS`**, set **`Out`** to **`Out Ch 1+2`** (feeding Out 1 to the PA and Out 2 to the loopback), and click **`OFF` $\rightarrow$ `ON`**.
+   - Set **`GEN`** signal to **`Pink Noise (-3 dB/oct)`** at **`-12 dBFS`**, set **`Out`** to **`Out Ch 1+2`** (feeding Out 1 to the PA and Out 2 to the loopback), and click **`OFF`** → **`ON`**.
 4. **Check `Preamp Headroom (dBFS)` in the Right Inspector:**
    - Raise your interface's **Input 2 (`Ref R`)** trim until the **`Ref R`** bar sits in the green zone around **`-18` to `-12 dBFS`** (`OK` badge, well below `-0.5 dBFS` `CLIP`).
    - Bring up your PA processor input to a comfortable conversational pink-noise level (`~75–82 dBC` in the room) and raise **Input 1 (`Meas M`)** mic preamp gain until **`Meas M`** also reads around **`-18` to `-12 dBFS`** without triggering **`CLIP`**.
@@ -126,7 +126,7 @@ Measurement condenser capsules typically exhibit a `+1.5` to `+3 dB` diffraction
 A digital interface reports **`dBFS`** (decibels relative to full-scale ADC clipping). To reference **WebSoundMeter**'s broadband SPL meter and Show Mode compliance logs to true acoustic Pascals (`20 µPa`):
 
 1. **Lock physical preamp gain first:** Set your Input 1 preamp knob low enough that peak concert levels (`122–126 dB Peak`) will never clip `0 dBFS`, and mark or tape the knob.
-2. Fit your **Acoustic SPL Calibrator** over the microphone capsule and turn it on at **`94.0 dB`** (or **`114.0 dB`) @ `1 kHz`**.
+2. Fit your **Acoustic SPL Calibrator** over the microphone capsule and turn it on at **`94.0 dB`** (or **`114.0 dB`**) at **`1 kHz`**.
 3. Set the topbar SPL meter to **`dBZ`** (or **`dBA`**, which has `0.0 dB` weighting at `1,000 Hz`) and **`Slow`**.
 4. Adjust **`Input Gain (dB)`** in **Live Measurement Settings** until the topbar SPL readout matches **`94.0 dB`**.
 5. Remove the calibrator.

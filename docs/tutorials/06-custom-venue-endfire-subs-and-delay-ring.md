@@ -39,11 +39,11 @@ Select **`Center 4-Deep End-Fire Subs`** under **Subwoofer Arrays** (`Array Mode
 
 ## 3. Checking Throw & Delay Ring Timing with the Acoustic Ruler (`Shift + Drag`)
 
-On a `52 m` field, inverse-square spreading ($-6\text{ dB}$ per distance doubling) plus `26 °C` high-frequency air absorption (`ISO 9613-1`) causes main hangs alone to drop more than `14 dB` from front barrier to the rear field. Adding **`Delay Tower L / R`** at **`X = 26 m`** restores rear-field vocal intelligibility and brings broadband `±3 dB` evenness to **`81%`**.
+On a `52 m` field, inverse-square spreading (`-6 dB` per distance doubling) plus `26 °C` high-frequency air absorption (`ISO 9613-1`) causes main hangs alone to drop more than `14 dB` from front barrier to the rear field. Adding **`Delay Tower L / R`** at **`X = 26 m`** restores rear-field vocal intelligibility and brings broadband `±3 dB` evenness to **`81%`**.
 
 1. **Quick Geometric Flight-Time Check (`Shift + Drag` Ruler):**
    - Switch layout to **`Plan`** (key **`2`**) or use **Split** view, hold **`Shift`**, and drag from **`Main Hang L`** (`X = 0.5 m, Y = 8.0 m`) out to **`Delay Tower L`** (`X = 26 m, Y = 11 m`) or **`Rear Field (42 m)`**:
-   - The live yellow ruler overlay reports both **3D/2D distance (`m`)** and **acoustic flight time (`ms`)** at the current atmospheric speed of sound ($c = 346.9\text{ m/s}$ at `26 °C`).
+   - The live yellow ruler overlay reports both **3D/2D distance (`m`)** and **acoustic flight time (`ms`)** at the current atmospheric speed of sound (`c = 346.9 m/s` at `26 °C`).
 
 ![Measuring Throw Distance & Acoustic Flight Time with Shift + Drag Ruler](./images/t06-03-acoustic-ruler-delay-check.png)
 
