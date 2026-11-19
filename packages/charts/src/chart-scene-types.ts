@@ -57,8 +57,10 @@ export interface TraceSeries {
   readonly lineDash?: readonly number[];
   readonly lineWidth?: number;
   readonly opacity?: number;
-  /** Forces 2D Canvas rendering (used for dashed lines or secondary envelopes). */
+  /** Forces 2D Canvas rendering (default for crisp HiDPI multi-pixel strokes above the grid). */
   readonly force2d?: boolean;
+  /** Opts into WebGL2 screen-space quad-strip rendering on the underlay canvas. */
+  readonly preferWebGl?: boolean;
 }
 
 export interface FractionalOctaveBarSeries {

@@ -60,7 +60,7 @@ export function drawChartGridAndAxes(
     const py = top + (1.0 - normY) * height;
     const isZero = Math.abs(yVal) < 1e-5;
 
-    ctx.strokeStyle = isZero ? 'rgba(148, 163, 184, 0.45)' : 'rgba(30, 41, 59, 0.8)';
+    ctx.strokeStyle = isZero ? '#475569' : '#1e293b';
     ctx.lineWidth = isZero ? 1.25 : 1.0;
     ctx.beginPath();
     ctx.moveTo(left, py);
@@ -81,7 +81,7 @@ export function drawChartGridAndAxes(
       const px = left + normX * width;
       const isMajor = ISO_MAJOR_FREQUENCIES.includes(f);
 
-      ctx.strokeStyle = isMajor ? 'rgba(51, 65, 85, 0.85)' : 'rgba(21, 30, 48, 0.8)';
+      ctx.strokeStyle = isMajor ? '#26334d' : '#151e30';
       ctx.lineWidth = 1.0;
       ctx.beginPath();
       ctx.moveTo(px, top);
@@ -111,7 +111,7 @@ export function drawChartGridAndAxes(
       const px = left + normX * width;
       const isZero = Math.abs(xVal) < 1e-5;
 
-      ctx.strokeStyle = isZero ? 'rgba(148, 163, 184, 0.45)' : 'rgba(30, 41, 59, 0.8)';
+      ctx.strokeStyle = isZero ? '#475569' : '#1e293b';
       ctx.lineWidth = isZero ? 1.25 : 1.0;
       ctx.beginPath();
       ctx.moveTo(px, top);
@@ -131,7 +131,7 @@ export function drawChartGridAndAxes(
       const px = left + normX * width;
       const isZero = Math.abs(xVal) < 1e-5;
 
-      ctx.strokeStyle = isZero ? 'rgba(148, 163, 184, 0.45)' : 'rgba(30, 41, 59, 0.8)';
+      ctx.strokeStyle = isZero ? '#475569' : '#1e293b';
       ctx.lineWidth = isZero ? 1.25 : 1.0;
       ctx.beginPath();
       ctx.moveTo(px, top);
@@ -171,8 +171,9 @@ export function drawCanvasTrace(
   const baseOpacity = style?.opacity ?? 1.0;
 
   ctx.save();
-  ctx.lineWidth = style?.lineWidth ?? 1.85;
+  ctx.lineWidth = style?.lineWidth ?? 2.0;
   ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   ctx.strokeStyle = color;
   if (style?.lineDash && style.lineDash.length > 0) {
     ctx.setLineDash([...style.lineDash]);

@@ -15,7 +15,7 @@ describe('GlTraceRenderer', () => {
     renderer.dispose();
   });
 
-  it('scissors to plot region, uploads STREAM_DRAW line strips, and disposes resources', () => {
+  it('scissors to plot region, extrudes screen-space quad strips, and disposes resources', () => {
     const mockGl = {
       VERTEX_SHADER: 35633,
       FRAGMENT_SHADER: 35632,
@@ -29,7 +29,7 @@ describe('GlTraceRenderer', () => {
       ONE_MINUS_SRC_ALPHA: 771,
       COLOR_BUFFER_BIT: 16384,
       STREAM_DRAW: 35040,
-      LINE_STRIP: 3,
+      TRIANGLES: 4,
       createShader: vi.fn(() => ({})),
       shaderSource: vi.fn(),
       compileShader: vi.fn(),
@@ -74,9 +74,17 @@ describe('GlTraceRenderer', () => {
     expect(mockGl.viewport).toHaveBeenLastCalledWith(52, 88, 400, 200);
     expect(mockGl.scissor).toHaveBeenCalledWith(52, 88, 400, 200);
 
-    const verts = new Float32Array([-1, 0, 1, 1, 0, 1]);
-    renderer.drawTrace(verts, 2, '#10b981', 0.8);
-    expect(mockGl.drawArrays).toHaveBeenCalledWith(mockGl.LINE_STRIP, 0, 2);
+    // Two valid segments separated by a zero-alpha phase-wrap break -> 2 quads = 12 triangle vertices
+    const verts = new Float32Array([
+      -1, 0, 1,
+      0, 0.2, 1,
+      0, 0.2, 0,
+      0.1, -0.2, 0,
+      0.1, -0.2, 1,
+      1, 0, 1,
+    ]);
+    renderer.drawTrace(verts, 6, '#10b981', 0.9, 4.0);
+    expect(mockGl.drawArrays).toHaveBeenCalledWith(mockGl.TRIANGLES, 0, 12);
 
     renderer.dispose();
     expect(mockGl.deleteBuffer).toHaveBeenCalledTimes(1);

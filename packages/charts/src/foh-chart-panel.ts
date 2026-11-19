@@ -182,7 +182,10 @@ export function paintChartScene(
   const glActive =
     glRenderer !== null &&
     glRenderer.isWebGlAvailable() &&
-    Boolean(scene.traces && scene.traces.some((t) => !t.force2d && !t.lineDash?.length));
+    Boolean(
+      scene.traces &&
+        scene.traces.some((t) => t.preferWebGl && !t.force2d && !t.lineDash?.length)
+    );
 
   if (glRenderer && glRenderer.isWebGlAvailable()) {
     glRenderer.clear(
@@ -247,10 +250,19 @@ export function paintChartScene(
       }
 
       const canUseGl =
-        glActive && !trace.force2d && (!trace.lineDash || trace.lineDash.length === 0);
+        glActive &&
+        Boolean(trace.preferWebGl) &&
+        !trace.force2d &&
+        (!trace.lineDash || trace.lineDash.length === 0);
 
       if (canUseGl && glRenderer) {
-        glRenderer.drawTrace(verts, vertCount, trace.color, trace.opacity ?? 0.95);
+        glRenderer.drawTrace(
+          verts,
+          vertCount,
+          trace.color,
+          trace.opacity ?? 1.0,
+          (trace.lineWidth ?? 2.0) * dpr
+        );
       } else {
         drawCanvasTrace(ctx, verts, vertCount, trace.color, box, {
           lineDash: trace.lineDash,

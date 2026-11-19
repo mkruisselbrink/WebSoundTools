@@ -11,6 +11,7 @@ function createMock2dContext(): CanvasRenderingContext2D {
     strokeStyle: '',
     lineWidth: 1,
     lineJoin: 'round',
+    lineCap: 'round',
     globalAlpha: 1,
     font: '',
     textAlign: 'left',
@@ -74,5 +75,48 @@ describe('paintChartScene & FohChartPanel', () => {
     expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 640, 320);
     expect(ctx.stroke).toHaveBeenCalled();
     expect(ctx.fillText).toHaveBeenCalledWith('1000 Hz', expect.any(Number), expect.any(Number));
+  });
+
+  it('paints traces on the 2D HiDPI canvas above grid lines even when GlTraceRenderer is present', () => {
+    const ctx = createMock2dContext();
+    const mockGlRenderer = {
+      isWebGlAvailable: () => true,
+      clear: vi.fn(),
+      drawTrace: vi.fn(),
+      dispose: vi.fn(),
+      reinitialize: vi.fn(),
+    };
+    const strokeWidths: number[] = [];
+    ctx.stroke = vi.fn(() => {
+      strokeWidths.push(ctx.lineWidth);
+    });
+
+    paintChartScene(
+      ctx,
+      mockGlRenderer as never,
+      { cssWidth: 640, cssHeight: 320, dpr: 2, deviceWidth: 1280, deviceHeight: 640 },
+      {
+        axis: {
+          xScale: 'log',
+          xUnit: 'Hz',
+          yUnit: 'dB',
+          bounds: { xMin: 20, xMax: 20000, yMin: -24, yMax: 24, yStep: 6 },
+        },
+        traces: [
+          {
+            id: 'tf',
+            color: '#38bdf8',
+            x: new Float32Array([100, 1000, 10000]),
+            y: new Float32Array([0, 0, 0]),
+          },
+        ],
+      },
+      null
+    );
+
+    expect(mockGlRenderer.clear).toHaveBeenCalledTimes(1);
+    expect(mockGlRenderer.drawTrace).not.toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalledWith(52, 12, 570, 284);
+    expect(strokeWidths).toContain(2);
   });
 });

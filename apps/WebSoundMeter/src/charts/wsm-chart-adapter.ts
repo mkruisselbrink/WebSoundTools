@@ -150,6 +150,7 @@ function buildSplHistoryTraces(
         color: src.color,
         ndcVertices: v.vertices,
         ndcVertexCount: v.vertexCount,
+        lineWidth: 2.2,
       });
       continue;
     }
@@ -189,6 +190,7 @@ function buildSplHistoryTraces(
         color: src.color,
         ndcVertices: vA.vertices,
         ndcVertexCount: vA.vertexCount,
+        lineWidth: 2.2,
       });
       continue;
     }
@@ -227,6 +229,7 @@ function buildSplHistoryTraces(
         color: src.color,
         ndcVertices: vLeq1.vertices,
         ndcVertexCount: vLeq1.vertexCount,
+        lineWidth: 2.2,
       });
       continue;
     }
@@ -284,6 +287,7 @@ function buildSplHistoryTraces(
       color: src.color,
       ndcVertices: vLeq15.vertices,
       ndcVertexCount: vLeq15.vertexCount,
+      lineWidth: 2.2,
     });
   }
 
@@ -385,8 +389,8 @@ export function buildWsmChartScene(input: WsmChartSceneInput): ChartScene {
           color: src.color,
           x: fArr,
           y: pkArr,
-          opacity: 0.35,
-          lineWidth: 1.0,
+          opacity: 0.45,
+          lineWidth: 1.25,
           force2d: true,
         });
       }

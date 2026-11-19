@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * WebGL2 hardware-accelerated continuous `LINE_STRIP` trace renderer with
- * per-vertex coherence alpha blending and zero-alpha discontinuity discard.
+ * WebGL2 hardware-accelerated screen-space variable-width ribbon (`TRIANGLES`) trace renderer
+ * with per-vertex coherence alpha blending and zero-alpha discontinuity breaks.
  */
 
 import { createGlProgram, parseCssColorToRgba } from '@foh/canvas';
@@ -39,6 +39,9 @@ export class GlTraceRenderer {
   private vao: WebGLVertexArrayObject | null = null;
   private vbo: WebGLBuffer | null = null;
   private uColorLoc: WebGLUniformLocation | null = null;
+  private viewportWidthPx = 1;
+  private viewportHeightPx = 1;
+  private quadScratch = new Float32Array(4096 * 18);
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.reinitialize();
@@ -102,6 +105,8 @@ export class GlTraceRenderer {
     const left = Math.round(plotLeftPx);
     const w = Math.max(1, Math.round(plotWidthPx));
     const h = Math.max(1, Math.round(plotHeightPx));
+    this.viewportWidthPx = w;
+    this.viewportHeightPx = h;
 
     if (typeof gl.disable === 'function') {
       gl.disable(gl.SCISSOR_TEST);
@@ -125,12 +130,80 @@ export class GlTraceRenderer {
     vertices: Float32Array,
     vertexCount: number,
     colorCss: string,
-    opacity: number = 1.0
+    opacity: number = 1.0,
+    lineWidthPx: number = 3.5
   ): void {
     if (!this.gl || !this.program || !this.vao || !this.vbo || vertexCount < 2) {
       return;
     }
     const gl = this.gl;
+    const wPx = Math.max(1, this.viewportWidthPx || this.canvas.width || 1);
+    const hPx = Math.max(1, this.viewportHeightPx || this.canvas.height || 1);
+    const halfWidthPx = Math.max(0.5, lineWidthPx * 0.5);
+
+    const neededFloats = (vertexCount - 1) * 18;
+    if (this.quadScratch.length < neededFloats) {
+      this.quadScratch = new Float32Array(neededFloats);
+    }
+    const out = this.quadScratch;
+    let ptr = 0;
+
+    for (let i = 0; i < vertexCount - 1; i++) {
+      const base0 = i * 3;
+      const base1 = base0 + 3;
+      const a0 = vertices[base0 + 2];
+      const a1 = vertices[base1 + 2];
+      if (a0 <= 0.001 || a1 <= 0.001) {
+        continue;
+      }
+
+      const x0 = vertices[base0];
+      const y0 = vertices[base0 + 1];
+      const x1 = vertices[base1];
+      const y1 = vertices[base1 + 1];
+
+      const dxPx = (x1 - x0) * 0.5 * wPx;
+      const dyPx = (y1 - y0) * 0.5 * hPx;
+      const lenPx = Math.hypot(dxPx, dyPx);
+      if (lenPx < 1e-4) {
+        continue;
+      }
+
+      const nxPx = (-dyPx / lenPx) * halfWidthPx;
+      const nyPx = (dxPx / lenPx) * halfWidthPx;
+      const ox = (nxPx * 2.0) / wPx;
+      const oy = (nyPx * 2.0) / hPx;
+
+      out[ptr++] = x0 + ox;
+      out[ptr++] = y0 + oy;
+      out[ptr++] = a0;
+
+      out[ptr++] = x0 - ox;
+      out[ptr++] = y0 - oy;
+      out[ptr++] = a0;
+
+      out[ptr++] = x1 + ox;
+      out[ptr++] = y1 + oy;
+      out[ptr++] = a1;
+
+      out[ptr++] = x1 + ox;
+      out[ptr++] = y1 + oy;
+      out[ptr++] = a1;
+
+      out[ptr++] = x0 - ox;
+      out[ptr++] = y0 - oy;
+      out[ptr++] = a0;
+
+      out[ptr++] = x1 - ox;
+      out[ptr++] = y1 - oy;
+      out[ptr++] = a1;
+    }
+
+    const triVertCount = ptr / 3;
+    if (triVertCount === 0) {
+      return;
+    }
+
     const [r, g, b, a] = parseCssColorToRgba(colorCss);
 
     gl.useProgram(this.program);
@@ -138,8 +211,8 @@ export class GlTraceRenderer {
 
     gl.bindVertexArray(this.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices.subarray(0, vertexCount * 3), gl.STREAM_DRAW);
-    gl.drawArrays(gl.LINE_STRIP, 0, vertexCount);
+    gl.bufferData(gl.ARRAY_BUFFER, out.subarray(0, ptr), gl.STREAM_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, triVertCount);
     gl.bindVertexArray(null);
   }
 
