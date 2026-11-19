@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "npm --workspace web-sound-meter run build && npm --workspace web-speaker-sim run build",
-    "test:e2e": "npm --workspace web-sound-meter run test:e2e && npm --workspace web-speaker-sim run test:e2e"
+    "test:e2e": "npm --workspace web-sound-meter run test:e2e && npm --workspace web-speaker-sim run test:e2e",
+    "docs:screenshots": "npm run build && node docs/scripts/generate-screenshots.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
