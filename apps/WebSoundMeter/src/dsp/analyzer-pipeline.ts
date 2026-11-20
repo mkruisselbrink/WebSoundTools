@@ -47,7 +47,7 @@ import {
   TransferEstimatorType,
   TransferFunctionAnalyzer,
 } from './transfer-function.js';
-import { BroadbandMeterBank } from './weighting-meters.js';
+import { BroadbandLevelsSnapshot, BroadbandMeterBank } from './weighting-meters.js';
 import { SourceData } from '../sources/source-data.js';
 
 export type InputPreFilterType = 'Z' | 'A' | 'C' | 'notch-1k';
@@ -357,6 +357,8 @@ export class MeasurementPipeline {
   }
 
   resetAveraging(): void {
+    this.circM.fill(0);
+    this.circR.fill(0);
     this.tf.reset();
     this.deconv.reset();
     this.meters.reset();
@@ -365,8 +367,91 @@ export class MeasurementPipeline {
 
   resetSplHistory(): void {
     this.splHistory.reset();
+    this.meters.reset();
     this.lastExportedSplEpochSeq = -1;
     this.cachedSplHistory = undefined;
+  }
+
+  /**
+   * Exports the current pipeline and meter state without running an additional FFT frame
+   * (used after resets so paused or idle UIs update immediately).
+   */
+  getSnapshot(): SourceData {
+    const levelsSnapshot = this.meters.getSnapshot(this.splHistory.getRollingLeq());
+    this.lastExportedSplEpochSeq = this.splHistory.getEpochSeq();
+    this.cachedSplHistory = this.splHistory.exportWindow();
+    return this.buildSourceSnapshot(levelsSnapshot, this.cachedSplHistory, []);
+  }
+
+  private buildSourceSnapshot(
+    levelsSnapshot: BroadbandLevelsSnapshot,
+    exportedSplHistory: SplHistoryData | undefined,
+    feedbackTracks: DetectedFeedbackTrack[]
+  ): SourceData {
+    const N = this.config.fftSize;
+    const smoothFrac = OCTAVE_SMOOTHING_FRACTIONS[this.config.octaveSmoothing];
+    let moduleOut = this.tf.module;
+    let magnitudeOut = this.tf.magnitude;
+    let phaseReOut = this.tf.phaseReal;
+    let phaseImOut = this.tf.phaseImag;
+    if (smoothFrac > 0) {
+      smoothMagnitudeOctave(this.tf.module, this.outModule, smoothFrac, this.smoothPrefixA);
+      smoothMagnitudeOctave(
+        this.tf.magnitude,
+        this.outMagnitude,
+        smoothFrac,
+        this.smoothPrefixA
+      );
+      smoothPhaseOctave(
+        this.tf.phaseReal,
+        this.tf.phaseImag,
+        this.outPhaseRe,
+        this.outPhaseIm,
+        smoothFrac,
+        this.smoothPrefixA,
+        this.smoothPrefixB
+      );
+      moduleOut = this.outModule;
+      magnitudeOut = this.outMagnitude;
+      phaseReOut = this.outPhaseRe;
+      phaseImOut = this.outPhaseIm;
+    }
+
+    return {
+      id: this.config.id,
+      name: this.config.name,
+      kind: 'measurement',
+      color: this.config.color,
+      visible: true,
+      active: true,
+      gainOffsetDb: 0,
+      delayOffsetMs: 0,
+      invertPolarity: false,
+      notes: `FFT ${N} | ${this.config.windowType} | Avg: ${this.config.averagingType} | Delay: ${this.config.delayMs.toFixed(2)} ms`,
+      createdAt: '',
+      sampleRate: this.config.sampleRate,
+      freqData: {
+        length: this.tf.binCount,
+        frequency: this.tf.frequency,
+        module: moduleOut,
+        magnitude: magnitudeOut,
+        phaseReal: phaseReOut,
+        phaseImag: phaseImOut,
+        coherence: this.tf.coherence,
+        peakSquared: this.tf.peakSquared,
+        meanSquared: this.tf.meanSquared,
+      },
+      timeData: {
+        length: this.deconv.size,
+        timeMs: this.deconv.timeMs,
+        impulse: this.deconv.impulse,
+        stepResponse: this.deconv.stepResponse,
+      },
+      levels: levelsSnapshot,
+      delayEstimate: this.latestDelayEstimate,
+      ...(exportedSplHistory ? { splHistory: exportedSplHistory } : {}),
+      feedbackTracks,
+    };
   }
 
   setSplHistoryWindowSec(windowSec: SplHistoryWindowSec): void {
@@ -520,35 +605,6 @@ export class MeasurementPipeline {
       };
     }
 
-    // Apply optional fractional-octave smoothing
-    const smoothFrac = OCTAVE_SMOOTHING_FRACTIONS[this.config.octaveSmoothing];
-    let moduleOut = this.tf.module;
-    let magnitudeOut = this.tf.magnitude;
-    let phaseReOut = this.tf.phaseReal;
-    let phaseImOut = this.tf.phaseImag;
-    if (smoothFrac > 0) {
-      smoothMagnitudeOctave(this.tf.module, this.outModule, smoothFrac, this.smoothPrefixA);
-      smoothMagnitudeOctave(
-        this.tf.magnitude,
-        this.outMagnitude,
-        smoothFrac,
-        this.smoothPrefixA
-      );
-      smoothPhaseOctave(
-        this.tf.phaseReal,
-        this.tf.phaseImag,
-        this.outPhaseRe,
-        this.outPhaseIm,
-        smoothFrac,
-        this.smoothPrefixA,
-        this.smoothPrefixB
-      );
-      moduleOut = this.outModule;
-      magnitudeOut = this.outMagnitude;
-      phaseReOut = this.outPhaseRe;
-      phaseImOut = this.outPhaseIm;
-    }
-
     const levelsSnapshot = this.meters.getSnapshot(this.splHistory.getRollingLeq());
     const feedbackTracks: DetectedFeedbackTrack[] = this.feedbackDetector.processFrame({
       slotId: this.config.id,
@@ -571,41 +627,7 @@ export class MeasurementPipeline {
       exportedSplHistory = this.cachedSplHistory;
     }
 
-    return {
-      id: this.config.id,
-      name: this.config.name,
-      kind: 'measurement',
-      color: this.config.color,
-      visible: true,
-      active: true,
-      gainOffsetDb: 0,
-      delayOffsetMs: 0,
-      invertPolarity: false,
-      notes: `FFT ${N} | ${this.config.windowType} | Avg: ${this.config.averagingType} | Delay: ${this.config.delayMs.toFixed(2)} ms`,
-      createdAt: '',
-      sampleRate: this.config.sampleRate,
-      freqData: {
-        length: this.tf.binCount,
-        frequency: this.tf.frequency,
-        module: moduleOut,
-        magnitude: magnitudeOut,
-        phaseReal: phaseReOut,
-        phaseImag: phaseImOut,
-        coherence: this.tf.coherence,
-        peakSquared: this.tf.peakSquared,
-        meanSquared: this.tf.meanSquared,
-      },
-      timeData: {
-        length: this.deconv.size,
-        timeMs: this.deconv.timeMs,
-        impulse: this.deconv.impulse,
-        stepResponse: this.deconv.stepResponse,
-      },
-      levels: levelsSnapshot,
-      delayEstimate: this.latestDelayEstimate,
-      ...(exportedSplHistory ? { splHistory: exportedSplHistory } : {}),
-      feedbackTracks,
-    };
+    return this.buildSourceSnapshot(levelsSnapshot, exportedSplHistory, feedbackTracks);
   }
 }
 

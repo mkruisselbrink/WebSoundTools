@@ -24,11 +24,17 @@ export interface SplMeterGroupProps {
   readonly onSplTimeChange: (time: MeterIntegrationTime) => void;
 }
 
-function evaluateMonitoredMetricDb(
+export function evaluateMonitoredMetricDb(
   levels: BroadbandLevelsSnapshot | undefined,
-  thresholds: SplAlertThresholds
+  thresholds: SplAlertThresholds,
+  workspaceMode: WorkspaceMode | undefined = 'tuning',
+  splWeighting: WeightingCurve = 'A',
+  splTime: MeterIntegrationTime = 'Fast'
 ): number {
   if (!levels) return -40.0;
+  if (workspaceMode !== 'show') {
+    return levels.levelsDb[splWeighting][splTime];
+  }
   const rolling = levels.rollingLeq;
   switch (thresholds.metric) {
     case 'LAeq15m':
@@ -44,7 +50,7 @@ function evaluateMonitoredMetricDb(
     case 'LAF':
       return levels.levelsDb.A.Fast;
     case 'LZpeak':
-      return levels.peaksDb.Z;
+      return rolling?.recentPeakDbZ ?? levels.peaksDb.Z;
   }
 }
 
@@ -55,7 +61,13 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
   const currentPeak = levels ? levels.peaksDb[props.splWeighting] : -40.0;
   const rolling = levels?.rollingLeq;
   const thresholds = props.splAlertThresholds ?? DEFAULT_SPL_ALERT_THRESHOLDS;
-  const monitoredDb = evaluateMonitoredMetricDb(levels, thresholds);
+  const monitoredDb = evaluateMonitoredMetricDb(
+    levels,
+    thresholds,
+    props.workspaceMode,
+    props.splWeighting,
+    props.splTime
+  );
 
   const isLimit = thresholds.enabled && monitoredDb >= thresholds.limitDb;
   const isWarn =

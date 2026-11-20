@@ -19,6 +19,8 @@ export interface RollingLeqSnapshot {
   readonly leq15m: Record<WeightingCurve, number>;
   readonly leq60m: Record<WeightingCurve, number>;
   readonly cMinusALeq1mDb: number;
+  /** Short-term Z-weighted peak (dB SPL) over the active/most-recent 1-second epoch for live LZpeak alerts */
+  readonly recentPeakDbZ?: number;
 }
 
 export interface EpochCurveEnergy {

@@ -192,5 +192,24 @@ describe('SplHistoryTracker (Dual-Resolution 4-Hour Ring Buffer & Sliding Leq)',
     expect(lines.length).toBe(11); // 1 header + 10 rows
     expect(lines[1]).toContain('live-measurement,FOH Mic,80.0,90.0,80.0,90.0,80.0,80.0,80.0,100.0');
   });
+
+  it('tracks short-term recentPeakDbZ across 1s epochs so peak alerts recover once signal drops', () => {
+    const tracker = new SplHistoryTracker(48000, 100.0);
+
+    // 1 second with a loud 106 dB peak (maxPeakSq = 4.0)
+    for (let sub = 0; sub < 4; sub++) {
+      tracker.pushSubEpochEnergy(makeSyntheticEpoch(0.1, 0.1, 0.1, 4.0));
+    }
+    expect(tracker.getRollingLeq().recentPeakDbZ).toBeCloseTo(106.02, 1);
+
+    // Next 2 full seconds drop back to 80 dB peak (maxPeakSq = 0.01)
+    for (let sub = 0; sub < 8; sub++) {
+      tracker.pushSubEpochEnergy(makeSyntheticEpoch(0.005, 0.005, 0.005, 0.01));
+    }
+    expect(tracker.getRollingLeq().recentPeakDbZ).toBeCloseTo(80.0, 1);
+
+    tracker.reset();
+    expect(tracker.getRollingLeq().recentPeakDbZ).toBeLessThan(0);
+  });
 });
 

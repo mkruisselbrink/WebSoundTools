@@ -417,7 +417,7 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         break;
       }
 
-      case 'reset-averaging':
+      case 'reset-averaging': {
         if (msg.slotId) {
           getOrCreateSlotRuntime(msg.slotId).pipeline.resetAveraging();
         } else {
@@ -425,9 +425,20 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
             rt.pipeline.resetAveraging();
           }
         }
+        const frames = Array.from(slots.values()).map((rt) => ({
+          ...rt.pipeline.getSnapshot(),
+          id: rt.slot.id,
+          name: rt.slot.name,
+          color: rt.slot.color,
+          visible: rt.slot.visible,
+        }));
+        if (frames.length > 0) {
+          self.postMessage({ type: 'measurement-frames', frames });
+        }
         break;
+      }
 
-      case 'reset-spl-history':
+      case 'reset-spl-history': {
         if (msg.slotId) {
           getOrCreateSlotRuntime(msg.slotId).pipeline.resetSplHistory();
         } else {
@@ -435,7 +446,18 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
             rt.pipeline.resetSplHistory();
           }
         }
+        const frames = Array.from(slots.values()).map((rt) => ({
+          ...rt.pipeline.getSnapshot(),
+          id: rt.slot.id,
+          name: rt.slot.name,
+          color: rt.slot.color,
+          visible: rt.slot.visible,
+        }));
+        if (frames.length > 0) {
+          self.postMessage({ type: 'measurement-frames', frames });
+        }
         break;
+      }
 
       case 'set-spl-history-window': {
         currentSplWindowSec = msg.windowSec;

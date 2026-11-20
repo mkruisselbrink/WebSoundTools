@@ -177,6 +177,7 @@ export function computeRollingLeqSnapshot(params: {
   readonly secEnergySumC: number;
   readonly secEnergySumZ: number;
   readonly secSubCount: number;
+  readonly recentPeakSqZ?: number;
 }): RollingLeqSnapshot {
   const {
     tierBCount,
@@ -188,6 +189,7 @@ export function computeRollingLeqSnapshot(params: {
     secEnergySumC,
     secEnergySumZ,
     secSubCount,
+    recentPeakSqZ = 0,
   } = params;
 
   const winDb = (sum: number, winSec: number, inFlightE: number): number => {
@@ -228,6 +230,7 @@ export function computeRollingLeqSnapshot(params: {
     leq15m,
     leq60m,
     cMinusALeq1mDb: leq1m.C - leq1m.A,
+    recentPeakDbZ: energyToDb(recentPeakSqZ, splOffsetDb),
   };
 }
 

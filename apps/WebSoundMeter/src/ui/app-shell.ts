@@ -133,6 +133,9 @@ export class WebSoundMeterApp extends LitElement {
       onResetAveraging: () => {
         const activeId = this.sourceStore.getActiveLiveSourceId();
         this.engine?.resetAveraging(activeId);
+        if (this.workspace.workspaceMode !== 'show') {
+          this.engine?.resetSplHistory(activeId);
+        }
       },
       onSelectLayoutCount: (count) => {
         const isShow = this.workspace.workspaceMode === 'show';
@@ -494,7 +497,10 @@ export class WebSoundMeterApp extends LitElement {
         this.persistState('none');
         this.requestUpdate();
       },
-      onResetAveraging: () => this.engine?.resetAveraging(liveSlot.id),
+      onResetAveraging: () => {
+        this.engine?.resetAveraging(liveSlot.id);
+        this.engine?.resetSplHistory(liveSlot.id);
+      },
       onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => {
         this.engine?.updateMeasurementConfig(partial, liveSlot.id);
         this.persistState('none');

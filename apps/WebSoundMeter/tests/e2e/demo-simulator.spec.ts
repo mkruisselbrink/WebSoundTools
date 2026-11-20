@@ -72,6 +72,16 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await expect(wsm.app.getByTestId('select-fft-size')).toBeVisible();
     await expect(wsm.app.getByTestId('select-smoothing')).toBeVisible();
 
+    // Verify SPL limit alert activates above threshold and clears automatically once back under limit
+    const gainInput = wsm.app.getByLabel('Input Gain (dB)');
+    const splBar = wsm.app.getByTestId('spl-meter-bar');
+    await gainInput.fill('32');
+    await gainInput.press('Enter');
+    await expect(splBar).toHaveClass(/alert-limit/);
+    await gainInput.fill('0');
+    await gainInput.press('Enter');
+    await expect(splBar).not.toHaveClass(/alert-limit|alert-warn/);
+
     // Capture a stored trace and rename with spaces, 'c', and 'd' (verifying keyboard shortcuts ignore inputs)
     await wsm.captureStoredTrace();
     const storedItems = wsm.app.locator('[data-testid^="source-item-stored-"]');

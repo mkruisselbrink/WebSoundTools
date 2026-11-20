@@ -73,6 +73,7 @@ export class SplHistoryTracker {
   private secLastFastSqA = 0;
   private secLastFastSqC = 0;
   private secMaxPeakSqZ = 0;
+  private lastCommittedSecPeakSqZ = 0;
 
   private readonly tierA = new TierARingBuffers();
   private readonly tierB = new TierBRingBuffers();
@@ -141,6 +142,7 @@ export class SplHistoryTracker {
     this.secLastFastSqA = 0;
     this.secLastFastSqC = 0;
     this.secMaxPeakSqZ = 0;
+    this.lastCommittedSecPeakSqZ = 0;
     this.secondsSinceRecalc = 0;
 
     this.tierA.reset();
@@ -238,6 +240,7 @@ export class SplHistoryTracker {
     this.tierB.leq60mDbA[head] = rolling.leq60m.A;
     this.tierB.peakDb[head] = energyToDb(this.secMaxPeakSqZ, offset);
 
+    this.lastCommittedSecPeakSqZ = this.secMaxPeakSqZ;
     this.secMaxPeakSqZ = 0;
   }
 
@@ -258,6 +261,7 @@ export class SplHistoryTracker {
       secEnergySumC: this.secEnergySumC,
       secEnergySumZ: this.secEnergySumZ,
       secSubCount: this.secSubCount,
+      recentPeakSqZ: Math.max(this.secMaxPeakSqZ, this.lastCommittedSecPeakSqZ),
     });
   }
 
@@ -352,6 +356,10 @@ export class SplHistoryTracker {
       this.tierB.leq15mDbA[head] = rolling.leq15m.A;
       this.tierB.leq60mDbA[head] = rolling.leq60m.A;
       this.tierB.peakDb[head] = checkpoint.peakDb[i] ?? rolling.leq1m.Z;
+      if (i === n - 1) {
+        const lastPkRelDb = this.tierB.peakDb[head] - this.splOffsetDb;
+        this.lastCommittedSecPeakSqZ = lastPkRelDb > -139 ? Math.pow(10, lastPkRelDb / 10) : 0;
+      }
 
       if (i >= n - 300) {
         const fastA = this.tierB.shortDbA[head];
