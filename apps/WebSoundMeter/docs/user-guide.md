@@ -14,32 +14,33 @@ The segmented switch at the top left toggles between two operational modes:
 
 | Mode | Purpose | Active Panels & Safety Rules |
 | :--- | :--- | :--- |
-| **`🛠 Tuning`** | Pre-show PA alignment, spatial averaging, and offline EQ/crossover design | Displays all source types (**Live Measurements**, **Stored Traces**, **Virtual EQ**, **Math Union**), **Signal Generator**, and per-source property inspectors. |
-| **`🎚 Show`** | Concert sound-level compliance and narrowband feedback monitoring | Hides `Stored` and `Math Union` traces from charts (preserving their saved visibility flags for Tuning mode), switches the right dock to **Live Mics & SPL Watch**, **Feedback Ring Log**, and **Show Limits & Log**, and **forcibly mutes and hides the Signal Generator** whenever a hardware audio interface is active. |
+| **`Tuning`** | Pre-show PA alignment, spatial averaging, and offline EQ/crossover design | Displays all source types (**Live Measurements**, **Stored Traces**, **Virtual EQ**, **Math Union**), **Signal Generator**, and per-source property inspectors. |
+| **`Show`** | Concert sound-level compliance and narrowband feedback monitoring | Hides `Stored` and `Math Union` traces from charts (preserving their saved visibility flags for Tuning mode), switches the right dock to **Live Mics & SPL Watch**, **Feedback Ring Log**, and **Show Limits & Log**, and **forcibly mutes and hides the Signal Generator** whenever a hardware audio interface is active. |
 
-### URL State, Autosave & Offline PWA
+### URL State, Autosave & Offline Desktop PWA
 - **URL Sharing & History:** Mode, layout preset, active chart plot types, simulator preset, SPL weighting/time constants, and selected source sync to URL query parameters (`?mode=...&layout=...&plots=...`) with full Browser Back/Forward support.
 - **Session Recovery:** Routing, live measurement slots, generator configuration, and SPL alert thresholds autosave to `localStorage`. Captured/imported traces, Virtual EQs, Math Unions, calibration curves, and rolling `1 Hz` SPL compliance checkpoints persist in `IndexedDB`.
+- **Window Controls Overlay (Installed PWA):** When installed as a standalone desktop PWA, the locked `40 px` studio bar merges directly into the native OS window titlebar (`window-controls-overlay`) with draggable grip regions and container-aware compaction.
 - **Hardware Reload Safety:** Reloading the page while **Hardware** input mode is active starts **Paused** (`Resume` button shown) so the browser receives a clean user gesture before opening `AudioContext` and microphone streams.
 
 ---
 
 ## 2. Top Control Bar Reference
 
-### Chart Layout Presets
-Each mode maintains its own active chart stack (`1` to `3` panels):
+### Chart Layout Presets (`1x` / `2x` / `3x` + `▾`)
+Each mode maintains its own active chart stack (`1` to `3` panels), selectable via 1-click `1x`/`2x`/`3x` buttons or the `▾` preset popover:
 - **Tuning Layouts:** `PA Alignment 3x (Mag + Phase + Impulse)`, `Transfer Function 2x (Mag + Phase)`, `Live Mixing 2x (RTA + Magnitude)`, `Single Chart 1x`.
-- **Show Layouts:** `Live Show 2x (RTA + SPL History)`, `Live Show 3x (RTA + SPL History + TF Mag)`, `Single Chart 1x`.
+- **Show Layouts:** `Live Show 2x (RTA + SPL History)`, `Live Show 3x (RTA + Mag + SPL History)`, `Single Chart 1x`.
 
-### Input, Reference & Hardware Channel Limit
-- **Input Selector (`INPUT`):** Switches between **`Built-in Demo Simulator`** and any detected multi-channel **`Hardware`** audio interface (`getUserMedia` with echo cancellation, noise suppression, and auto-gain disabled at the device's native sample rate).
-- **Hardware Generator Auto-Mute:** Switching `INPUT` from `Built-in Demo Simulator` to any physical hardware device automatically sets **`GEN`** to **`OFF`** so pink noise never fires unexpectedly into an unmuted PA.
-- **Global Reference (`Ref`):** Shown in Hardware mode. Selects **`Internal Gen`** (internal digital loopback) or any physical input **`In Ch 1..N`** (physical analog/digital loopback or console matrix feed).
-- **Concurrent Tap Capacity:** The real-time `AudioWorklet` ring buffer taps up to **`8` distinct physical hardware input channels** simultaneously—supporting up to **`7` live measurement microphones + `1` physical reference loopback channel** (or `8` microphones when `Ref` is set to `Internal Gen`).
+### Input, Reference & Hardware Channel Limit (`Audio Input & Reference ▾`)
+- **Input Selector:** Clicking the audio interface pill opens the **Audio Input & Reference** popover to switch between **`Built-in Demo Simulator`** and any detected multi-channel **`Hardware`** audio interface (`getUserMedia` with echo cancellation, noise suppression, and auto-gain disabled at the device's native sample rate).
+- **Hardware Generator Auto-Mute:** Switching from `Built-in Demo Simulator` to any physical hardware device automatically sets **`Gen`** to **`OFF`** so pink noise never fires unexpectedly into an unmuted PA.
+- **Global Reference Channel (`Ref`):** Shown in Hardware mode. Selects **`Internal Signal Generator`** (internal digital reference) or any physical input **`In Ch 1..N`** (physical analog/digital loopback or console mix feed) as the dual-FFT reference for transfer-function magnitude, phase, coherence, impulse deconvolution, and delay estimation.
+- **Concurrent Tap Capacity:** The real-time `AudioWorklet` ring buffer taps up to **`8` distinct physical hardware input channels** simultaneously—supporting up to **`7` live measurement microphones + `1` physical reference loopback channel** (or `8` microphones when `Ref` is set to `Internal Signal Generator`).
 - **`Pause` / `Resume` (`Space`):** Freezes live capture, spectrum integration, and hardware generator output simultaneously.
 
-### Signal Generator (`GEN`)
-- **`ON` / `OFF` Toggle:** Enables or mutes the internal test signal.
+### Signal Generator (`Gen` Split-Pill)
+- **`Gen` / `Gen ON` Toggle:** 1-click button enables or mutes the internal test signal; the adjacent `▾` chevron opens waveform, level, and output routing controls.
 - **Signal Types:**
   - `Pink Noise (-3 dB/oct)` — Equal energy per octave for broadband transfer function and RTA work.
   - `White Noise (Flat)` — Equal energy per Hz.

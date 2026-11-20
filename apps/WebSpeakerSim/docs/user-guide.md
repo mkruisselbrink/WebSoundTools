@@ -31,23 +31,22 @@ All spatial coordinates use a right-handed metric coordinate system in **meters 
 
 ## 2. Top Control Bar & Coverage Readouts
 
-### Project & History Controls
-- **`Venue`:** Loads one of the `3` built-in reference venues.
-- **`Projects`:** Opens the local `IndexedDB` project manager to save/load named venues or click **`Reset Local Autosave`** to return to clean factory state.
-- **`Export` / `Import`:** Saves or loads a portable `.wss-project.json` bundle containing the complete scene, colormap settings, and **all** custom speakers currently in your browser library.
-- **`Undo` / `Redo`:** Steps backward/forward through up to `60` scene mutations (continuous CAD drags and EQ handle scrubs coalesce via `txKey` into single undo steps).
+### Scene, Project & History Controls
+- **`Scene ▾` Popover:** Displays the active venue name (with a cyan indicator dot when modified from a preset) and opens a popover to load any of the `3` built-in demo venues, open **`Saved Projects`** (`IndexedDB` manager + **`Reset Local Autosave`**), **`Save Snapshot`**, or **`Import .json`** / **`Export .json`** portable `.wss-project.json` bundles (containing the scene, colormap settings, and custom speakers).
+- **`Undo` / `Redo` (`↶` / `↷`):** Steps backward/forward through up to `60` scene mutations (continuous CAD drags and EQ handle scrubs coalesce via `txKey` into single undo steps).
+- **Window Controls Overlay (Installed PWA):** When installed as a desktop PWA, the locked `40 px` studio bar merges directly into the native OS titlebar (`window-controls-overlay`).
 
-### Analysis Band & Colormap Controls
+### Analysis Band, Ground Bounce & Heatmap Popover
 ![Mains Only at 4 kHz with Stepped Isobars Highlighting Front-Center Gap](./images/02-mains-4khz-gap.png)
 
 - **`Band`:**
   - **Broadband Weighted Spectra:** `Broadband Pink (dBA)`, `Broadband Pink (dBC)`, `Broadband Pink (dBZ)`, `Live Music Contour (dBA)`, `Live Music Contour (dBC)`, `Subband Average (31.5–100 Hz dBC)`.
   - **Single Bands:** `31.5 Hz`, `63 Hz`, `80 Hz`, `125 Hz`, `250 Hz`, `500 Hz`, `1 kHz`, `2 kHz`, `4 kHz`, `8 kHz`, `16 kHz`.
-- **`Scale`:** `Auto ±3 dB` (`6 dB` window), `Auto ±6 dB` (`12 dB` window), `Auto 21 dB` (default), `Auto 36 dB` (wide range for stage sub rejection), or `Manual` (`Min`/`Max dB`). Both Plan and Section heatmaps lock to the Audience Plan grid scale so colors match across viewports.
-- **`Palette`:** `Rainbow` (`Turbo` high-contrast), `Thermal` (`Inferno` monotonic luminance), or `Viridis` (perceptually uniform, colorblind-safe).
-- **`Contours` & `Stepped`:** Overlays `1 dB`, `2 dB`, `3 dB`, or `6 dB` isolines (`Off` disables contours—helpful at `4–16 kHz` where narrowband interference fringes are dense) and quantizes continuous gradients into discrete dB bands.
-- **`Ground Bounce` (`G`):** Toggles the 1st-order `Z = 0 m` planar image-source reflection (`+6 dB` coherent sub coupling and midband floor comb filtering).
-- **`Speaker Library / Import` (`L`):** Opens the 3-tab Loudspeaker Catalog, Datasheet Spec Builder, and `.gll` / `.clf` / `.frd` file importer modal.
+- **`Bounce` (`G`) + Heatmap `▾` Split-Pill:** Left button toggles the 1st-order `Z = 0 m` planar image-source reflection (`+6 dB` coherent sub coupling and midband floor comb filtering); right button (or clicking the bottom-right SPL colorbar legend inside either viewport) opens the **SPL Heatmap & Contours** popover:
+  - **`SPL Color Window`:** `Auto ±3 dB` (`6 dB` window), `Auto ±6 dB` (`12 dB` window), `Auto 21 dB` (default), `Auto 36 dB` (wide range for stage sub rejection), or `Manual Min / Max`. Both Plan and Section heatmaps lock to the Audience Plan grid scale so colors match across viewports.
+  - **`Color Palette`:** `Rainbow` (`Turbo` high-contrast), `Thermal` (`Inferno` monotonic luminance), or `Viridis` (perceptually uniform, colorblind-safe).
+  - **`Isobar Contours` & `Stepped Isobars`:** Overlays `1 dB`, `2 dB`, `3 dB`, or `6 dB` isolines (`Off` disables contours) and quantizes continuous gradients into discrete dB bands, alongside the live worker **`Solver`** compute time in `ms`.
+- **`Speakers` (`L`):** Opens the 3-tab Loudspeaker Catalog, Datasheet Spec Builder, and `.gll` / `.clf` / `.frd` file importer modal.
 
 ### Live Coverage Metrics & Layout Switcher
 ![Balanced Broadband Coverage & Audience SPL Histogram](./images/03-frontfills-coverage-histogram.png)
