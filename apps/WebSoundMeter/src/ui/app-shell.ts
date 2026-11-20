@@ -6,7 +6,9 @@
  * Main Application Shell (`<web-sound-meter-app>` Lit 3 Web Component).
  */
 
+import { observeWindowControlsOverlay } from '@foh/pwa/client';
 import '@foh/ui';
+import { hasOpenPopover } from '@foh/ui';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import {
@@ -71,7 +73,11 @@ export class WebSoundMeterApp extends LitElement {
   private readonly workspace = new WorkspaceLayoutController();
   private readonly calibrationMgr = new CalibrationManager();
   private unsubscribeStore: (() => void) | null = null;
+  private unsubscribeWco: (() => void) | null = null;
   private hardwareStreamDeferred = false;
+
+  @state()
+  private wcoVisible = false;
 
   @state()
   private audioDevices: AudioDeviceOption[] = [];
@@ -155,6 +161,9 @@ export class WebSoundMeterApp extends LitElement {
         this.helpModalOpen = !this.helpModalOpen;
       },
       onEscape: () => {
+        if (hasOpenPopover(this.renderRoot)) {
+          return;
+        }
         if (this.helpModalOpen) {
           this.helpModalOpen = false;
         } else if (this.showAdvancedMeasSettings) {
@@ -270,6 +279,10 @@ export class WebSoundMeterApp extends LitElement {
     void this.hydratePersistentStores();
     syncBrowserUrlState(this.getUrlViewState(), 'replace');
 
+    this.unsubscribeWco = observeWindowControlsOverlay((snap) => {
+      this.wcoVisible = snap.visible;
+    });
+
     window.addEventListener('keydown', this.keydownHandler);
     window.addEventListener('popstate', this.popstateHandler);
   }
@@ -278,15 +291,12 @@ export class WebSoundMeterApp extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
     window.removeEventListener('popstate', this.popstateHandler);
+    this.unsubscribeWco?.();
+    this.unsubscribeWco = null;
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     this.engine?.dispose();
     this.engine = null;
-  }
-
-  private getActiveLiveSlot(): LiveMeasurementSlotConfig {
-    const activeId = this.sourceStore.getActiveLiveSourceId();
-    return this.engine!.getLiveSlot(activeId);
   }
 
   private async hydratePersistentStores(): Promise<void> {
@@ -581,13 +591,16 @@ export class WebSoundMeterApp extends LitElement {
         : allSources;
     const activeEq = this.sourceStore.getActiveEq();
     const activeLiveId = this.sourceStore.getActiveLiveSourceId();
-    const activeSlot = this.getActiveLiveSlot();
     const activeLiveSource = this.sourceStore.getLiveSource(activeLiveId);
 
     return html`
       ${renderTopbar({
         workspaceMode: this.workspace.workspaceMode,
         layoutPreset: this.workspace.layoutPreset,
+        wcoVisible: this.wcoVisible,
+        canUndo: this.sourceStore.canUndo,
+        canRedo: this.sourceStore.canRedo,
+        popoverRoot: this.renderRoot,
         audioInputMode: this.workspace.audioInputMode,
         audioDevices: this.audioDevices,
         selectedDeviceId: this.selectedDeviceId,
@@ -604,6 +617,12 @@ export class WebSoundMeterApp extends LitElement {
         splAlertThresholds: this.workspace.splAlertThresholds,
         onWorkspaceModeChange: (mode) => this.setWorkspaceMode(mode),
         onLayoutPresetChange: (preset) => this.setLayoutPreset(preset),
+        onUndo: () => {
+          if (this.sourceStore.undo()) this.persistState('replace');
+        },
+        onRedo: () => {
+          if (this.sourceStore.redo()) this.persistState('replace');
+        },
         onInputSourceSelect: this.handleInputSourceSelect,
         onGlobalReferenceChannelChange: (refCh) => {
           this.globalReferenceChannel = refCh;
@@ -719,8 +738,6 @@ export class WebSoundMeterApp extends LitElement {
               },
             })
           : renderSidebar({
-              audioInputMode: this.workspace.audioInputMode,
-              simulatorPreset: activeSlot.simulatorPreset,
               allSources,
               selectedSourceId: this.sourceStore.getSelectedSourceId(),
               inspectorContent: this.renderSelectedSourceInspector(allSources),

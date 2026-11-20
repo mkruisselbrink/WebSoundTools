@@ -151,6 +151,18 @@ export class WssViewportPanel extends LitElement {
 
   private camera: ViewportCamera2D | null = null;
   private lastFittedSceneId: string | null = null;
+  private pointerDownPos: { readonly x: number; readonly y: number } | null = null;
+
+  private isInsideLegendBar(px: number, py: number): boolean {
+    const { cssWidth, cssHeight } = this.stageController.dimensions;
+    return (
+      !this.rulerActive &&
+      cssWidth > 220 &&
+      cssHeight > 60 &&
+      px >= cssWidth - 206 &&
+      py >= cssHeight - 42
+    );
+  }
 
   private readonly stageController = new DualCanvasController(this, {
     maxDevicePixelRatio: 2,
@@ -350,6 +362,10 @@ export class WssViewportPanel extends LitElement {
     const rect = cadCanvas.getBoundingClientRect();
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
+    this.pointerDownPos = { x: px, y: py };
+    if (this.isInsideLegendBar(px, py)) {
+      return;
+    }
     cadCanvas.setPointerCapture(ev.pointerId);
     this.gestures.onPointerDown(ev, this.camera, cssWidth, cssHeight, px, py);
   }
@@ -362,6 +378,7 @@ export class WssViewportPanel extends LitElement {
     const px = ev.clientX - rect.left;
     const py = ev.clientY - rect.top;
 
+    cadCanvas.style.cursor = this.isInsideLegendBar(px, py) ? 'pointer' : '';
     this.gestures?.onPointerMove(this.camera, cssWidth, cssHeight, px, py);
 
     const wp = screenToWorld(this.camera, cssWidth, cssHeight, px, py);
@@ -387,6 +404,20 @@ export class WssViewportPanel extends LitElement {
 
   private handlePointerUp(ev: PointerEvent): void {
     const cadCanvas = this.stageController.overlayCanvas;
+    if (cadCanvas && this.pointerDownPos) {
+      const rect = cadCanvas.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const dist = Math.hypot(px - this.pointerDownPos.x, py - this.pointerDownPos.y);
+      if (dist < 5 && this.isInsideLegendBar(px, py)) {
+        this.pointerDownPos = null;
+        this.dispatchEvent(
+          new CustomEvent('open-heatmap-popover', { bubbles: true, composed: true })
+        );
+        return;
+      }
+    }
+    this.pointerDownPos = null;
     if (cadCanvas?.hasPointerCapture(ev.pointerId)) {
       cadCanvas.releasePointerCapture(ev.pointerId);
     }

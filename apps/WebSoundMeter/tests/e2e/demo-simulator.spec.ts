@@ -13,9 +13,11 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     const wsm = new WsmPageDriver(page);
     await wsm.goto('/');
 
-    // Verify PWA manifest link is present
+    // Verify PWA manifest link and locked 40px single-row studio header
     const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
     expect(manifestHref).toBe('/manifest.webmanifest');
+    const topbarBox = await wsm.app.getByTestId('app-topbar').boundingBox();
+    expect(topbarBox?.height).toBe(40);
 
     // Wait for simulator worker frames to populate SPL meter and Delay Finder
     await wsm.waitForLiveSignal();

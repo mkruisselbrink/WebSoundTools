@@ -49,7 +49,7 @@ export async function captureWsmGuideScenes({
     await sleep(250);
     await page.screenshot({
       path: path.join(wsmOutDir, '06-advanced-measurement-settings.png'),
-      clip: { x: 1096, y: 52, width: 344, height: 848 },
+      clip: { x: 1096, y: 40, width: 344, height: 860 },
     });
     await wsm.toggleAdvancedMeasurementSettings();
 

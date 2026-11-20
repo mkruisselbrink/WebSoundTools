@@ -2,7 +2,12 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { html, nothing, TemplateResult } from 'lit';
+import {
+  type PopoverParentRootLike,
+  renderChevronDownSvg,
+  syncAnchoredPopoverToggle,
+} from '@foh/ui';
+import { html, TemplateResult } from 'lit';
 import {
   DEFAULT_SPL_ALERT_THRESHOLDS,
   SplAlertThresholds,
@@ -20,9 +25,17 @@ export interface SplMeterGroupProps {
   readonly splTime: MeterIntegrationTime;
   readonly levels?: BroadbandLevelsSnapshot;
   readonly splAlertThresholds?: SplAlertThresholds;
+  readonly popoverRoot?: PopoverParentRootLike;
   readonly onSplWeightingChange: (curve: WeightingCurve) => void;
   readonly onSplTimeChange: (time: MeterIntegrationTime) => void;
 }
+
+const SHORT_TIME_LABELS: Record<MeterIntegrationTime, string> = {
+  Fast: 'Fast',
+  Slow: 'Slow',
+  Impulse: 'Imp',
+  Leq: 'Leq',
+};
 
 export function evaluateMonitoredMetricDb(
   levels: BroadbandLevelsSnapshot | undefined,
@@ -73,13 +86,12 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
   const isWarn =
     thresholds.enabled && !isLimit && monitoredDb >= thresholds.warningDb;
 
-  const statusBadge = isLimit
-    ? html`<span class="spl-alert-badge limit" data-testid="spl-status-badge">◆ LIMIT</span>`
+  const alertClass = isLimit ? 'alert-limit' : isWarn ? 'alert-warn' : '';
+  const showStatusBadge = isLimit
+    ? html`<span class="foh-lcd-badge limit" data-testid="spl-status-badge">◆ LIMIT</span>`
     : isWarn
-      ? html`<span class="spl-alert-badge warn" data-testid="spl-status-badge">▲ WARN</span>`
-      : props.workspaceMode === 'show'
-        ? html`<span class="spl-alert-badge ok" data-testid="spl-status-badge">● OK</span>`
-        : nothing;
+      ? html`<span class="foh-lcd-badge warn" data-testid="spl-status-badge">▲ WARN</span>`
+      : html`<span class="foh-lcd-badge ok" data-testid="spl-status-badge">● OK</span>`;
 
   const laeq1m = rolling ? rolling.leq1m.A : currentLeq;
   const laeq15m = rolling ? rolling.leq15m.A : currentLeq;
@@ -91,70 +103,133 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
 
   return html`
     <div
-      class="toolbar-group spl-readout ${isLimit ? 'alert-limit' : isWarn ? 'alert-warn' : ''}"
+      class="foh-lcd ${alertClass}"
       data-testid="spl-meter-bar"
+      role="group"
+      aria-label="Broadband SPL Meter"
     >
-      <select
-        id="wsm-select-spl-weighting"
-        name="spl-weighting"
-        aria-label="SPL Weighting"
-        data-testid="select-spl-weighting"
-        .value=${props.splWeighting}
-        @change=${(e: Event) =>
-          props.onSplWeightingChange((e.target as HTMLSelectElement).value as WeightingCurve)}
+      <button
+        type="button"
+        class="foh-lcd-trigger"
+        data-testid="btn-spl-popover"
+        data-popover-trigger="wsm-spl-popover"
+        popovertarget="wsm-spl-popover"
+        aria-label="SPL Weighting and Integration Time"
+        aria-expanded="false"
+        title="Change SPL Frequency Weighting (A/C/Z) & Integration Time"
       >
-        <option value="A">dBA</option>
-        <option value="C">dBC</option>
-        <option value="Z">dBZ</option>
-      </select>
-      <select
-        id="wsm-select-spl-time"
-        name="spl-integration-time"
-        aria-label="SPL Integration Time"
-        .value=${props.splTime}
-        @change=${(e: Event) =>
-          props.onSplTimeChange(
-            (e.target as HTMLSelectElement).value as MeterIntegrationTime
-          )}
+        <span>dB${props.splWeighting}·${SHORT_TIME_LABELS[props.splTime]}</span>
+        ${renderChevronDownSvg()}
+      </button>
+
+      <span class="foh-lcd-primary" data-testid="spl-main-value"
+        >${currentSpl.toFixed(1)} dB${props.splWeighting}</span
       >
-        <option value="Fast">Fast</option>
-        <option value="Slow">Slow</option>
-        <option value="Impulse">Impulse</option>
-        <option value="Leq">Leq</option>
-      </select>
-      <div class="spl-main-value" data-testid="spl-main-value">
-        ${currentSpl.toFixed(1)} dB${props.splWeighting}
-      </div>
 
       ${props.workspaceMode === 'show'
         ? html`
-            <div class="spl-show-metrics" data-testid="spl-show-compliance-metrics">
-              <div class="spl-metric-chip">
-                <span>LAeq1m</span>
-                <strong>${laeq1m.toFixed(1)}</strong>
-              </div>
-              <div class="spl-metric-chip">
-                <span>LAeq15m</span>
-                <strong>${laeq15m.toFixed(1)} / ${thresholds.limitDb.toFixed(0)}</strong>
-              </div>
-              <div class="spl-metric-chip">
-                <span>LC−LA</span>
-                <strong>${cMinusA >= 0 ? '+' : ''}${cMinusA.toFixed(1)} dB</strong>
-              </div>
-              <div class="spl-metric-chip">
-                <span>Pk</span>
-                <strong>${currentPeak.toFixed(1)}</strong>
-              </div>
-              ${statusBadge}
+            <span class="foh-lcd-sep foh-hide-below-medium" aria-hidden="true"></span>
+            <div class="spl-show-inline" data-testid="spl-show-compliance-metrics">
+              <span class="foh-lcd-kv foh-hide-below-full">
+                <span class="foh-lcd-k">LAeq1m</span>
+                <span class="foh-lcd-v" style="inline-size:5.2ch"
+                  >${laeq1m.toFixed(1)}</span
+                >
+              </span>
+              <span class="foh-lcd-kv foh-hide-below-medium">
+                <span class="foh-lcd-k">LAeq15</span>
+                <span class="foh-lcd-v" style="inline-size:8.6ch"
+                  >${laeq15m.toFixed(1)}/${thresholds.limitDb.toFixed(0)}</span
+                >
+              </span>
+              <span class="foh-lcd-kv foh-hide-below-full">
+                <span class="foh-lcd-k">LC−LA</span>
+                <span class="foh-lcd-v" style="inline-size:7.4ch"
+                  >${cMinusA >= 0 ? '+' : ''}${cMinusA.toFixed(1)}dB</span
+                >
+              </span>
+              <span class="foh-lcd-kv foh-hide-below-full">
+                <span class="foh-lcd-k">Pk</span>
+                <span class="foh-lcd-v" style="inline-size:5.2ch"
+                  >${currentPeak.toFixed(1)}</span
+                >
+              </span>
+              ${showStatusBadge}
             </div>
           `
         : html`
-            <div class="spl-sub-value">
-              <div class="spl-sub-row"><span>Leq:</span><strong>${currentLeq.toFixed(1)}</strong></div>
-              <div class="spl-sub-row"><span>Pk:</span><strong>${currentPeak.toFixed(1)}</strong></div>
-            </div>
-            ${statusBadge}
+            <span class="foh-lcd-sep foh-hide-below-full" aria-hidden="true"></span>
+            <span class="foh-lcd-kv foh-hide-below-full">
+              <span class="foh-lcd-k">Leq</span>
+              <span class="foh-lcd-v" style="inline-size:5.2ch"
+                >${currentLeq.toFixed(1)}</span
+              >
+            </span>
+            <span class="foh-lcd-kv foh-hide-below-full">
+              <span class="foh-lcd-k">Pk</span>
+              <span class="foh-lcd-v" style="inline-size:5.2ch"
+                >${currentPeak.toFixed(1)}</span
+              >
+            </span>
           `}
+
+      <div
+        id="wsm-spl-popover"
+        popover="auto"
+        class="foh-popover"
+        @toggle=${(ev: Event) => {
+          if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
+        }}
+      >
+        <div class="foh-popover-title">SPL Meter Configuration</div>
+        <div class="foh-popover-grid">
+          <div class="foh-popover-row">
+            <label for="wsm-select-spl-weighting">Frequency Weighting</label>
+            <select
+              id="wsm-select-spl-weighting"
+              name="spl-weighting"
+              aria-label="SPL Weighting"
+              data-testid="select-spl-weighting"
+              .value=${props.splWeighting}
+              @change=${(e: Event) =>
+                props.onSplWeightingChange(
+                  (e.target as HTMLSelectElement).value as WeightingCurve
+                )}
+            >
+              <option value="A" ?selected=${props.splWeighting === 'A'}>
+                A-Weighting (dBA)
+              </option>
+              <option value="C" ?selected=${props.splWeighting === 'C'}>
+                C-Weighting (dBC)
+              </option>
+              <option value="Z" ?selected=${props.splWeighting === 'Z'}>
+                Z-Weighting / Flat (dBZ)
+              </option>
+            </select>
+          </div>
+
+          <div class="foh-popover-row">
+            <label for="wsm-select-spl-time">Integration Time</label>
+            <select
+              id="wsm-select-spl-time"
+              name="spl-integration-time"
+              aria-label="SPL Integration Time"
+              .value=${props.splTime}
+              @change=${(e: Event) =>
+                props.onSplTimeChange(
+                  (e.target as HTMLSelectElement).value as MeterIntegrationTime
+                )}
+            >
+              <option value="Fast" ?selected=${props.splTime === 'Fast'}>Fast (125 ms)</option>
+              <option value="Slow" ?selected=${props.splTime === 'Slow'}>Slow (1 s)</option>
+              <option value="Impulse" ?selected=${props.splTime === 'Impulse'}>
+                Impulse (35 ms)
+              </option>
+              <option value="Leq" ?selected=${props.splTime === 'Leq'}>Leq</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }

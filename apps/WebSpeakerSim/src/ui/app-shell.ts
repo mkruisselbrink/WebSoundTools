@@ -5,7 +5,9 @@
  * Root application shell `<web-speaker-sim-app>` (`src/ui/app-shell.ts`).
  */
 
+import { observeWindowControlsOverlay } from '@foh/pwa/client';
 import '@foh/ui';
+import { hasOpenPopover, toggleAnchoredPopover } from '@foh/ui';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import '../charts/chart-panel.js';
@@ -64,6 +66,7 @@ export class WebSpeakerSimApp extends LitElement {
   @state() private helpModalOpen = false;
   @state() private savedProjects: SavedProjectRecord[] = [];
   @state() private toastMessage = '';
+  @state() private wcoVisible = false;
 
   // Alignment UI state for Virtual Mic inspector
   @state() private alignRefGroupId = '';
@@ -77,6 +80,7 @@ export class WebSpeakerSimApp extends LitElement {
   private isLoadingPreset = false;
   private unsubStore: (() => void) | null = null;
   private unsubSim: (() => void) | null = null;
+  private unsubWco: (() => void) | null = null;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -101,6 +105,9 @@ export class WebSpeakerSimApp extends LitElement {
         this.helpModalOpen = !this.helpModalOpen;
       },
       onEscape: () => {
+        if (hasOpenPopover(this.renderRoot)) {
+          return;
+        }
         if (this.helpModalOpen) {
           this.helpModalOpen = false;
         } else if (this.speakerLibraryOpen) {
@@ -177,11 +184,17 @@ export class WebSpeakerSimApp extends LitElement {
       window.addEventListener('keydown', this.onKeyDownBound);
     }
 
+    this.unsubWco = observeWindowControlsOverlay((snap) => {
+      this.wcoVisible = snap.visible;
+    });
+
     void this.hydrateIndexedDb();
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    this.unsubWco?.();
+    this.unsubWco = null;
     this.unsubStore?.();
     this.unsubSim?.();
     if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
@@ -325,9 +338,15 @@ export class WebSpeakerSimApp extends LitElement {
         this.layoutMode,
         this.chartDrawerExpanded,
         {
+          wcoVisible: this.wcoVisible,
+          isSceneModified: this.isSceneModified,
+          popoverRoot: this.renderRoot,
           onSelectPreset: (id) => this.handleSelectPreset(id),
           onOpenProjectsModal: () => {
             this.projectsModalOpen = true;
+          },
+          onSaveSnapshot: () => {
+            void this.saveCurrentProjectToDb();
           },
           onExportProjectJson: () => this.exportProjectBundle(),
           onTriggerImportProjectJson: () => {
@@ -367,7 +386,23 @@ export class WebSpeakerSimApp extends LitElement {
 
       <main class="workspace">
         <div class="center-column">
-          <div class="viewports-grid" data-layout=${this.layoutMode}>
+          <div
+            class="viewports-grid"
+            data-layout=${this.layoutMode}
+            @open-heatmap-popover=${() => {
+              const trigger = this.renderRoot.querySelector(
+                '#wss-heatmap-popover'
+              )
+                ? (this.renderRoot.querySelector(
+                    '[data-popover-trigger="wss-heatmap-popover"]'
+                  ) as HTMLElement | null)
+                : null;
+              const pop = this.renderRoot.querySelector(
+                '#wss-heatmap-popover'
+              ) as HTMLElement | null;
+              toggleAnchoredPopover(trigger, pop, true);
+            }}
+          >
             ${this.layoutMode !== 'section'
               ? html`
                   <wss-viewport-panel

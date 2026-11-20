@@ -132,7 +132,7 @@ export async function captureWssGuideScenes({
     await sleep(300);
     await page.screenshot({
       path: path.join(wssOutDir, '08-zone-and-environment-inspectors.png'),
-      clip: { x: 480, y: 66, width: 960, height: 834 },
+      clip: { x: 480, y: 40, width: 960, height: 860 },
     });
 
     // 07: Cropped Speaker Library Datasheet Spec Builder Modal

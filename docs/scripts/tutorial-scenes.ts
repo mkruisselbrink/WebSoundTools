@@ -82,7 +82,7 @@ export async function captureTutorialScenes({
     await sleep(200);
     await page.screenshot({
       path: path.join(outDir, 't01-02-mic-calibration-loaded.png'),
-      clip: { x: 1096, y: 52, width: 344, height: 848 },
+      clip: { x: 1096, y: 40, width: 344, height: 860 },
     });
 
     await context.close();
@@ -183,7 +183,7 @@ export async function captureTutorialScenes({
     await sleep(900);
     await page.screenshot({
       path: path.join(outDir, 't03-04-impulse-etc-reflections.png'),
-      clip: { x: 0, y: 52, width: 1096, height: 848 },
+      clip: { x: 0, y: 40, width: 1096, height: 860 },
     });
 
     await context.close();
@@ -292,7 +292,7 @@ export async function captureTutorialScenes({
     await sleep(250);
     await page.screenshot({
       path: path.join(outDir, 't06-03-acoustic-ruler-delay-check.png'),
-      clip: { x: 0, y: 66, width: 1090, height: 525 },
+      clip: { x: 0, y: 40, width: 1090, height: 550 },
     });
     await wss.releaseAcousticRuler();
 

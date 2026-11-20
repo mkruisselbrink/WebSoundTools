@@ -4,7 +4,9 @@ Shared Lit 3 dark FOH design tokens, controls, DSP chain editor, entity/source t
 
 ## Modules
 
-- **`styles/tokens.css.ts`**, **`styles/controls.css.ts`**, **`styles/panels.css.ts`**: `--foh-*` Slate-950 design tokens, buttons, badges, swatches, coordinate grids, inspector sections, and entity-tree styles.
+- **`styles/tokens.css.ts`**, **`styles/controls.css.ts`**, **`styles/panels.css.ts`**, **`styles/topbar.css.ts`**: `--foh-*` Slate-950 design tokens, buttons, badges, swatches, coordinate grids, inspector sections, entity-tree styles, and the unified single-row WCO application header (`@container topbar` + `.foh-lcd`).
+- **`icons/foh-icons.ts`**: Shared rounded-square app marks and `12–16 px` `currentColor` toolbar SVG icons.
+- **`overlays/foh-popover.ts`**: Native `popover="auto"` anchored disclosure helper with `@supports (position-area: block-end)` CSS Anchor Positioning and viewport-clamped fixed fallback.
 - **`inspector/field-primitives.ts`**: `numVal`, `clampNum`, and `renderCoordinateGrid` for 2-column and 3-column numeric inspector fields.
 - **`inspector/dsp-chain-editor.ts`**: `renderDspChainEditor` & `<foh-dsp-chain-editor>` providing Gain, Delay, Polarity, Mute, Butterworth/Linkwitz-Riley 12–48 dB/oct HPF/LPF crossovers, and multi-band Parametric EQ cards.
 - **`tree/entity-tree.ts`**: `renderEntityTreeSection` & `<foh-entity-tree>` for grouped source/entity lists with visibility checkboxes or mute buttons, color swatches, and badges.

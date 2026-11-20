@@ -242,11 +242,28 @@ export class WsmPageDriver {
   }
 
   async selectLayout(layout: LayoutPreset): Promise<void> {
-    await this.byTestId(WSM_TEST_IDS.layoutSelect).selectOption(layout);
+    const sel = this.byTestId(WSM_TEST_IDS.layoutSelect);
+    if (!(await sel.isVisible())) {
+      await this.byTestId(WSM_TEST_IDS.layoutPopoverBtn).click();
+      await expect(sel).toBeVisible();
+    }
+    await sel.selectOption(layout);
+    if (await sel.isVisible()) {
+      await this.byTestId(WSM_TEST_IDS.layoutPopoverBtn).click();
+    }
   }
 
   async selectInputSource(optionValue: string): Promise<void> {
-    await this.byTestId(WSM_TEST_IDS.inputModeSelect).selectOption(optionValue);
+    const sel = this.byTestId(WSM_TEST_IDS.inputModeSelect);
+    const openedHere = !(await sel.isVisible());
+    if (openedHere) {
+      await this.byTestId(WSM_TEST_IDS.ioPopoverBtn).click();
+      await expect(sel).toBeVisible();
+    }
+    await sel.selectOption(optionValue);
+    if (openedHere && (await sel.isVisible())) {
+      await this.byTestId(WSM_TEST_IDS.ioPopoverBtn).click();
+    }
   }
 
   async toggleGenerator(): Promise<void> {

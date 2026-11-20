@@ -4,13 +4,9 @@
 
 import { renderEntityTreeSection } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
-import { InputSourceMode } from '../dsp/dsp.worker.js';
-import { SIMULATOR_PRESETS, SimulatorPresetId } from '../dsp/synthetic-rig.js';
 import { SourceData } from '../sources/source-data.js';
 
 export interface SidebarViewProps {
-  readonly audioInputMode: InputSourceMode;
-  readonly simulatorPreset: SimulatorPresetId;
   readonly allSources: readonly SourceData[];
   readonly selectedSourceId: string;
   readonly inspectorContent: TemplateResult;
@@ -25,15 +21,6 @@ export interface SidebarViewProps {
 export function renderSidebar(props: SidebarViewProps): TemplateResult {
   return html`
     <aside class="sidebar">
-      ${props.audioInputMode === 'simulator'
-        ? html`
-            <div class="sim-banner" data-testid="simulator-description">
-              <strong>Demo Mode Active:</strong>
-              ${SIMULATOR_PRESETS[props.simulatorPreset].description}
-            </div>
-          `
-        : nothing}
-
       <div class="section-card">
         ${renderEntityTreeSection({
           title: `Sources (${props.allSources.length})`,

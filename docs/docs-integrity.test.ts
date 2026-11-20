@@ -252,6 +252,7 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
         id?: string;
         name?: string;
         description?: string;
+        display_override?: string[];
         icons?: { src: string; sizes: string; type: string }[];
         screenshots?: {
           src: string;
@@ -264,6 +265,10 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
 
       if (!manifest.id) {
         issues.push(`${app}: manifest.webmanifest missing explicit "id"`);
+      }
+
+      if (!manifest.display_override?.includes('window-controls-overlay')) {
+        issues.push(`${app}: manifest.webmanifest missing "window-controls-overlay" in display_override`);
       }
 
       const metaMatch = /<meta\s+name="description"\s+content="([^"]+)"/s.exec(indexHtml);

@@ -75,7 +75,15 @@ export class WssPageDriver {
   }
 
   async selectVenuePreset(presetId: VenuePresetId): Promise<void> {
-    await this.byTestId(WSS_TEST_IDS.presetSelect).selectOption(presetId);
+    const sel = this.byTestId(WSS_TEST_IDS.presetSelect);
+    if (!(await sel.isVisible())) {
+      await this.byTestId(WSS_TEST_IDS.scenePopoverBtn).click();
+      await expect(sel).toBeVisible();
+    }
+    await sel.selectOption(presetId);
+    if (await sel.isVisible()) {
+      await this.byTestId(WSS_TEST_IDS.scenePopoverBtn).click();
+    }
     await this.waitForSimulationReady();
   }
 
@@ -83,20 +91,41 @@ export class WssPageDriver {
     await this.byTestId(WSS_TEST_IDS.bandSelect).selectOption(bandKey);
   }
 
+  private async withHeatmapPopover(fn: () => Promise<void>): Promise<void> {
+    const sel = this.byTestId(WSS_TEST_IDS.colormapRangeSelect);
+    const openedHere = !(await sel.isVisible());
+    if (openedHere) {
+      await this.byTestId(WSS_TEST_IDS.heatmapPopoverBtn).click();
+      await expect(sel).toBeVisible();
+    }
+    await fn();
+    if (openedHere && (await sel.isVisible())) {
+      await this.byTestId(WSS_TEST_IDS.heatmapPopoverBtn).click();
+    }
+  }
+
   async setColormapRange(rangeMode: ColormapRangeMode): Promise<void> {
-    await this.byTestId(WSS_TEST_IDS.colormapRangeSelect).selectOption(rangeMode);
+    await this.withHeatmapPopover(async () => {
+      await this.byTestId(WSS_TEST_IDS.colormapRangeSelect).selectOption(rangeMode);
+    });
   }
 
   async setColormapPalette(palette: ColormapPaletteId): Promise<void> {
-    await this.byTestId(WSS_TEST_IDS.colormapPaletteSelect).selectOption(palette);
+    await this.withHeatmapPopover(async () => {
+      await this.byTestId(WSS_TEST_IDS.colormapPaletteSelect).selectOption(palette);
+    });
   }
 
   async setIsolineStep(stepDb: IsolineStepDb): Promise<void> {
-    await this.byTestId(WSS_TEST_IDS.isolineSelect).selectOption(String(stepDb));
+    await this.withHeatmapPopover(async () => {
+      await this.byTestId(WSS_TEST_IDS.isolineSelect).selectOption(String(stepDb));
+    });
   }
 
   async toggleSteppedColormap(): Promise<void> {
-    await this.byTestId(WSS_TEST_IDS.colormapSteppedBtn).click();
+    await this.withHeatmapPopover(async () => {
+      await this.byTestId(WSS_TEST_IDS.colormapSteppedBtn).click();
+    });
   }
 
   async setViewportLayout(mode: ViewportLayoutMode): Promise<void> {

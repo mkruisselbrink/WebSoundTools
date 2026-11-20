@@ -4,6 +4,31 @@
 export { fohTokensCss } from './styles/tokens.css.js';
 export { FOH_SELECT_CHEVRON_DATA_URI, fohControlsCss } from './styles/controls.css.js';
 export { fohPanelsCss } from './styles/panels.css.js';
+export { fohTopbarCss } from './styles/topbar.css.js';
+export {
+  renderAudioInterfaceIconSvg,
+  renderChevronDownSvg,
+  renderGroundBounceIconSvg,
+  renderHelpQuestionSvg,
+  renderMeterWaveIconSvg,
+  renderPauseIconSvg,
+  renderPlayIconSvg,
+  renderRedoIconSvg,
+  renderSineWaveIconSvg,
+  renderSlidersIconSvg,
+  renderSpeakerCabinetIconSvg,
+  renderUndoIconSvg,
+  renderWsmAppMarkSvg,
+  renderWssAppMarkSvg,
+} from './icons/foh-icons.js';
+export {
+  closePopoverById,
+  hasOpenPopover,
+  positionPopoverFallback,
+  syncAnchoredPopoverToggle,
+  toggleAnchoredPopover,
+  type PopoverParentRootLike,
+} from './overlays/foh-popover.js';
 export {
   clampNum,
   numVal,

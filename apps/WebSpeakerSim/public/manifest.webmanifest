@@ -5,10 +5,11 @@
   "description": "Offline-capable synchronized Plan & Side Section venue simulator over a 3D direct-field + ground-reflection solver, point-source & cardioid/end-fire/arc subwoofer arrays, .gll/.clf/.frd importers, and Virtual Mic .frd export.",
   "start_url": "./",
   "scope": "./",
+  "display_override": ["window-controls-overlay", "standalone"],
   "display": "standalone",
   "orientation": "any",
   "background_color": "#060911",
-  "theme_color": "#060911",
+  "theme_color": "#0b1120",
   "categories": ["music", "utilities", "productivity"],
   "icons": [
     {

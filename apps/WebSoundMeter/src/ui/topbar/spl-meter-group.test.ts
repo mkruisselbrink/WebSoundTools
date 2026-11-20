@@ -104,4 +104,60 @@ describe('spl-meter-group alert evaluation & recovery', () => {
     };
     expect(evaluateMonitoredMetricDb(snapAfterTransient, peakThresholds, 'show')).toBe(88.0);
   });
+
+  it('never mounts or unmounts status badge in Tuning mode on peaks while keeping a fixed badge slot in Show mode', () => {
+    const quietSnap = makeSnapshot({
+      fastA: 72.0,
+      leq15mA: 72.0,
+      allTimePeakZ: 80.0,
+      recentPeakZ: 76.0,
+    });
+    const loudSnap = makeSnapshot({
+      fastA: 103.5,
+      leq15mA: 103.5,
+      allTimePeakZ: 109.0,
+      recentPeakZ: 108.0,
+    });
+
+    const tuningLoud = renderSplMeterGroup({
+      workspaceMode: 'tuning',
+      splWeighting: 'A',
+      splTime: 'Fast',
+      levels: loudSnap,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+      onSplWeightingChange: () => {},
+      onSplTimeChange: () => {},
+    });
+    const tuningQuiet = renderSplMeterGroup({
+      workspaceMode: 'tuning',
+      splWeighting: 'A',
+      splTime: 'Fast',
+      levels: quietSnap,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+      onSplWeightingChange: () => {},
+      onSplTimeChange: () => {},
+    });
+    // Identical structural child count in Tuning mode across quiet and loud frames
+    expect(tuningLoud.values.length).toBe(tuningQuiet.values.length);
+
+    const showQuiet = renderSplMeterGroup({
+      workspaceMode: 'show',
+      splWeighting: 'A',
+      splTime: 'Fast',
+      levels: quietSnap,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+      onSplWeightingChange: () => {},
+      onSplTimeChange: () => {},
+    });
+    const showLoud = renderSplMeterGroup({
+      workspaceMode: 'show',
+      splWeighting: 'A',
+      splTime: 'Fast',
+      levels: loudSnap,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+      onSplWeightingChange: () => {},
+      onSplTimeChange: () => {},
+    });
+    expect(showQuiet.values.length).toBe(showLoud.values.length);
+  });
 });

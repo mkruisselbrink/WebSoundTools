@@ -2,13 +2,14 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { fohControlsCss, fohPanelsCss, fohTokensCss } from '@foh/ui';
+import { fohControlsCss, fohPanelsCss, fohTokensCss, fohTopbarCss } from '@foh/ui';
 import { css } from 'lit';
 
 export const appShellStyles = [
   fohTokensCss,
   fohControlsCss,
   fohPanelsCss,
+  fohTopbarCss,
   css`
     :host {
       display: flex;
@@ -27,92 +28,38 @@ export const appShellStyles = [
     box-sizing: border-box;
   }
 
-  /* Top Bar */
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 8px 14px;
-    background: #0f172a;
-    border-bottom: 1px solid #1e293b;
-    flex-wrap: wrap;
+  /* Fixed-geometry WSM Topbar Pills */
+  .wsm-pause-pill {
+    inline-size: 66px;
   }
 
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 700;
-    font-size: 14px;
-    color: #38bdf8;
-    letter-spacing: 0.02em;
+  .wsm-io-pill {
+    max-inline-size: 196px;
   }
 
-  .toolbar-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #162033;
-    border: 1px solid #263554;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 12px;
-    flex-shrink: 0;
-    white-space: nowrap;
+  .wsm-gen-toggle-btn {
+    inline-size: 68px;
   }
 
-  .topbar-meta-actions {
-    margin-left: auto;
-  }
-
-  .topbar-link {
+  .spl-show-inline {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    background: #0f172a;
-    color: #f8fafc;
-    border: 1px solid #334155;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 12px;
-    font-weight: 500;
-    text-decoration: none;
-    min-block-size: 24px;
-    min-inline-size: 24px;
+    gap: 7px;
   }
 
-  @media (hover: hover) {
-    .topbar-link:hover {
-      border-color: #38bdf8;
-      color: #ffffff;
+  @container topbar (max-width: 1079px) {
+    .wsm-io-pill {
+      max-inline-size: 144px;
     }
   }
 
-  @media (pointer: coarse) {
-    .topbar-link,
-    .topbar-meta-actions button {
-      min-block-size: 28px;
-      min-inline-size: 28px;
+  @container topbar (max-width: 819px) {
+    .wsm-pause-pill {
+      inline-size: 28px;
     }
-  }
-
-  .toolbar-label {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .btn-toggle-gen {
-    width: 46px;
-    text-align: center;
-  }
-
-  .btn-toggle-pause {
-    width: 68px;
-    text-align: center;
+    .wsm-io-pill {
+      max-inline-size: 112px;
+    }
   }
 
   .delay-readout {
@@ -256,6 +203,12 @@ export const appShellStyles = [
     overflow-y: auto;
     padding: 10px;
     gap: 12px;
+  }
+
+  @media (max-width: 980px) {
+    .sidebar {
+      width: 280px;
+    }
   }
 
   .section-card {
@@ -483,13 +436,14 @@ export const appShellStyles = [
   }
 
   .sim-banner {
-    font-size: 11px;
+    font-size: 10.5px;
     color: #94a3b8;
     line-height: 1.35;
-    padding: 4px 6px;
-    background: #0f172a;
+    margin-top: 2px;
+    padding: 4px 7px;
+    background: #090d16;
     border-radius: 4px;
-    border-left: 3px solid #38bdf8;
+    border-left: 2px solid #38bdf8;
   }
 
   /* Workspace Mode Segmented Toggle */

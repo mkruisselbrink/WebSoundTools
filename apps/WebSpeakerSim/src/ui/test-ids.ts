@@ -9,13 +9,16 @@
 export const WSS_TEST_IDS = {
   // Topbar & Layout
   appTopbar: 'app-topbar',
+  scenePopoverBtn: 'btn-scene-popover',
   presetSelect: 'preset-select',
   projectsBtn: 'btn-projects',
+  saveSnapshotBtn: 'btn-save-snapshot',
   exportProjectBtn: 'btn-export-project',
   importProjectBtn: 'btn-import-project',
   undoBtn: 'btn-undo',
   redoBtn: 'btn-redo',
   bandSelect: 'band-select',
+  heatmapPopoverBtn: 'btn-heatmap-popover',
   colormapRangeSelect: 'colormap-range-select',
   topbarMinSpl: 'topbar-min-spl',
   topbarMaxSpl: 'topbar-max-spl',

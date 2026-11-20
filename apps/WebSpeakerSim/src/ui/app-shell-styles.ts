@@ -5,13 +5,14 @@
  * Application shell layout styles composing `@foh/ui` design tokens, controls, and panels.
  */
 
-import { fohControlsCss, fohPanelsCss, fohTokensCss } from '@foh/ui';
+import { fohControlsCss, fohPanelsCss, fohTokensCss, fohTopbarCss } from '@foh/ui';
 import { css } from 'lit';
 
 export const appShellStyles = [
   fohTokensCss,
   fohControlsCss,
   fohPanelsCss,
+  fohTopbarCss,
   css`
     :host {
       --bg-app: var(--_foh-bg-app);
@@ -50,58 +51,69 @@ export const appShellStyles = [
     box-sizing: border-box;
   }
 
-  /* --- Topbar --- */
-  .topbar {
+  /* --- Fixed-Geometry Topbar Controls --- */
+  .wss-scene-pill {
+    max-inline-size: 196px;
+  }
+
+  .wss-band-select {
+    inline-size: 164px;
+  }
+
+  .wss-bounce-btn {
+    inline-size: 68px;
+  }
+
+  .wss-heatmap-btn {
+    inline-size: 112px;
+  }
+
+  .wss-palette-swatch {
+    inline-size: 11px;
+    block-size: 11px;
+    border-radius: 2.5px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    flex-shrink: 0;
+  }
+
+  .wss-popover-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 6px 10px;
-    background: var(--bg-header);
-    border-bottom: 1px solid var(--border-subtle);
-    flex-wrap: wrap;
-    min-height: 42px;
-    z-index: 10;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
   }
 
-  .topbar-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: -0.01em;
-    color: var(--text-primary);
-    padding-right: 6px;
-    border-right: 1px solid var(--border-subtle);
-  }
-
-  .brand-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--accent-bright);
-    box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
-  }
-
-  .tb-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--border-subtle);
-    margin: 0 2px;
-  }
-
-  .tb-label {
+  .wss-sim-time {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
     font-size: 10.5px;
     color: var(--text-muted);
-    font-weight: 500;
+  }
+
+  @container topbar (max-width: 1079px) {
+    .wss-scene-pill {
+      max-inline-size: 148px;
+    }
+    .wss-band-select {
+      inline-size: 132px;
+    }
+  }
+
+  @container topbar (max-width: 819px) {
+    .wss-scene-pill {
+      max-inline-size: 112px;
+    }
+    .wss-band-select {
+      inline-size: 112px;
+    }
+    .wss-bounce-btn {
+      inline-size: 30px;
+    }
+    .wss-heatmap-btn {
+      inline-size: 40px;
+    }
   }
 
   select,

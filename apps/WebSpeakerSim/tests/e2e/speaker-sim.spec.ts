@@ -12,6 +12,8 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     await wss.goto('/');
 
     await expect(page.getByTestId('app-topbar')).toBeVisible();
+    const topbarBox = await page.getByTestId('app-topbar').boundingBox();
+    expect(topbarBox?.height).toBe(40);
     await expect(page.getByTestId('viewport-plan')).toBeVisible();
     await expect(page.getByTestId('viewport-section')).toBeVisible();
     await expect(page.getByTestId('chart-drawer')).toBeVisible();

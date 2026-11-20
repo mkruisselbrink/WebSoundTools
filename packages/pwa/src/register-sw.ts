@@ -8,6 +8,16 @@ export interface ServiceWorkerContainerLike {
   ): Promise<unknown>;
 }
 
+export {
+  getWindowControlsOverlaySnapshot,
+  observeWindowControlsOverlay,
+  type MediaQueryListLike,
+  type TitlebarAreaRectLike,
+  type WcoEnvironmentLike,
+  type WindowControlsOverlayLike,
+  type WindowControlsOverlaySnapshot,
+} from './wco.js';
+
 export async function registerOfflineServiceWorker(
   swContainer: ServiceWorkerContainerLike | undefined = typeof navigator !== 'undefined'
     ? navigator.serviceWorker

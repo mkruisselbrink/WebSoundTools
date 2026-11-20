@@ -188,6 +188,9 @@ export function renderLiveMeasurementInspector(
                             </option>`
                         )}
                       </select>
+                      <div class="sim-banner" data-testid="simulator-description">
+                        ${SIMULATOR_PRESETS[slot.simulatorPreset].description}
+                      </div>
                     </div>
                   `
                 : html`
