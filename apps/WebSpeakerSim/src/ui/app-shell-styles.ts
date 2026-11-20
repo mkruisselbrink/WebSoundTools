@@ -108,12 +108,18 @@ export const appShellStyles = [
   input[type='text'],
   input[type='number'] {
     font: inherit;
-    background: var(--bg-input);
+    background-color: var(--bg-input);
     color: var(--text-primary);
     border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 3px 6px;
     font-size: 11.5px;
+  }
+
+  select {
+    padding-inline-start: 7px;
+    padding-inline-end: 24px;
+    background-position: right 7px center;
   }
 
   input[type='number'] {

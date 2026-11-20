@@ -148,12 +148,16 @@ export const appShellStyles = [
   input[type='text'],
   button {
     font: inherit;
-    background: #0f172a;
+    background-color: #0f172a;
     color: #f8fafc;
     border: 1px solid #334155;
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 12px;
+  }
+
+  select {
+    padding-inline-end: 26px;
   }
 
   button {
@@ -470,6 +474,12 @@ export const appShellStyles = [
     padding: 2px 4px;
     font-size: 11px;
     width: 100%;
+  }
+
+  .eq-band-row select {
+    padding-inline-start: 6px;
+    padding-inline-end: 22px;
+    background-position: right 6px center;
   }
 
   .sim-banner {

@@ -1,7 +1,14 @@
 // Copyright (C) 2026 WebSoundTools Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { css } from 'lit';
+import { css, unsafeCSS } from 'lit';
+
+/**
+ * URL-encoded `10x6` SVG chevron (`#cbd5e1` Slate-300, >11:1 contrast on Slate-950 inputs)
+ * paired with `appearance: none` for consistent cross-browser `<select>` arrow spacing.
+ */
+export const FOH_SELECT_CHEVRON_DATA_URI =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1.5 1.25L5 4.75L8.5 1.25' stroke='%23cbd5e1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
 
 /**
  * Shared button, input, select, checkbox, swatch, badge, focus-ring, and SR-only styles.
@@ -10,6 +17,23 @@ export const fohControlsCss = css`
   :where(button, select, input, a, [tabindex]):focus-visible {
     outline: 2px solid var(--_foh-accent-bright, #38bdf8);
     outline-offset: 2px;
+  }
+
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("${unsafeCSS(FOH_SELECT_CHEVRON_DATA_URI)}");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px 6px;
+    padding-inline-end: 26px;
+    cursor: pointer;
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--_foh-bg-header, #0f172a);
+    color: var(--_foh-text-primary, #f8fafc);
   }
 
   .foh-sr-only:where(:not(:focus-within, :active)) {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 export { fohTokensCss } from './styles/tokens.css.js';
-export { fohControlsCss } from './styles/controls.css.js';
+export { FOH_SELECT_CHEVRON_DATA_URI, fohControlsCss } from './styles/controls.css.js';
 export { fohPanelsCss } from './styles/panels.css.js';
 export {
   clampNum,

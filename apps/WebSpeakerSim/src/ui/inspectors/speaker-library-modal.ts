@@ -6,7 +6,7 @@
  * and client-side `.gll` / `.clf` / `.frd` / `.csv` / `.json` Loudspeaker File Importer.
  */
 
-import '@foh/ui';
+import { fohControlsCss, fohTokensCss } from '@foh/ui';
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import {
@@ -24,7 +24,10 @@ type LibraryModalTab = 'catalog' | 'spec-builder' | 'import';
 
 @customElement('wss-speaker-library-modal')
 export class WssSpeakerLibraryModal extends LitElement {
-  static styles = css`
+  static styles = [
+    fohTokensCss,
+    fohControlsCss,
+    css`
     :where(button, select, input, a, [tabindex]):focus-visible {
       outline: 2px solid #38bdf8;
       outline-offset: 2px;
@@ -125,12 +128,16 @@ export class WssSpeakerLibraryModal extends LitElement {
 
     input,
     select {
-      background: #090d16;
+      background-color: #090d16;
       color: #f8fafc;
       border: 1px solid #334155;
       border-radius: 4px;
       padding: 5px 8px;
       font-size: 12px;
+    }
+
+    select {
+      padding-inline-end: 26px;
     }
 
     .dropzone {
@@ -180,7 +187,8 @@ export class WssSpeakerLibraryModal extends LitElement {
       border: 1px solid #38bdf8;
       font-size: 11.5px;
     }
-  `;
+    `,
+  ];
 
   @property({ type: Boolean })
   public open = false;

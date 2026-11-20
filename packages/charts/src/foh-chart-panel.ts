@@ -10,7 +10,16 @@
  */
 
 import { DualCanvasController, type DualCanvasDimensions } from '@foh/canvas';
-import { LitElement, css, html, nothing, type CSSResultGroup, type TemplateResult } from 'lit';
+import { FOH_SELECT_CHEVRON_DATA_URI } from '@foh/ui';
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  unsafeCSS,
+  type CSSResultGroup,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import {
   drawCanvasTrace,
@@ -111,7 +120,7 @@ export const fohChartPanelStyles = css`
   select,
   button {
     font: inherit;
-    background: var(--foh-bg-surface, #162033);
+    background-color: var(--foh-bg-surface, #162033);
     color: var(--foh-text-primary, #f8fafc);
     border: 1px solid var(--foh-border-strong, #334155);
     border-radius: 4px;
@@ -119,6 +128,22 @@ export const fohChartPanelStyles = css`
     font-size: 11px;
     cursor: pointer;
     user-select: none;
+  }
+
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("${unsafeCSS(FOH_SELECT_CHEVRON_DATA_URI)}");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    background-size: 10px 6px;
+    padding-inline-end: 24px;
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--foh-bg-elevated, #0f172a);
+    color: var(--foh-text-primary, #f8fafc);
   }
 
   @media (hover: hover) {

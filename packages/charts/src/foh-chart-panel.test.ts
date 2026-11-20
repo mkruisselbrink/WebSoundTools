@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { describe, expect, it, vi } from 'vitest';
-import { FohChartPanel, paintChartScene } from './foh-chart-panel.js';
+import { FohChartPanel, fohChartPanelStyles, paintChartScene } from './foh-chart-panel.js';
 
 function createMock2dContext(): CanvasRenderingContext2D {
   return {
@@ -75,6 +75,9 @@ describe('paintChartScene & FohChartPanel', () => {
     expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 640, 320);
     expect(ctx.stroke).toHaveBeenCalled();
     expect(ctx.fillText).toHaveBeenCalledWith('1000 Hz', expect.any(Number), expect.any(Number));
+    const cssText = fohChartPanelStyles.toString();
+    expect(cssText).toContain('appearance: none');
+    expect(cssText).toContain('padding-inline-end: 24px');
   });
 
   it('paints traces on the 2D HiDPI canvas above grid lines even when GlTraceRenderer is present', () => {

@@ -59,7 +59,8 @@ export class WssChartPanel extends FohChartPanelBase {
       }
 
       .span-select {
-        padding: 1px 5px;
+        padding: 1px 22px 1px 6px;
+        background-position: right 6px center;
         font-size: 10.5px;
         margin-left: 4px;
       }

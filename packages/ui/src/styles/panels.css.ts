@@ -61,12 +61,18 @@ export const fohPanelsCss = css`
   .foh-mini-field select {
     width: 100%;
     font: inherit;
-    background: var(--_foh-bg-input, #090d16);
+    background-color: var(--_foh-bg-input, #090d16);
     color: var(--_foh-text-primary, #f8fafc);
     border: 1px solid var(--_foh-border-strong, #334155);
     border-radius: var(--_foh-radius-sm, 4px);
     padding: 3px 6px;
     font-size: 11px;
+  }
+
+  .foh-mini-field select {
+    padding-inline-start: 7px;
+    padding-inline-end: 24px;
+    background-position: right 7px center;
   }
 
   .foh-mini-field input[type='number'] {
@@ -97,11 +103,12 @@ export const fohPanelsCss = css`
     flex: 1;
     min-width: 0;
     font: inherit;
-    background: var(--_foh-bg-input, #090d16);
+    background-color: var(--_foh-bg-input, #090d16);
     color: var(--_foh-text-primary, #f8fafc);
     border: 1px solid var(--_foh-border-strong, #334155);
     border-radius: var(--_foh-radius-sm, 4px);
-    padding: 2px 5px;
+    padding: 2px 22px 2px 6px;
+    background-position: right 6px center;
     font-size: 11px;
   }
 
