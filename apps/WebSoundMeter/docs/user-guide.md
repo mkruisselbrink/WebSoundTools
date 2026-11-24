@@ -51,9 +51,12 @@ Each mode maintains its own active chart stack (`1` to `3` panels), selectable v
 - **Output Level:** `0 dBFS (Hot)`, `-3`, `-6`, `-12` (default), `-18`, or `-24 dBFS`.
 - **Hardware Output Routing (`Out`):** Routes generator audio to **`Out Ch 1+2`**, an individual physical output **`Out Ch 1..N`**, or **`Mute Out`**.
 
-### Broadband SPL Meter (`IEC 61672`)
+### Broadband SPL Meter (`IEC 61672`) & Acoustic Calibration
 - **Weighting Curve:** **`dBA`**, **`dBC`**, or **`dBZ`** (flat unweighted).
 - **Integration Time:** **`Fast`** (`125 ms`), **`Slow`** (`1,000 ms`), **`Impulse`** (`35 ms` rise / `1,500 ms` fall), or **`Leq`** (continuous energy-equivalent level since last reset).
+- **Per-Mic `Input Gain` vs. `SPL Offset / Calibrate…`:**
+  - **`Input Gain (dB)` (`gainDb`, default `0 dB`):** Digital channel trim applied before the FFT—shifts **both** Transfer Function / RTA `dBFS` traces and SPL readouts (useful when level-matching `M` to `R` on a Transfer Function plot).
+  - **`SPL Offset` (`0 dBFS = X dB SPL`, default `100 dB`) & `Cal…` / `Calibrate SPL…`:** Acoustic calibration offset applied strictly to SPL / Leq / Peak meters and Show History without moving `0 dB` on Transfer Function or RTA `dBFS` traces. Click **`Cal…`** (in Show mode mic cards) or **`Calibrate SPL…`** (in Tuning's Live Measurement inspector) to match a `94 dB` / `114 dB` pistonphone calibrator or side-by-side reference SPL meter in one click.
 - **Readouts:**
   - In **Tuning** mode: main weighted SPL plus **`Leq`** and **`Pk`** (true peak).
   - In **Show** mode: main SPL plus **`LAeq1m`**, **`LAeq15m / Limit`**, **`LC−LA`** (`1`-minute C-minus-A low-end balance), **`Pk`**, and a colorblind-safe compliance badge (**`● OK`**, **`▲ WARN`**, or **`◆ LIMIT`**).

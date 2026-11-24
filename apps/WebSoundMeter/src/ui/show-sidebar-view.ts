@@ -2,8 +2,12 @@
 // Inspired by Open Sound Meter (OSM), Copyright (C) Pavel Smokotnin
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { PopoverParentRootLike } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
-import { REFERENCE_CHANNEL_GLOBAL } from '../dsp/analyzer-pipeline.js';
+import {
+  MeasurementPipelineConfig,
+  REFERENCE_CHANNEL_GLOBAL,
+} from '../dsp/analyzer-pipeline.js';
 import {
   InputSourceMode,
   LiveMeasurementSlotConfig,
@@ -20,12 +24,16 @@ import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
 } from '../dsp/synthetic-rig.js';
+import type { WeightingCurve } from '../dsp/weighting-meters.js';
 import { SourceData } from '../sources/source-data.js';
+import { renderSplCalibratorPopover } from './inspectors/calibration-inspector-section.js';
 
 export interface ShowSidebarViewProps {
   readonly audioInputMode?: InputSourceMode;
   readonly availableChannels?: number;
   readonly globalReferenceChannel?: number;
+  readonly splWeighting?: WeightingCurve;
+  readonly popoverRoot?: PopoverParentRootLike;
   readonly selectedSourceId?: string;
   readonly liveSlots: readonly LiveMeasurementSlotConfig[];
   readonly liveSources: readonly SourceData[];
@@ -43,6 +51,10 @@ export interface ShowSidebarViewProps {
         'name' | 'simulatorPreset' | 'measurementChannel' | 'referenceChannel'
       >
     >
+  ) => void;
+  readonly onUpdateSlotConfig?: (
+    slotId: string,
+    partial: Partial<MeasurementPipelineConfig>
   ) => void;
   readonly onSlotFeedbackModeChange: (
     slotId: string,
@@ -235,6 +247,72 @@ export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
                         </div>
                       </div>
                     `}
+
+                <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
+                  <span class="label-muted" title="Digital Input Gain (dB) & 0 dBFS SPL Offset"
+                    >Gain / Cal:</span
+                  >
+                  <div class="show-gain-cal-controls">
+                    <label class="show-mini-num" title="Digital Input Gain (dB) — shifts RTA/TF & SPL">
+                      <span>Gain</span>
+                      <input
+                        type="number"
+                        name="show-gain-${slot.id}"
+                        aria-label="Input Gain dB for ${slot.name}"
+                        data-testid="input-show-gain-${slot.id}"
+                        step="0.5"
+                        .value=${String(slot.config.gainDb)}
+                        @change=${(e: Event) => {
+                          const v = parseFloat((e.target as HTMLInputElement).value);
+                          if (Number.isFinite(v)) {
+                            props.onUpdateSlotConfig?.(slot.id, { gainDb: v });
+                          }
+                        }}
+                      />
+                    </label>
+                    <label
+                      class="show-mini-num"
+                      title="SPL Offset (dB SPL @ 0 dBFS) — shifts SPL & Leq only"
+                    >
+                      <span>0dBFS</span>
+                      <input
+                        type="number"
+                        name="show-spl-offset-${slot.id}"
+                        aria-label="SPL Offset dB for ${slot.name}"
+                        data-testid="input-show-spl-offset-${slot.id}"
+                        step="0.5"
+                        .value=${String(slot.config.splOffsetDb)}
+                        @change=${(e: Event) => {
+                          const v = parseFloat((e.target as HTMLInputElement).value);
+                          if (Number.isFinite(v)) {
+                            props.onUpdateSlotConfig?.(slot.id, { splOffsetDb: v });
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="show-cal-btn"
+                      data-testid="btn-show-cal-${slot.id}"
+                      data-popover-trigger="show-cal-pop-${slot.id}"
+                      popovertarget="show-cal-pop-${slot.id}"
+                      aria-expanded="false"
+                      title="Calibrate ${slot.name} to 94 / 114 dB pistonphone or reference SPL meter"
+                    >
+                      Cal…
+                    </button>
+                  </div>
+                  ${renderSplCalibratorPopover({
+                    popoverId: `show-cal-pop-${slot.id}`,
+                    slotName: slot.name,
+                    cfg: slot.config,
+                    levels,
+                    splWeighting: props.splWeighting,
+                    popoverRoot: props.popoverRoot,
+                    onUpdateConfig: (partial) =>
+                      props.onUpdateSlotConfig?.(slot.id, partial),
+                  })}
+                </div>
 
                 <div class="show-mic-bottom" @click=${(e: Event) => e.stopPropagation()}>
                   <span class="label-muted">FB Watch:</span>

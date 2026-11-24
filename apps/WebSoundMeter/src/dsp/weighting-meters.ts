@@ -47,6 +47,28 @@ export interface BroadbandLevelsSnapshot {
   readonly rollingLeq?: RollingLeqSnapshot;
 }
 
+/**
+ * Computes the `splOffsetDb` (`dB SPL @ 0 dBFS`) required so the current `Fast` meter reading
+ * on `curve` matches a known `referenceSplDb` (e.g. `94.0` or `114.0 dB` from an acoustic
+ * pistonphone calibrator or side-by-side reference SPL meter).
+ *
+ * Returns `null` when no usable signal is present (`< -110 dBFS`).
+ */
+export function computeCalibratedSplOffsetDb(
+  levels: BroadbandLevelsSnapshot | undefined,
+  referenceSplDb: number,
+  curve: WeightingCurve = 'Z'
+): number | null {
+  if (!levels || !Number.isFinite(referenceSplDb)) {
+    return null;
+  }
+  const uncalibratedDb = levels.levelsDb[curve].Fast - levels.splOffsetDb;
+  if (!Number.isFinite(uncalibratedDb) || uncalibratedDb < -110) {
+    return null;
+  }
+  return Math.round((referenceSplDb - uncalibratedDb) * 10) / 10;
+}
+
 class SingleCurveMeter {
   private readonly filter: BiquadCascade;
   private fastRmsSq = 0;

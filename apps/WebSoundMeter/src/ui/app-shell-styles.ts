@@ -582,6 +582,45 @@ export const appShellStyles = [
     font-size: 11px;
   }
 
+  .show-gain-cal-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .show-mini-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: #94a3b8;
+  }
+
+  .show-mini-num input[type='number'] {
+    width: 52px;
+    padding: 2px 4px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .show-cal-btn {
+    padding: 2px 6px;
+    font-size: 10.5px;
+    border-color: #38bdf8;
+    color: #38bdf8;
+    background: #0f172a;
+    flex-shrink: 0;
+  }
+
+  .show-cal-btn:hover {
+    background: #0284c7;
+    color: #ffffff;
+  }
+
   .label-muted {
     color: #94a3b8;
     font-size: 10px;

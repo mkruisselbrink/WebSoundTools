@@ -69,6 +69,8 @@ export const WSM_TEST_IDS = {
   delayEstimateReadout: 'delay-estimate-readout',
   estimatedDelayMs: 'estimated-delay-ms',
   applyDelayBtn: 'btn-apply-delay',
+  splOffsetDbInput: 'input-spl-offset-db',
+  calibrateSplBtn: 'btn-calibrate-spl',
   feedbackModeSelect: 'select-feedback-mode',
   calibrationCurveSelect: 'select-calibration-curve',
   toggleAdvancedMeasBtn: 'btn-toggle-advanced-meas',
@@ -114,6 +116,9 @@ export const WSM_DYNAMIC_TEST_IDS = {
   chartPanel: (idx: number) => `chart-panel-${idx}` as const,
   showMic: (slotId: string) => `show-mic-${slotId}` as const,
   showSimPreset: (slotId: string) => `select-show-sim-preset-${slotId}` as const,
+  showGainInput: (slotId: string) => `input-show-gain-${slotId}` as const,
+  showSplOffsetInput: (slotId: string) => `input-show-spl-offset-${slotId}` as const,
+  showCalBtn: (slotId: string) => `btn-show-cal-${slotId}` as const,
   ringLogNotchBtn: (trackId: string) => `btn-notch-eq-${trackId}` as const,
 } as const;
 

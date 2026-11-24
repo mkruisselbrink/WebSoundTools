@@ -469,6 +469,8 @@ export class WebSoundMeterApp extends LitElement {
       slot: liveSlot,
       delayEstimate: activeLiveSource?.delayEstimate,
       levels: activeLiveSource?.levels,
+      splWeighting: this.workspace.splWeighting,
+      popoverRoot: this.renderRoot,
       audioInputMode: this.workspace.audioInputMode,
       availableChannels: this.availableChannels,
       globalReferenceChannel: this.globalReferenceChannel,
@@ -688,6 +690,8 @@ export class WebSoundMeterApp extends LitElement {
               audioInputMode: this.workspace.audioInputMode,
               availableChannels: this.availableChannels,
               globalReferenceChannel: this.globalReferenceChannel,
+              splWeighting: this.workspace.splWeighting,
+              popoverRoot: this.renderRoot,
               selectedSourceId: activeLiveId,
               liveSlots: this.engine?.getLiveSlots() ?? [],
               liveSources: this.sourceStore.getLiveSources(),
@@ -707,6 +711,11 @@ export class WebSoundMeterApp extends LitElement {
               onUpdateSlotMeta: (slotId, partial) => {
                 this.engine?.updateLiveSlot(slotId, partial);
                 this.persistState(partial.simulatorPreset !== undefined ? 'push' : 'none');
+                this.requestUpdate();
+              },
+              onUpdateSlotConfig: (slotId, partial) => {
+                this.engine?.updateMeasurementConfig(partial, slotId);
+                this.persistState('none');
                 this.requestUpdate();
               },
               onSlotFeedbackModeChange: (slotId, mode) => {

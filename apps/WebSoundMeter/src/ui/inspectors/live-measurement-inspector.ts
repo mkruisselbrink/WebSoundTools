@@ -7,6 +7,7 @@
  * feedback watch mode, mic calibration, and collapsible FFT/averaging settings).
  */
 
+import type { PopoverParentRootLike } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
 import { MeasurementPipelineConfig } from '../../dsp/analyzer-pipeline.js';
 import { DelayEstimate } from '../../dsp/deconvolution.js';
@@ -19,17 +20,23 @@ import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
 } from '../../dsp/synthetic-rig.js';
-import type { BroadbandLevelsSnapshot } from '../../dsp/weighting-meters.js';
+import type {
+  BroadbandLevelsSnapshot,
+  WeightingCurve,
+} from '../../dsp/weighting-meters.js';
 import { StoredCalibrationFile } from '../../sources/session-storage.js';
 import {
   renderAdvancedMeasurementSettings,
   renderCalibrationSelectorSection,
+  renderSplCalibratorPopover,
 } from './calibration-inspector-section.js';
 
 export interface LiveMeasurementInspectorHandlers {
   readonly slot?: LiveMeasurementSlotConfig;
   readonly delayEstimate?: DelayEstimate;
   readonly levels?: BroadbandLevelsSnapshot;
+  readonly splWeighting?: WeightingCurve;
+  readonly popoverRoot?: PopoverParentRootLike;
   readonly audioInputMode?: InputSourceMode;
   readonly availableChannels?: number;
   readonly globalReferenceChannel?: number;
@@ -317,6 +324,51 @@ export function renderLiveMeasurementInspector(
           >
             ${cfg.invertPolarity ? 'Inverted (−180°)' : 'Normal (+)'}
           </button>
+        </div>
+
+        <div class="prop-field">
+          <label
+            for="wsm-spl-offset-db"
+            title="Acoustic SPL corresponding to 0 dBFS — shifts SPL & Show Leq readouts without moving Transfer Function or RTA dBFS traces"
+          >
+            SPL Offset (0 dBFS)
+          </label>
+          <input
+            type="number"
+            id="wsm-spl-offset-db"
+            name="spl-offset-db"
+            step="0.5"
+            aria-label="SPL Offset (dB at 0 dBFS)"
+            data-testid="input-spl-offset-db"
+            .value=${String(cfg.splOffsetDb)}
+            @change=${(e: Event) => {
+              const v = parseFloat((e.target as HTMLInputElement).value);
+              if (Number.isFinite(v)) handlers.onUpdateConfig({ splOffsetDb: v });
+            }}
+          />
+        </div>
+
+        <div class="prop-field">
+          <span class="prop-label">Acoustic SPL Cal</span>
+          <button
+            type="button"
+            data-testid="btn-calibrate-spl"
+            data-popover-trigger="wsm-inspector-cal-pop"
+            popovertarget="wsm-inspector-cal-pop"
+            aria-expanded="false"
+            title="Match SPL Offset against a 94 / 114 dB pistonphone calibrator or reference SPL meter"
+          >
+            Calibrate SPL…
+          </button>
+          ${renderSplCalibratorPopover({
+            popoverId: 'wsm-inspector-cal-pop',
+            slotName: slot?.name ?? cfg.name,
+            cfg,
+            levels: handlers.levels,
+            splWeighting: handlers.splWeighting,
+            popoverRoot: handlers.popoverRoot,
+            onUpdateConfig: handlers.onUpdateConfig,
+          })}
         </div>
 
         <div class="prop-field full-width">

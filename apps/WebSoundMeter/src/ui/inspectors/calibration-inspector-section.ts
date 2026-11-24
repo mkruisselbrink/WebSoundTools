@@ -12,6 +12,11 @@ import {
   WINDOW_FUNCTION_LABELS,
   WindowFunctionType,
 } from '@foh/dsp';
+import {
+  type PopoverParentRootLike,
+  closePopoverById,
+  syncAnchoredPopoverToggle,
+} from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
 import {
   InputPreFilterType,
@@ -23,7 +28,144 @@ import type {
   LiveMeasurementSlotConfig,
 } from '../../dsp/dsp-worker-protocol.js';
 import { AveragingType, TransferEstimatorType } from '../../dsp/transfer-function.js';
+import {
+  type BroadbandLevelsSnapshot,
+  type WeightingCurve,
+  computeCalibratedSplOffsetDb,
+} from '../../dsp/weighting-meters.js';
 import { StoredCalibrationFile } from '../../sources/session-storage.js';
+
+export function renderSplCalibratorPopover(params: {
+  readonly popoverId: string;
+  readonly slotName: string;
+  readonly cfg: MeasurementPipelineConfig;
+  readonly levels?: BroadbandLevelsSnapshot;
+  readonly splWeighting?: WeightingCurve;
+  readonly popoverRoot?: PopoverParentRootLike;
+  readonly onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => void;
+}): TemplateResult {
+  const { popoverId, slotName, cfg, levels, popoverRoot, onUpdateConfig } = params;
+  const curve: WeightingCurve = params.splWeighting ?? 'A';
+  const currentFastDb = levels ? levels.levelsDb[curve].Fast : -40.0;
+  const uncalDb = levels ? currentFastDb - levels.splOffsetDb : -140.0;
+  const hasSignal = Number.isFinite(uncalDb) && uncalDb >= -110;
+  const refInputId = `${popoverId}-ref-spl`;
+
+  const applyMatch = (refDb: number) => {
+    const nextOffset = computeCalibratedSplOffsetDb(levels, refDb, curve);
+    if (nextOffset !== null) {
+      onUpdateConfig({ splOffsetDb: nextOffset });
+      closePopoverById(popoverRoot, popoverId);
+    }
+  };
+
+  return html`
+    <div
+      id=${popoverId}
+      popover="auto"
+      class="foh-popover"
+      @click=${(e: Event) => e.stopPropagation()}
+      @toggle=${(ev: Event) => {
+        if (popoverRoot) syncAnchoredPopoverToggle(ev, popoverRoot);
+      }}
+    >
+      <div class="foh-popover-title">SPL Calibration · ${slotName}</div>
+      <div class="foh-popover-grid">
+        <div
+          style="display:flex;justify-content:space-between;padding:4px 7px;background:#050811;border:1px solid #1e293b;border-radius:4px;font-family:var(--_foh-font-mono,monospace);font-size:10.5px;"
+        >
+          <span style="color:#94a3b8;">Live (${curve}·Fast)</span>
+          <strong style="color:${hasSignal ? '#38bdf8' : '#64748b'};">
+            ${hasSignal
+              ? `${currentFastDb.toFixed(1)} dB${curve} (${uncalDb.toFixed(1)} dBFS)`
+              : 'No live signal'}
+          </strong>
+        </div>
+
+        <div class="foh-popover-row">
+          <label for="${popoverId}-offset">
+            0 dBFS Full-Scale SPL (dB) — shifts SPL &amp; Leq only
+          </label>
+          <input
+            type="number"
+            id="${popoverId}-offset"
+            name="${popoverId}-offset"
+            step="0.5"
+            aria-label="0 dBFS SPL Offset for ${slotName}"
+            .value=${String(cfg.splOffsetDb)}
+            @change=${(e: Event) => {
+              const v = parseFloat((e.target as HTMLInputElement).value);
+              if (Number.isFinite(v)) onUpdateConfig({ splOffsetDb: v });
+            }}
+          />
+        </div>
+
+        <div class="foh-popover-row">
+          <label for=${refInputId}>
+            Match Calibrator / Reference Meter (dB${curve})
+          </label>
+          <div style="display:flex;gap:5px;">
+            <input
+              type="number"
+              id=${refInputId}
+              name=${refInputId}
+              step="0.5"
+              value="94"
+              aria-label="Reference SPL Level dB"
+              style="flex:1;min-width:0;"
+            />
+            <button
+              type="button"
+              class="foh-tb-pill foh-tb-primary"
+              ?disabled=${!hasSignal}
+              title="Set SPL Offset so current live signal reads this exact dB SPL"
+              @click=${(e: Event) => {
+                const container = (e.currentTarget as HTMLElement).parentElement;
+                const inp = container?.querySelector('input') as HTMLInputElement | null;
+                const refVal = parseFloat(inp?.value ?? '94');
+                if (Number.isFinite(refVal)) applyMatch(refVal);
+              }}
+            >
+              Match Live
+            </button>
+          </div>
+        </div>
+
+        <div class="foh-popover-actions" style="grid-template-columns:1fr 1fr 1fr;">
+          <button
+            type="button"
+            class="foh-tb-pill"
+            ?disabled=${!hasSignal}
+            title="Calibrate to 94.0 dB SPL pistonphone"
+            @click=${() => applyMatch(94.0)}
+          >
+            94 dB Cal
+          </button>
+          <button
+            type="button"
+            class="foh-tb-pill"
+            ?disabled=${!hasSignal}
+            title="Calibrate to 114.0 dB SPL high-level pistonphone"
+            @click=${() => applyMatch(114.0)}
+          >
+            114 dB Cal
+          </button>
+          <button
+            type="button"
+            class="foh-tb-pill"
+            title="Reset SPL Offset to default (0 dBFS = 100 dB SPL)"
+            @click=${() => {
+              onUpdateConfig({ splOffsetDb: 100.0 });
+              closePopoverById(popoverRoot, popoverId);
+            }}
+          >
+            Reset 100
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 export function renderCalibrationSelectorSection(params: {
   readonly savedCalibrations: readonly StoredCalibrationFile[];

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { evaluateBiquadCascadeResponse } from '@foh/dsp';
 import {
   BroadbandMeterBank,
+  computeCalibratedSplOffsetDb,
   createWeightingBiquadCoeffs,
 } from './weighting-meters.js';
 
@@ -72,6 +73,39 @@ describe('IEC 61672-1 Weighting Filters & Broadband SPL / Leq Meters', () => {
 
     expect(snap.peaksDb.Z).toBeCloseTo(expectedPeakSpl, 1);
     expect(snap.referenceRmsDb).toBeCloseTo(-3.0103 - 6.0206, 1);
+  });
+
+  it('computes idempotent splOffsetDb calibration for 94 dB / 114 dB pistonphone references and rejects silence', () => {
+    const meters = new BroadbandMeterBank(sampleRate, 100.0);
+
+    // Silence (< -110 dBFS) should return null rather than producing an extreme offset
+    expect(computeCalibratedSplOffsetDb(meters.getSnapshot(), 94.0, 'Z')).toBeNull();
+
+    // Feed a -20 dBFS RMS 1 kHz tone (amplitude = sqrt(2) * 0.1)
+    const block = new Float32Array(4800);
+    const amp = Math.SQRT2 * 0.1;
+    let phase = 0;
+    const dPhase = (2 * Math.PI * 1000) / sampleRate;
+    for (let b = 0; b < 15; b++) {
+      for (let i = 0; i < block.length; i++) {
+        block[i] = Math.sin(phase) * amp;
+        phase += dPhase;
+      }
+      meters.processBlock(block, block);
+    }
+
+    const beforeCal = meters.getSnapshot();
+    expect(beforeCal.levelsDb.A.Fast).toBeCloseTo(80.0, 1);
+
+    // Calibrating to 94.0 dB SPL yields splOffsetDb = 114.0 dB (94 - (-20))
+    const nextOffset = computeCalibratedSplOffsetDb(beforeCal, 94.0, 'A');
+    expect(nextOffset).toBeCloseTo(114.0, 1);
+    meters.setSplOffsetDb(nextOffset!);
+
+    const afterCal = meters.getSnapshot();
+    expect(afterCal.levelsDb.A.Fast).toBeCloseTo(94.0, 1);
+    // Re-running calibration at the same signal level is idempotent
+    expect(computeCalibratedSplOffsetDb(afterCal, 94.0, 'A')).toBeCloseTo(114.0, 1);
   });
 });
 
