@@ -47,7 +47,11 @@ import { renderLiveMeasurementInspector } from './inspectors/live-measurement-in
 import { renderStoredInspector } from './inspectors/stored-source-inspector.js';
 import { renderUnionInspector } from './inspectors/union-source-inspector.js';
 import { dispatchAppKeydown } from './keyboard-shortcuts.js';
-import { renderShowSidebar } from './show-sidebar-view.js';
+import {
+  type MobileShowTab,
+  renderMobileShowWorkspace,
+} from './show-mobile-view.js';
+import { renderShowSidebar, type ShowSidebarViewProps } from './show-sidebar-view.js';
 import { renderSidebar } from './sidebar-view.js';
 import { renderTopbar } from './topbar/topbar-view.js';
 import {
@@ -56,6 +60,7 @@ import {
   parseUrlViewState,
   syncBrowserUrlState,
 } from './url-state.js';
+import { ScreenWakeLockController } from './wake-lock.js';
 import {
   LayoutPreset,
   WorkspaceLayoutController,
@@ -74,10 +79,25 @@ export class WebSoundMeterApp extends LitElement {
   private readonly calibrationMgr = new CalibrationManager();
   private unsubscribeStore: (() => void) | null = null;
   private unsubscribeWco: (() => void) | null = null;
+  private phoneMediaQuery: MediaQueryList | null = null;
+  private readonly wakeLock = new ScreenWakeLockController({
+    onChange: (active) => {
+      this.wakeLockActive = active;
+    },
+  });
   private hardwareStreamDeferred = false;
 
   @state()
   private wcoVisible = false;
+
+  @state()
+  private isPhoneViewport = false;
+
+  @state()
+  private mobileShowTab: MobileShowTab = 'rta';
+
+  @state()
+  private wakeLockActive = false;
 
   @state()
   private audioDevices: AudioDeviceOption[] = [];
@@ -186,6 +206,16 @@ export class WebSoundMeterApp extends LitElement {
     });
   };
 
+  private readonly phoneMediaChangeHandler = (e: MediaQueryListEvent): void => {
+    this.isPhoneViewport = e.matches;
+  };
+
+  private syncWakeLock(): void {
+    void this.wakeLock.setDesired(
+      this.workspace.workspaceMode === 'show' && !this.isPaused
+    );
+  }
+
   private popstateHandler = () => {
     const next = parseUrlViewState(window.location.search, this.getUrlViewState());
     const nextMode: WorkspaceMode = next.workspaceMode ?? 'tuning';
@@ -193,6 +223,7 @@ export class WebSoundMeterApp extends LitElement {
     if (nextMode === 'show' && this.workspace.audioInputMode === 'hardware' && this.genConfig.enabled) {
       this.updateGenerator({ enabled: false });
     }
+    this.syncWakeLock();
     this.workspace.layoutPreset = next.layoutPreset;
     this.workspace.chartPlotTypes = next.chartPlotTypes;
     const activeId = this.sourceStore.getActiveLiveSourceId();
@@ -283,6 +314,13 @@ export class WebSoundMeterApp extends LitElement {
       this.wcoVisible = snap.visible;
     });
 
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.phoneMediaQuery = window.matchMedia('(max-width: 679px)');
+      this.isPhoneViewport = this.phoneMediaQuery.matches;
+      this.phoneMediaQuery.addEventListener('change', this.phoneMediaChangeHandler);
+    }
+    this.syncWakeLock();
+
     window.addEventListener('keydown', this.keydownHandler);
     window.addEventListener('popstate', this.popstateHandler);
   }
@@ -291,6 +329,9 @@ export class WebSoundMeterApp extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
     window.removeEventListener('popstate', this.popstateHandler);
+    this.phoneMediaQuery?.removeEventListener('change', this.phoneMediaChangeHandler);
+    this.phoneMediaQuery = null;
+    this.wakeLock.dispose();
     this.unsubscribeWco?.();
     this.unsubscribeWco = null;
     this.unsubscribeStore?.();
@@ -355,6 +396,7 @@ export class WebSoundMeterApp extends LitElement {
     ) {
       this.updateGenerator({ enabled: false });
     }
+    this.syncWakeLock();
     this.persistState('push');
     this.requestUpdate();
   }
@@ -456,6 +498,7 @@ export class WebSoundMeterApp extends LitElement {
     }
     this.isPaused = nextPaused;
     this.engine?.setPaused(this.isPaused);
+    this.syncWakeLock();
   };
 
   private renderSelectedSourceInspector(allSources: SourceData[]) {
@@ -594,11 +637,77 @@ export class WebSoundMeterApp extends LitElement {
     const activeEq = this.sourceStore.getActiveEq();
     const activeLiveId = this.sourceStore.getActiveLiveSourceId();
     const activeLiveSource = this.sourceStore.getLiveSource(activeLiveId);
+    const liveSlots = this.engine?.getLiveSlots() ?? [];
+    const activeLiveSlot = this.engine?.getLiveSlot(activeLiveId) ?? liveSlots[0];
+    const isMobileShow =
+      this.workspace.workspaceMode === 'show' && this.isPhoneViewport;
+
+    const showSidebarProps: ShowSidebarViewProps = {
+      audioInputMode: this.workspace.audioInputMode,
+      availableChannels: this.availableChannels,
+      globalReferenceChannel: this.globalReferenceChannel,
+      splWeighting: this.workspace.splWeighting,
+      popoverRoot: this.renderRoot,
+      selectedSourceId: activeLiveId,
+      liveSlots,
+      liveSources: this.sourceStore.getLiveSources(),
+      feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
+      splAlertThresholds: this.workspace.splAlertThresholds,
+      onAddLiveSource: this.handleAddLiveSource,
+      onSelectSlot: (slotId) => {
+        this.sourceStore.setSelectedSourceId(slotId);
+        this.persistState('replace');
+      },
+      onDeleteSlot: (slotId) => this.handleDeleteLiveSlot(slotId),
+      onToggleSlotVisibility: (id, vis) => {
+        this.sourceStore.toggleVisibility(id, vis);
+        this.engine?.updateLiveSlot(id, { visible: vis });
+        this.persistState('none');
+      },
+      onUpdateSlotMeta: (slotId, partial) => {
+        this.engine?.updateLiveSlot(slotId, partial);
+        this.persistState(partial.simulatorPreset !== undefined ? 'push' : 'none');
+        this.requestUpdate();
+      },
+      onUpdateSlotConfig: (slotId, partial) => {
+        this.engine?.updateMeasurementConfig(partial, slotId);
+        this.persistState('none');
+        this.requestUpdate();
+      },
+      onSlotFeedbackModeChange: (slotId, mode) => {
+        this.engine?.updateMeasurementConfig({ feedbackMode: mode }, slotId);
+        this.persistState('none');
+        this.requestUpdate();
+      },
+      onApplyFeedbackNotch: (track) => {
+        this.sourceStore.applyFeedbackNotchToEq(track);
+        this.persistState('none');
+      },
+      onClearFeedbackRingLog: () => {
+        this.sourceStore.clearFeedbackRingLog();
+      },
+      onUpdateSplThresholds: (partial) => {
+        this.workspace.splAlertThresholds = {
+          ...this.workspace.splAlertThresholds,
+          ...partial,
+        };
+        this.persistState('none');
+        this.requestUpdate();
+      },
+      onResetShowLog: () => {
+        this.engine?.resetSplHistory();
+        void clearSplShowCheckpointsFromDb();
+      },
+      onExportSplCsv: () => {
+        this.engine?.exportSplCsv();
+      },
+    };
 
     return html`
       ${renderTopbar({
         workspaceMode: this.workspace.workspaceMode,
         layoutPreset: this.workspace.layoutPreset,
+        isMobileShow,
         wcoVisible: this.wcoVisible,
         canUndo: this.sourceStore.canUndo,
         canRedo: this.sourceStore.canRedo,
@@ -658,130 +767,104 @@ export class WebSoundMeterApp extends LitElement {
         },
       })}
 
-      <div class="workspace">
-        <main class="charts-column">
-          ${this.workspace.chartPlotTypes.map(
-            (pt, idx) => html`
-              <chart-panel
-                data-testid="chart-panel-${idx}"
-                .plotType=${pt}
-                .sources=${chartSources}
-                .eqBands=${activeEq ? activeEq.bands : null}
-                .splAlertThresholds=${this.workspace.splAlertThresholds}
-                @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {
-                  this.workspace.updateChartPlotTypeAt(idx, e.detail.plotType);
-                  this.persistState('replace');
-                  this.requestUpdate();
-                }}
-                @spl-window-change=${(
-                  e: CustomEvent<{ windowSec: SplHistoryWindowSec }>
-                ) => {
-                  this.engine?.setSplHistoryWindow(e.detail.windowSec);
-                }}
-                @eq-band-drag=${this.handleEqBandDrag}
-                @eq-band-drag-end=${() => this.sourceStore.endEqBandDrag()}
-              ></chart-panel>
-            `
-          )}
-        </main>
+      ${isMobileShow
+        ? renderMobileShowWorkspace({
+            ...showSidebarProps,
+            activeTab: this.mobileShowTab,
+            splWeighting: this.workspace.splWeighting,
+            splTime: this.workspace.splTime,
+            levels: activeLiveSource?.levels,
+            activeSlotName: activeLiveSlot?.name ?? 'Live Measurement',
+            activeSlotColor: activeLiveSlot?.color ?? '#38bdf8',
+            wakeLockActive: this.wakeLockActive,
+            chartSources,
+            eqBands: activeEq ? activeEq.bands : null,
+            onSelectTab: (tab) => {
+              this.mobileShowTab = tab;
+            },
+            onSplWeightingChange: (curve) => {
+              this.workspace.splWeighting = curve;
+              this.persistState('replace');
+              this.requestUpdate();
+            },
+            onSplTimeChange: (time) => {
+              this.workspace.splTime = time;
+              this.persistState('replace');
+              this.requestUpdate();
+            },
+            onSplWindowChange: (windowSec) => {
+              this.engine?.setSplHistoryWindow(windowSec);
+            },
+            onEqBandDrag: this.handleEqBandDrag,
+            onEqBandDragEnd: () => this.sourceStore.endEqBandDrag(),
+          })
+        : html`
+            <div class="workspace" data-mode=${this.workspace.workspaceMode}>
+              <main class="charts-column">
+                ${this.workspace.chartPlotTypes.map(
+                  (pt, idx) => html`
+                    <chart-panel
+                      data-testid="chart-panel-${idx}"
+                      .plotType=${pt}
+                      .sources=${chartSources}
+                      .eqBands=${activeEq ? activeEq.bands : null}
+                      .splAlertThresholds=${this.workspace.splAlertThresholds}
+                      @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {
+                        this.workspace.updateChartPlotTypeAt(idx, e.detail.plotType);
+                        this.persistState('replace');
+                        this.requestUpdate();
+                      }}
+                      @spl-window-change=${(
+                        e: CustomEvent<{ windowSec: SplHistoryWindowSec }>
+                      ) => {
+                        this.engine?.setSplHistoryWindow(e.detail.windowSec);
+                      }}
+                      @eq-band-drag=${this.handleEqBandDrag}
+                      @eq-band-drag-end=${() => this.sourceStore.endEqBandDrag()}
+                    ></chart-panel>
+                  `
+                )}
+              </main>
 
-        ${this.workspace.workspaceMode === 'show'
-          ? renderShowSidebar({
-              audioInputMode: this.workspace.audioInputMode,
-              availableChannels: this.availableChannels,
-              globalReferenceChannel: this.globalReferenceChannel,
-              splWeighting: this.workspace.splWeighting,
-              popoverRoot: this.renderRoot,
-              selectedSourceId: activeLiveId,
-              liveSlots: this.engine?.getLiveSlots() ?? [],
-              liveSources: this.sourceStore.getLiveSources(),
-              feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
-              splAlertThresholds: this.workspace.splAlertThresholds,
-              onAddLiveSource: this.handleAddLiveSource,
-              onSelectSlot: (slotId) => {
-                this.sourceStore.setSelectedSourceId(slotId);
-                this.persistState('replace');
-              },
-              onDeleteSlot: (slotId) => this.handleDeleteLiveSlot(slotId),
-              onToggleSlotVisibility: (id, vis) => {
-                this.sourceStore.toggleVisibility(id, vis);
-                this.engine?.updateLiveSlot(id, { visible: vis });
-                this.persistState('none');
-              },
-              onUpdateSlotMeta: (slotId, partial) => {
-                this.engine?.updateLiveSlot(slotId, partial);
-                this.persistState(partial.simulatorPreset !== undefined ? 'push' : 'none');
-                this.requestUpdate();
-              },
-              onUpdateSlotConfig: (slotId, partial) => {
-                this.engine?.updateMeasurementConfig(partial, slotId);
-                this.persistState('none');
-                this.requestUpdate();
-              },
-              onSlotFeedbackModeChange: (slotId, mode) => {
-                this.engine?.updateMeasurementConfig({ feedbackMode: mode }, slotId);
-                this.persistState('none');
-                this.requestUpdate();
-              },
-              onApplyFeedbackNotch: (track) => {
-                this.sourceStore.applyFeedbackNotchToEq(track);
-                this.persistState('none');
-              },
-              onClearFeedbackRingLog: () => {
-                this.sourceStore.clearFeedbackRingLog();
-              },
-              onUpdateSplThresholds: (partial) => {
-                this.workspace.splAlertThresholds = {
-                  ...this.workspace.splAlertThresholds,
-                  ...partial,
-                };
-                this.persistState('none');
-                this.requestUpdate();
-              },
-              onResetShowLog: () => {
-                this.engine?.resetSplHistory();
-                void clearSplShowCheckpointsFromDb();
-              },
-              onExportSplCsv: () => {
-                this.engine?.exportSplCsv();
-              },
-            })
-          : renderSidebar({
-              allSources,
-              selectedSourceId: this.sourceStore.getSelectedSourceId(),
-              inspectorContent: this.renderSelectedSourceInspector(allSources),
-              onAddLiveSource: this.handleAddLiveSource,
-              onAddEqSource: () => {
-                this.sourceStore.addVirtualEqSource();
-                this.persistState('replace');
-              },
-              onAddUnionSource: () => {
-                this.sourceStore.addUnionSource();
-                this.persistState('replace');
-              },
-              onImportFrdFile: (file: File) => {
-                void file.text().then((text) => {
-                  try {
-                    this.sourceStore.importFrdStoredSource(text, file.name);
-                    this.persistState('replace');
-                  } catch {
-                    // Ignore malformed .frd uploads
-                  }
-                });
-              },
-              onSelectSource: (id) => {
-                this.sourceStore.setSelectedSourceId(id);
-                this.persistState('replace');
-              },
-              onToggleSourceVisibility: (id, vis) => {
-                this.sourceStore.toggleVisibility(id, vis);
-                if (isLiveSourceId(id)) {
-                  this.engine?.updateLiveSlot(id, { visible: vis });
-                }
-                this.persistState('none');
-              },
-            })}
-      </div>
+              ${this.workspace.workspaceMode === 'show'
+                ? renderShowSidebar(showSidebarProps)
+                : renderSidebar({
+                    allSources,
+                    selectedSourceId: this.sourceStore.getSelectedSourceId(),
+                    inspectorContent: this.renderSelectedSourceInspector(allSources),
+                    onAddLiveSource: this.handleAddLiveSource,
+                    onAddEqSource: () => {
+                      this.sourceStore.addVirtualEqSource();
+                      this.persistState('replace');
+                    },
+                    onAddUnionSource: () => {
+                      this.sourceStore.addUnionSource();
+                      this.persistState('replace');
+                    },
+                    onImportFrdFile: (file: File) => {
+                      void file.text().then((text) => {
+                        try {
+                          this.sourceStore.importFrdStoredSource(text, file.name);
+                          this.persistState('replace');
+                        } catch {
+                          // Ignore malformed .frd uploads
+                        }
+                      });
+                    },
+                    onSelectSource: (id) => {
+                      this.sourceStore.setSelectedSourceId(id);
+                      this.persistState('replace');
+                    },
+                    onToggleSourceVisibility: (id, vis) => {
+                      this.sourceStore.toggleVisibility(id, vis);
+                      if (isLiveSourceId(id)) {
+                        this.engine?.updateLiveSlot(id, { visible: vis });
+                      }
+                      this.persistState('none');
+                    },
+                  })}
+            </div>
+          `}
 
       <foh-help-modal
         .open=${this.helpModalOpen}

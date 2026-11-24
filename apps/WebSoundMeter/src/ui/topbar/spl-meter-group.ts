@@ -67,6 +67,73 @@ export function evaluateMonitoredMetricDb(
   }
 }
 
+export function renderSplConfigPopover(
+  props: Pick<
+    SplMeterGroupProps,
+    'splWeighting' | 'splTime' | 'popoverRoot' | 'onSplWeightingChange' | 'onSplTimeChange'
+  >
+): TemplateResult {
+  return html`
+    <div
+      id="wsm-spl-popover"
+      popover="auto"
+      class="foh-popover"
+      @toggle=${(ev: Event) => {
+        if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
+      }}
+    >
+      <div class="foh-popover-title">SPL Meter Configuration</div>
+      <div class="foh-popover-grid">
+        <div class="foh-popover-row">
+          <label for="wsm-select-spl-weighting">Frequency Weighting</label>
+          <select
+            id="wsm-select-spl-weighting"
+            name="spl-weighting"
+            aria-label="SPL Weighting"
+            data-testid="select-spl-weighting"
+            .value=${props.splWeighting}
+            @change=${(e: Event) =>
+              props.onSplWeightingChange(
+                (e.target as HTMLSelectElement).value as WeightingCurve
+              )}
+          >
+            <option value="A" ?selected=${props.splWeighting === 'A'}>
+              A-Weighting (dBA)
+            </option>
+            <option value="C" ?selected=${props.splWeighting === 'C'}>
+              C-Weighting (dBC)
+            </option>
+            <option value="Z" ?selected=${props.splWeighting === 'Z'}>
+              Z-Weighting / Flat (dBZ)
+            </option>
+          </select>
+        </div>
+
+        <div class="foh-popover-row">
+          <label for="wsm-select-spl-time">Integration Time</label>
+          <select
+            id="wsm-select-spl-time"
+            name="spl-integration-time"
+            aria-label="SPL Integration Time"
+            .value=${props.splTime}
+            @change=${(e: Event) =>
+              props.onSplTimeChange(
+                (e.target as HTMLSelectElement).value as MeterIntegrationTime
+              )}
+          >
+            <option value="Fast" ?selected=${props.splTime === 'Fast'}>Fast (125 ms)</option>
+            <option value="Slow" ?selected=${props.splTime === 'Slow'}>Slow (1 s)</option>
+            <option value="Impulse" ?selected=${props.splTime === 'Impulse'}>
+              Impulse (35 ms)
+            </option>
+            <option value="Leq" ?selected=${props.splTime === 'Leq'}>Leq</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
   const { levels } = props;
   const currentSpl = levels ? levels.levelsDb[props.splWeighting][props.splTime] : -40.0;
@@ -173,63 +240,7 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
             </span>
           `}
 
-      <div
-        id="wsm-spl-popover"
-        popover="auto"
-        class="foh-popover"
-        @toggle=${(ev: Event) => {
-          if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
-        }}
-      >
-        <div class="foh-popover-title">SPL Meter Configuration</div>
-        <div class="foh-popover-grid">
-          <div class="foh-popover-row">
-            <label for="wsm-select-spl-weighting">Frequency Weighting</label>
-            <select
-              id="wsm-select-spl-weighting"
-              name="spl-weighting"
-              aria-label="SPL Weighting"
-              data-testid="select-spl-weighting"
-              .value=${props.splWeighting}
-              @change=${(e: Event) =>
-                props.onSplWeightingChange(
-                  (e.target as HTMLSelectElement).value as WeightingCurve
-                )}
-            >
-              <option value="A" ?selected=${props.splWeighting === 'A'}>
-                A-Weighting (dBA)
-              </option>
-              <option value="C" ?selected=${props.splWeighting === 'C'}>
-                C-Weighting (dBC)
-              </option>
-              <option value="Z" ?selected=${props.splWeighting === 'Z'}>
-                Z-Weighting / Flat (dBZ)
-              </option>
-            </select>
-          </div>
-
-          <div class="foh-popover-row">
-            <label for="wsm-select-spl-time">Integration Time</label>
-            <select
-              id="wsm-select-spl-time"
-              name="spl-integration-time"
-              aria-label="SPL Integration Time"
-              .value=${props.splTime}
-              @change=${(e: Event) =>
-                props.onSplTimeChange(
-                  (e.target as HTMLSelectElement).value as MeterIntegrationTime
-                )}
-            >
-              <option value="Fast" ?selected=${props.splTime === 'Fast'}>Fast (125 ms)</option>
-              <option value="Slow" ?selected=${props.splTime === 'Slow'}>Slow (1 s)</option>
-              <option value="Impulse" ?selected=${props.splTime === 'Impulse'}>
-                Impulse (35 ms)
-              </option>
-              <option value="Leq" ?selected=${props.splTime === 'Leq'}>Leq</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      ${renderSplConfigPopover(props)}
     </div>
   `;
 }

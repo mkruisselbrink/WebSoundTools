@@ -160,6 +160,12 @@ Transform and smoothing settings are synchronized across all live slots so multi
 - **30-Minute Checkpoint Window:** `1 Hz` SPL history checkpoints save to `IndexedDB` every `10 s` and automatically restore on browser reload if the checkpoint is **less than `30 minutes` old** (older show logs expire automatically so yesterday's gig never contaminates today's averages; click **`Reset Log`** anytime to start fresh).
 - **`CSV ⬇` Export:** Downloads `websoundmeter-spl-log-<UTC-ISO-timestamp>.csv` in chronological long format (one row per active slot per second: `timestamp_iso, slot_id, laf_db, lcf_db, laeq_1m_db, lceq_1m_db, laeq_5m_db, laeq_15m_db, laeq_60m_db, lpeak_db`).
 
+### Tablet & Handheld Phone Show Layouts
+- **Screen Wake Lock (`☀ Awake`):** Entering **Show** mode while running automatically requests a browser Screen Wake Lock (`navigator.wakeLock`) so propped tablets and handheld phones do not dim or lock mid-set, re-acquiring automatically when returning to the tab.
+- **Touch Chart Scrubbing:** Tapping or dragging across any chart on a touchscreen scrubs the floating frequency/time cursor HUD and pins the readout on finger lift; tap outside the plot frame (on the axis margin) to clear the pinned readout.
+- **Tablet Landscape & Portrait (`680–959 px`):** Touch devices automatically enlarge topbar, chart header, **`Cal…`**, and **`Notch EQ`** controls (`36–44 px` targets, `16 px` zoom-safe form inputs). In **Tablet Portrait**, Show mode stacks full-width charts on top over a 2-column bottom control deck (`Live Mics & SPL Watch` beside `Feedback Ring Log` and `Show Limits & Log`).
+- **Phone Handheld Show Deck (`< 680 px`):** Switches to a single-screen handheld meter with a **Pinned Hero SPL Scoreboard** (`dBA/dBC/dBZ`, `OK / WARN / LIMIT` badge, `LAeq,15m`, `LC − LA`, `Peak`), a 1-tap **Active Ring Alert Banner**, a single active view panel (halving mobile WebGL/battery draw), and a 4-tab bottom thumb bar (**`Spectrum`**, **`SPL Trend`**, **`Rings`**, **`Mics & Cal`**).
+
 ---
 
 ## 6. Keyboard Shortcuts & Undo Scope

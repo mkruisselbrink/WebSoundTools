@@ -146,4 +146,73 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await expect(wsm.app.locator('[data-testid^="source-item-live-"]')).toHaveCount(2);
     await context.setOffline(false);
   });
+
+  test('adapts Live Show Mode across Handheld Phone (< 680px) and Tablet Portrait (820x1180)', async ({
+    page,
+  }) => {
+    const wsm = new WsmPageDriver(page);
+
+    // 1. Handheld Phone Portrait (390 x 844)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await wsm.goto('/?mode=show');
+    await wsm.waitForLiveSignal();
+
+    await expect(wsm.app.getByTestId('mobile-show-shell')).toBeVisible();
+    await expect(wsm.app.getByTestId('show-sidebar')).toHaveCount(0);
+    await expect(wsm.app.getByTestId('spl-status-badge')).toBeVisible();
+
+    // Spectrum tab mounts exactly 1 <chart-panel> (RTA)
+    await expect(wsm.app.getByTestId('mobile-tab-rta')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(wsm.app.locator('chart-panel')).toHaveCount(1);
+
+    // Switch to SPL Trend tab -> still mounts only 1 <chart-panel> (SPL History)
+    await wsm.app.getByTestId('mobile-tab-history').click();
+    await expect(wsm.app.getByTestId('mobile-tab-history')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(wsm.app.locator('chart-panel')).toHaveCount(1);
+    await expect(
+      wsm.chartPanel(0).getByTestId('select-spl-window')
+    ).toBeVisible();
+
+    // Switch to Rings tab -> unmounts WebGL chart panels and shows Feedback Ring Log card
+    await wsm.app.getByTestId('mobile-tab-rings').click();
+    await expect(wsm.app.locator('chart-panel')).toHaveCount(0);
+    await expect(wsm.app.getByTestId('card-feedback-ring-log')).toBeVisible();
+
+    // Switch to Mics & Cal tab -> shows Live Mics & Limits cards and 1-tap 94 dB SPL Calibration
+    await wsm.app.getByTestId('mobile-tab-mics').click();
+    await expect(wsm.app.getByTestId('card-live-mics-watch')).toBeVisible();
+    await expect(wsm.app.getByTestId('card-show-limits-export')).toBeVisible();
+
+    await wsm.app.getByTestId('btn-show-cal-live-measurement').click();
+    await wsm.app.getByRole('button', { name: '94 dB Cal' }).click();
+    await expect(wsm.app.getByTestId('spl-main-value')).toContainText('94.', {
+      timeout: 3000,
+    });
+
+    // 2. Tablet Portrait (820 x 1180) -> Full-width charts stacked over 2-column Show bottom deck
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await expect(wsm.app.getByTestId('mobile-show-shell')).toHaveCount(0);
+    await expect(wsm.app.getByTestId('show-sidebar')).toBeVisible();
+    await expect(wsm.app.locator('chart-panel')).toHaveCount(2);
+
+    const chartsBox = await wsm.app.locator('.charts-column').boundingBox();
+    const sidebarBox = await wsm.app.getByTestId('show-sidebar').boundingBox();
+    const micsCardBox = await wsm.app.getByTestId('card-live-mics-watch').boundingBox();
+    const ringsCardBox = await wsm.app
+      .getByTestId('card-feedback-ring-log')
+      .boundingBox();
+
+    expect(chartsBox).not.toBeNull();
+    expect(sidebarBox).not.toBeNull();
+    expect(micsCardBox).not.toBeNull();
+    expect(ringsCardBox).not.toBeNull();
+    expect(chartsBox!.y + chartsBox!.height).toBeLessThanOrEqual(sidebarBox!.y + 2);
+    expect(micsCardBox!.x + micsCardBox!.width).toBeLessThanOrEqual(ringsCardBox!.x + 2);
+  });
 });

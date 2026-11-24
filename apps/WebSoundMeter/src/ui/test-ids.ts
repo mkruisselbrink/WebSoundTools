@@ -94,7 +94,7 @@ export const WSM_TEST_IDS = {
   unionSourceInspector: 'inspector-union-source',
   unionSourceChecklist: 'union-source-checklist',
 
-  // Show Mode Sidebar
+  // Show Mode Sidebar & Handheld Phone Show Shell
   showSidebar: 'show-sidebar',
   liveMicsWatchCard: 'card-live-mics-watch',
   showAddMeasBtn: 'btn-show-add-meas',
@@ -108,6 +108,14 @@ export const WSM_TEST_IDS = {
   splAlertMetricSelect: 'select-spl-alert-metric',
   splWarnDbInput: 'input-spl-warn-db',
   splLimitDbInput: 'input-spl-limit-db',
+  mobileShowShell: 'mobile-show-shell',
+  mobileShowTablist: 'mobile-show-tablist',
+  mobileTabRta: 'mobile-tab-rta',
+  mobileTabHistory: 'mobile-tab-history',
+  mobileTabRings: 'mobile-tab-rings',
+  mobileTabMics: 'mobile-tab-mics',
+  mobileRingAlertBanner: 'mobile-ring-alert-banner',
+  wakeLockBadge: 'wake-lock-badge',
 } as const;
 
 export type WsmTestId = (typeof WSM_TEST_IDS)[keyof typeof WSM_TEST_IDS];

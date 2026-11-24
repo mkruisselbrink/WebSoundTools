@@ -13,11 +13,23 @@ export const fohTopbarCss = css`
     display: flex;
     align-items: center;
     inline-size: 100%;
-    min-block-size: max(40px, env(titlebar-area-height, 0px));
-    block-size: max(40px, env(titlebar-area-height, 0px));
-    padding-inline-start: calc(env(titlebar-area-x, 0px) + 10px);
+    padding-block-start: env(safe-area-inset-top, 0px);
+    min-block-size: max(
+      calc(40px + env(safe-area-inset-top, 0px)),
+      env(titlebar-area-height, 0px)
+    );
+    block-size: max(
+      calc(40px + env(safe-area-inset-top, 0px)),
+      env(titlebar-area-height, 0px)
+    );
+    padding-inline-start: calc(
+      max(env(titlebar-area-x, 0px), env(safe-area-inset-left, 0px)) + 10px
+    );
     padding-inline-end: calc(
-      100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 10px
+      max(
+          100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px),
+          env(safe-area-inset-right, 0px)
+        ) + 10px
     );
     background: var(--_foh-bg-panel, #0b1120);
     border-bottom: 1px solid var(--_foh-border-subtle, #1e293b);
@@ -466,21 +478,46 @@ export const fohTopbarCss = css`
     font-size: 11.5px;
   }
 
-  @supports (position-area: block-end) {
-    .foh-popover {
-      inset: auto;
-      margin: 0;
-      margin-block: 5px;
-      position-area: block-end span-inline-end;
-      position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  @media (min-width: 680px) {
+    @supports (position-area: block-end) {
+      .foh-popover {
+        inset: auto;
+        margin: 0;
+        margin-block: 5px;
+        position-area: block-end span-inline-end;
+        position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+      }
+    }
+
+    @supports not (position-area: block-end) {
+      .foh-popover {
+        position: fixed;
+        inset: auto;
+        margin: 0;
+      }
     }
   }
 
-  @supports not (position-area: block-end) {
+  /* Bottom-sheet popover presentation on narrow handheld viewports (< 680px) */
+  @media (max-width: 679px) {
     .foh-popover {
       position: fixed;
-      inset: auto;
+      inset: auto max(8px, env(safe-area-inset-left, 0px))
+        max(10px, env(safe-area-inset-bottom, 0px))
+        max(8px, env(safe-area-inset-right, 0px));
+      inline-size: auto;
+      min-inline-size: 0;
+      max-inline-size: none;
+      max-block-size: min(78dvh, 520px);
+      overflow-y: auto;
       margin: 0;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .foh-popover::backdrop {
+      background: rgba(2, 6, 23, 0.58);
     }
   }
 
@@ -536,18 +573,61 @@ export const fohTopbarCss = css`
     border-top: 1px solid var(--_foh-border-subtle, #1e293b);
   }
 
-  /* Coarse touch pointer sizing */
+  /* Coarse touch pointer sizing (Tablet & Phone) */
   @media (pointer: coarse) {
+    .foh-topbar {
+      min-block-size: max(
+        calc(46px + env(safe-area-inset-top, 0px)),
+        env(titlebar-area-height, 0px)
+      );
+      block-size: max(
+        calc(46px + env(safe-area-inset-top, 0px)),
+        env(titlebar-area-height, 0px)
+      );
+    }
+
     .foh-tb-pill,
     .foh-split-pill,
     .foh-tb-select,
-    .foh-segmented {
-      min-block-size: 30px;
-      block-size: 30px;
+    .foh-segmented,
+    .foh-lcd {
+      min-block-size: 36px;
+      block-size: 36px;
     }
+
     .foh-seg-btn {
-      min-block-size: 26px;
-      min-inline-size: 28px;
+      min-block-size: 30px;
+      min-inline-size: 34px;
+      padding: 3px 10px;
+      font-size: 12px;
+    }
+
+    .foh-split-pill > button {
+      min-inline-size: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .foh-lcd-trigger {
+      min-block-size: 28px;
+      padding: 2px 7px;
+      font-size: 11.5px;
+    }
+
+    .foh-popover-row select,
+    .foh-popover-row input[type='number'],
+    .foh-popover-row input[type='text'] {
+      min-block-size: 38px;
+      padding: 6px 10px;
+    }
+  }
+
+  /* Prevent iOS/iPadOS Safari auto-zoom when focusing form controls on touch screens */
+  @media (pointer: coarse) and (max-width: 1024px) {
+    .foh-popover-row select,
+    .foh-popover-row input[type='number'],
+    .foh-popover-row input[type='text'] {
+      font-size: 16px;
     }
   }
 
