@@ -154,10 +154,21 @@ export const fohChartPanelStyles = css`
   }
 
   @media (pointer: coarse) {
+    .chart-header {
+      height: 38px;
+      min-height: 38px;
+    }
+
     select,
     button {
-      min-block-size: 26px;
-      min-inline-size: 26px;
+      min-block-size: 30px;
+      min-inline-size: 30px;
+      padding: 3px 9px;
+      font-size: 12px;
+    }
+
+    select {
+      padding-inline-end: 26px;
     }
   }
 
@@ -207,6 +218,7 @@ export const fohChartPanelStyles = css`
     min-height: 120px;
     background: var(--foh-bg-canvas, #090d16);
     user-select: none;
+    touch-action: none;
   }
 
   canvas {
@@ -354,6 +366,7 @@ export abstract class FohChartPanelBase extends LitElement {
   protected cursorDomainX: number | null = null;
 
   protected draggingEqBandIndex: number | null = null;
+  protected touchScrubbing = false;
   protected chartPadding: ChartPadding = DEFAULT_CHART_PADDING;
 
   private dragAnchorRelY = 0;
@@ -436,6 +449,7 @@ export abstract class FohChartPanelBase extends LitElement {
   protected clearCursor(): void {
     this.cursorDomainX = null;
     this.draggingEqBandIndex = null;
+    this.touchScrubbing = false;
   }
 
   private paintStage(dims: DualCanvasDimensions): void {
@@ -476,34 +490,66 @@ export abstract class FohChartPanelBase extends LitElement {
     };
   }
 
-  private handleStagePointerDown = (e: PointerEvent): void => {
-    const scene = this.lastScene ?? this.buildChartScene();
-    if (!scene.eqOverlay || scene.eqOverlay.bands.length === 0) return;
+  protected handleStagePointerDown(e: PointerEvent): void {
     const coords = this.getPointerRelativeCoords(e);
     if (!coords) return;
+    const scene = this.lastScene ?? this.buildChartScene();
 
-    const hitIdx = findHitEqBandIndex(
-      coords.relX,
-      coords.relY,
-      coords.box.width,
-      coords.box.height,
-      scene.eqOverlay.bands,
-      scene.axis.bounds,
-      scene.eqOverlay.referenceZeroDbY
-    );
-    if (hitIdx !== null) {
-      const band = scene.eqOverlay.bands[hitIdx];
-      const params = getEqBandParams(band);
-      this.draggingEqBandIndex = hitIdx;
-      this.dragAnchorRelY = coords.relY;
-      this.dragAnchorFreq = params.frequency;
-      this.dragAnchorGainDb = params.gainDb;
-      this.dragAnchorQ = params.q;
-      (e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId);
+    if (scene.eqOverlay && scene.eqOverlay.bands.length > 0) {
+      const hitRadius = e.pointerType === 'touch' ? 22 : 12;
+      const hitIdx = findHitEqBandIndex(
+        coords.relX,
+        coords.relY,
+        coords.box.width,
+        coords.box.height,
+        scene.eqOverlay.bands,
+        scene.axis.bounds,
+        scene.eqOverlay.referenceZeroDbY,
+        hitRadius
+      );
+      if (hitIdx !== null) {
+        const band = scene.eqOverlay.bands[hitIdx];
+        const params = getEqBandParams(band);
+        this.draggingEqBandIndex = hitIdx;
+        this.touchScrubbing = false;
+        this.dragAnchorRelY = coords.relY;
+        this.dragAnchorFreq = params.frequency;
+        this.dragAnchorGainDb = params.gainDb;
+        this.dragAnchorQ = params.q;
+        (e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId);
+        return;
+      }
     }
-  };
 
-  private handleStagePointerMove = (e: PointerEvent): void => {
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+      const insideBox =
+        coords.relX >= 0 &&
+        coords.relX <= coords.box.width &&
+        coords.relY >= 0 &&
+        coords.relY <= coords.box.height;
+      if (!insideBox) {
+        this.touchScrubbing = false;
+        if (this.cursorDomainX !== null) {
+          this.cursorDomainX = null;
+          this.canvasController.requestRepaint();
+        }
+        return;
+      }
+      this.touchScrubbing = true;
+      (e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId);
+      const normX = coords.relX / Math.max(1, coords.box.width);
+      const isLogX = scene.axis.xScale === 'log';
+      this.cursorDomainX = normXToValue(
+        normX,
+        scene.axis.bounds.xMin,
+        scene.axis.bounds.xMax,
+        isLogX
+      );
+      this.canvasController.requestRepaint();
+    }
+  }
+
+  protected handleStagePointerMove(e: PointerEvent): void {
     const coords = this.getPointerRelativeCoords(e);
     if (!coords) return;
     const scene = this.lastScene ?? this.buildChartScene();
@@ -544,6 +590,21 @@ export abstract class FohChartPanelBase extends LitElement {
       return;
     }
 
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+      if (!this.touchScrubbing) return;
+      const clampedRelX = Math.max(0, Math.min(coords.box.width, coords.relX));
+      const normX = clampedRelX / Math.max(1, coords.box.width);
+      const isLogX = scene.axis.xScale === 'log';
+      this.cursorDomainX = normXToValue(
+        normX,
+        scene.axis.bounds.xMin,
+        scene.axis.bounds.xMax,
+        isLogX
+      );
+      this.canvasController.requestRepaint();
+      return;
+    }
+
     if (
       coords.relX < 0 ||
       coords.relX > coords.box.width ||
@@ -566,26 +627,38 @@ export abstract class FohChartPanelBase extends LitElement {
       isLogX
     );
     this.canvasController.requestRepaint();
-  };
+  }
 
-  private handleStagePointerUp = (e: PointerEvent): void => {
+  protected handleStagePointerUp(e: PointerEvent): void {
     if (this.draggingEqBandIndex !== null) {
       this.draggingEqBandIndex = null;
       (e.currentTarget as HTMLElement | null)?.releasePointerCapture?.(e.pointerId);
       this.onEqBandDragEnd();
     }
-  };
+    if (this.touchScrubbing) {
+      this.touchScrubbing = false;
+      (e.currentTarget as HTMLElement | null)?.releasePointerCapture?.(e.pointerId);
+    }
+  }
 
-  private handleStagePointerLeave = (): void => {
+  protected handleStagePointerCancel(e: PointerEvent): void {
+    this.handleStagePointerUp(e);
+  }
+
+  protected handleStagePointerLeave(e: PointerEvent): void {
     if (this.draggingEqBandIndex !== null) {
       this.draggingEqBandIndex = null;
       this.onEqBandDragEnd();
+    }
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+      this.touchScrubbing = false;
+      return;
     }
     if (this.cursorDomainX !== null) {
       this.cursorDomainX = null;
       this.canvasController.requestRepaint();
     }
-  };
+  }
 
   private handleStageWheel = (e: WheelEvent): void => {
     if (!e.shiftKey) return;
@@ -631,10 +704,11 @@ export abstract class FohChartPanelBase extends LitElement {
       ${this.renderHeader()}
       <div
         class="stage"
-        @pointerdown=${this.handleStagePointerDown}
-        @pointermove=${this.handleStagePointerMove}
-        @pointerup=${this.handleStagePointerUp}
-        @pointerleave=${this.handleStagePointerLeave}
+        @pointerdown=${(e: PointerEvent) => this.handleStagePointerDown(e)}
+        @pointermove=${(e: PointerEvent) => this.handleStagePointerMove(e)}
+        @pointerup=${(e: PointerEvent) => this.handleStagePointerUp(e)}
+        @pointercancel=${(e: PointerEvent) => this.handleStagePointerCancel(e)}
+        @pointerleave=${(e: PointerEvent) => this.handleStagePointerLeave(e)}
         @wheel=${this.handleStageWheel}
       >
         <canvas class="gl-canvas"></canvas>

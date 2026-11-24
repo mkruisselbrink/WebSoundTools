@@ -122,4 +122,109 @@ describe('paintChartScene & FohChartPanel', () => {
     expect(ctx.fillRect).toHaveBeenCalledWith(52, 12, 570, 284);
     expect(strokeWidths).toContain(2);
   });
+
+  it('scrubs and pins cursorDomainX on touch pointerdown/pointermove while dismissing on axis-margin tap', () => {
+    const panel = Object.create(FohChartPanel.prototype) as unknown as {
+      scene: FohChartPanel['scene'];
+      cursorDomainX: number | null;
+      draggingEqBandIndex: number | null;
+      touchScrubbing: boolean;
+      chartPadding: { left: number; right: number; top: number; bottom: number };
+      canvasController: {
+        overlayCanvas: { getBoundingClientRect: () => DOMRect };
+        requestRepaint: ReturnType<typeof vi.fn>;
+      };
+      handleStagePointerDown: (e: Partial<PointerEvent>) => void;
+      handleStagePointerMove: (e: Partial<PointerEvent>) => void;
+      handleStagePointerUp: (e: Partial<PointerEvent>) => void;
+      handleStagePointerLeave: (e: Partial<PointerEvent>) => void;
+    };
+
+    const repaintSpy = vi.fn();
+    Object.defineProperty(panel, 'cursorDomainX', {
+      value: null,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(panel, 'scene', {
+      value: {
+        axis: {
+          xScale: 'log',
+          xUnit: 'Hz',
+          yUnit: 'dB',
+          bounds: { xMin: 20, xMax: 20000, yMin: -24, yMax: 24, yStep: 6 },
+        },
+      },
+      writable: true,
+      configurable: true,
+    });
+    panel.draggingEqBandIndex = null;
+    panel.touchScrubbing = false;
+    panel.chartPadding = { left: 52, right: 18, top: 12, bottom: 24 };
+    panel.canvasController = {
+      overlayCanvas: {
+        getBoundingClientRect: () =>
+          ({ left: 0, top: 0, width: 640, height: 320 }) as DOMRect,
+      },
+      requestRepaint: repaintSpy,
+    };
+
+    // Bind instance arrow handlers from constructor via temporary super-less init check:
+    // invoke prototype pointer methods directly.
+    const captureTarget = {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    } as unknown as HTMLElement;
+
+    // 1. Touch tap inside plot box (x = 52 + 570/2 = 337 => log midpoint sqrt(20*20000) = ~632.45 Hz)
+    panel.handleStagePointerDown({
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 337,
+      clientY: 120,
+      currentTarget: captureTarget,
+    });
+    expect(panel.cursorDomainX).not.toBeNull();
+    expect(panel.cursorDomainX!).toBeCloseTo(632.46, 0);
+
+    // 2. Touch drag right (x = 52 + 570 = 622 => 20000 Hz)
+    panel.handleStagePointerMove({
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 622,
+      clientY: 120,
+      currentTarget: captureTarget,
+    });
+    expect(panel.cursorDomainX!).toBeCloseTo(20000, 0);
+
+    // 3. Finger lift triggers pointerup + pointerleave('touch') — cursor readout stays pinned!
+    panel.handleStagePointerUp({
+      pointerId: 1,
+      pointerType: 'touch',
+      currentTarget: captureTarget,
+    });
+    panel.handleStagePointerLeave({ pointerType: 'touch' });
+    expect(panel.cursorDomainX!).toBeCloseTo(20000, 0);
+
+    // 4. Touch tap outside plot box (left axis margin x = 16) dismisses pinned readout
+    panel.handleStagePointerDown({
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 16,
+      clientY: 120,
+      currentTarget: captureTarget,
+    });
+    expect(panel.cursorDomainX).toBeNull();
+
+    // 5. Mouse hover still clears on pointerleave('mouse')
+    panel.handleStagePointerMove({
+      pointerId: 3,
+      pointerType: 'mouse',
+      clientX: 337,
+      clientY: 120,
+    });
+    expect(panel.cursorDomainX!).toBeCloseTo(632.46, 0);
+    panel.handleStagePointerLeave({ pointerType: 'mouse' });
+    expect(panel.cursorDomainX).toBeNull();
+  });
 });
