@@ -4,7 +4,19 @@
 export { fohTokensCss } from './styles/tokens.css.js';
 export { FOH_SELECT_CHEVRON_DATA_URI, fohControlsCss } from './styles/controls.css.js';
 export { fohPanelsCss } from './styles/panels.css.js';
+export { fohPopoverCss } from './styles/popover.css.js';
 export { fohTopbarCss } from './styles/topbar.css.js';
+export {
+  StoreSubscriptionController,
+  shallowEqual,
+  type StoreSubscriptionOptions,
+  type SubscribableSource,
+} from './controllers/store-subscription.js';
+export {
+  ShellWindowController,
+  type ShellWindowControllerOptions,
+} from './controllers/shell-window-controller.js';
+export { downloadTextFile, slugifyFilename } from './dom/download-file.js';
 export {
   renderAudioInterfaceIconSvg,
   renderChevronDownSvg,

@@ -7,6 +7,53 @@ import { css } from 'lit';
  * Shared inspector cards, 2/3-column coordinate grids, entity tree rows, and EQ band card styles.
  */
 export const fohPanelsCss = css`
+  .foh-insp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--_foh-border-subtle, #1e293b);
+  }
+
+  .foh-insp-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--_foh-text-primary, #f8fafc);
+  }
+
+  .foh-insp-subtitle {
+    font-size: 10.5px;
+    color: var(--_foh-text-muted, #94a3b8);
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+
+  .foh-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 6px;
+  }
+
+  .foh-field-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .foh-field-label {
+    font-size: 10px;
+    color: var(--_foh-text-muted, #94a3b8);
+    font-weight: 500;
+  }
+
+  .foh-field-row input[type='text'],
+  .foh-field-row input[type='number'],
+  .foh-field-row select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .foh-form-section {
     margin-bottom: 8px;
     padding: 7px 8px;
@@ -48,6 +95,11 @@ export const fohPanelsCss = css`
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+  }
+
+  .foh-mini-field.full-width {
+    grid-column: 1 / -1;
   }
 
   .foh-mini-field > span,
@@ -60,6 +112,9 @@ export const fohPanelsCss = css`
   .foh-mini-field input,
   .foh-mini-field select {
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font: inherit;
     background-color: var(--_foh-bg-input, #090d16);
     color: var(--_foh-text-primary, #f8fafc);
@@ -203,5 +258,36 @@ export const fohPanelsCss = css`
     font-weight: 500;
     flex: 1;
     min-width: 0;
+  }
+
+  @media (pointer: coarse) {
+    .foh-mini-field input,
+    .foh-mini-field select,
+    .foh-field-row input,
+    .foh-field-row select {
+      min-block-size: 36px;
+      padding: 5px 8px;
+    }
+
+    .foh-mini-field select,
+    .foh-field-row select {
+      padding-inline-end: 26px;
+    }
+
+    .foh-tree-row input[type='checkbox'] {
+      inline-size: 18px;
+      block-size: 18px;
+    }
+  }
+
+  @media (pointer: coarse) and (max-width: 1024px) {
+    .foh-mini-field input[type='text'],
+    .foh-mini-field input[type='number'],
+    .foh-mini-field select,
+    .foh-field-row input[type='text'],
+    .foh-field-row input[type='number'],
+    .foh-field-row select {
+      font-size: 16px;
+    }
   }
 `;

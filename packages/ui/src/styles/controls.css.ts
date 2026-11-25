@@ -14,9 +14,29 @@ export const FOH_SELECT_CHEVRON_DATA_URI =
  * Shared button, input, select, checkbox, swatch, badge, focus-ring, and SR-only styles.
  */
 export const fohControlsCss = css`
+  :where(button, select, input, textarea) {
+    font: inherit;
+  }
+
   :where(button, select, input, a, [tabindex]):focus-visible {
     outline: 2px solid var(--_foh-accent-bright, #38bdf8);
     outline-offset: 2px;
+  }
+
+  select,
+  input[type='text'],
+  input[type='number'] {
+    background-color: var(--_foh-bg-input, #090d16);
+    color: var(--_foh-text-primary, #f8fafc);
+    border: 1px solid var(--_foh-border-strong, #334155);
+    border-radius: var(--_foh-radius-sm, 4px);
+    padding: 3px 6px;
+    font-size: 11.5px;
+  }
+
+  input[type='number'] {
+    font-family: var(--_foh-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
   }
 
   select {
@@ -26,6 +46,7 @@ export const fohControlsCss = css`
     background-repeat: no-repeat;
     background-position: right 8px center;
     background-size: 10px 6px;
+    padding-inline-start: 7px;
     padding-inline-end: 26px;
     cursor: pointer;
   }
@@ -126,11 +147,28 @@ export const fohControlsCss = css`
     font-size: 10.5px;
   }
 
+  .foh-btn-link {
+    text-decoration: none;
+  }
+
+  .foh-btn-active {
+    background: #dc2626;
+    border-color: #f87171;
+    color: #ffffff;
+  }
+
+  .foh-btn:is([aria-pressed='true'], [data-active='true']) {
+    background: var(--_foh-accent, #0284c7);
+    border-color: var(--_foh-accent-bright, #38bdf8);
+    color: #ffffff;
+  }
+
   @media (pointer: coarse) {
     .foh-btn,
-    .foh-btn-xs {
-      min-block-size: 28px;
-      min-inline-size: 28px;
+    .foh-btn-xs,
+    select {
+      min-block-size: 32px;
+      min-inline-size: 32px;
     }
   }
 
