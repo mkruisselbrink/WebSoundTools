@@ -3,7 +3,10 @@
 
 import type { ReactiveControllerHost } from 'lit';
 import { describe, expect, it, vi } from 'vitest';
-import { ShellWindowController } from './shell-window-controller.js';
+import {
+  ShellWindowController,
+  blurFocusedNumberInputOnWheel,
+} from './shell-window-controller.js';
 
 describe('ShellWindowController', () => {
   it('tracks WCO visibility updates and cleans up subscriptions on disconnect', () => {
@@ -33,5 +36,51 @@ describe('ShellWindowController', () => {
 
     ctrl.hostDisconnected();
     expect(unsubSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('blurs focused number inputs across composedPath on wheel without touching unfocused or text inputs', () => {
+    const focusedNumberBlur = vi.fn();
+    const focusedNumber = {
+      tagName: 'INPUT',
+      type: 'number',
+      getRootNode: () => ({ activeElement: focusedNumber }),
+      blur: focusedNumberBlur,
+    };
+
+    expect(
+      blurFocusedNumberInputOnWheel({
+        composedPath: () => [focusedNumber, { tagName: 'DIV' }],
+      })
+    ).toBe(true);
+    expect(focusedNumberBlur).toHaveBeenCalledTimes(1);
+
+    const unfocusedNumberBlur = vi.fn();
+    const unfocusedNumber = {
+      tagName: 'INPUT',
+      type: 'number',
+      getRootNode: () => ({ activeElement: null }),
+      matches: () => false,
+      blur: unfocusedNumberBlur,
+    };
+    expect(
+      blurFocusedNumberInputOnWheel({
+        composedPath: () => [unfocusedNumber],
+      })
+    ).toBe(false);
+    expect(unfocusedNumberBlur).not.toHaveBeenCalled();
+
+    const textBlur = vi.fn();
+    const focusedText = {
+      tagName: 'INPUT',
+      type: 'text',
+      getRootNode: () => ({ activeElement: focusedText }),
+      blur: textBlur,
+    };
+    expect(
+      blurFocusedNumberInputOnWheel({
+        composedPath: () => [focusedText],
+      })
+    ).toBe(false);
+    expect(textBlur).not.toHaveBeenCalled();
   });
 });

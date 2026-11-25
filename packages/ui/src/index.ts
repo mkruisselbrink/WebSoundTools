@@ -14,6 +14,7 @@ export {
 } from './controllers/store-subscription.js';
 export {
   ShellWindowController,
+  blurFocusedNumberInputOnWheel,
   type ShellWindowControllerOptions,
 } from './controllers/shell-window-controller.js';
 export { downloadTextFile, slugifyFilename } from './dom/download-file.js';

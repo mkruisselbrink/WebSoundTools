@@ -110,6 +110,17 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     await wss.goto('/?preset=club-cardioid-pa');
 
     await wss.selectFirstDspGroup();
+    const gainInput = page.getByTestId('grp-gain-db');
+    await gainInput.focus();
+    const initialGain = await gainInput.inputValue();
+    const gainBox = await gainInput.boundingBox();
+    if (gainBox) {
+      await page.mouse.move(gainBox.x + gainBox.width / 2, gainBox.y + gainBox.height / 2);
+      await page.mouse.wheel(0, 120);
+      await page.mouse.wheel(0, -120);
+    }
+    await expect(gainInput).toHaveValue(initialGain);
+
     await wss.addEqBand();
     await expect(page.getByTestId('eq-band-0')).toBeVisible();
 
