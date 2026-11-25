@@ -279,6 +279,7 @@ export class WssSpeakerLibraryModal extends LitElement {
         .open=${this.open}
         modalTitle="Loudspeaker Library, Spec Builder & File Importer"
         maxWidth="700px"
+        docRegion="speaker-library-modal"
         dialogTestId="speaker-library-modal"
         closeButtonTestId="btn-close-library-modal"
         @close-modal=${() => this.close()}

@@ -55,12 +55,12 @@ export type { LayoutPreset };
 export class WebSoundMeterApp extends LitElement {
   static styles = appShellStyles;
 
-  private readonly sourceStore = new SourceStore();
-  private readonly workspace = new WorkspaceLayoutController();
-  private readonly mixerWatch = new MixerWatchController((nextCfg) => {
+  public readonly sourceStore = new SourceStore();
+  public readonly workspace = new WorkspaceLayoutController();
+  public readonly mixerWatch = new MixerWatchController((nextCfg) => {
     this.audio.syncMixerWatchToEngine(nextCfg);
   });
-  private readonly audio = new AudioSessionController(
+  public readonly audio = new AudioSessionController(
     this.workspace,
     this.sourceStore,
     this.mixerWatch
@@ -214,7 +214,11 @@ export class WebSoundMeterApp extends LitElement {
   private renderStatusBanner() {
     if (this.audio.audioStatusError) {
       return html`
-        <div class="audio-status-banner error" data-testid="audio-status-banner">
+        <div
+          class="audio-status-banner error"
+          data-testid="audio-status-banner"
+          data-doc-region="status-banner"
+        >
           <span>${this.audio.audioStatusError}</span>
           <div class="audio-status-actions">
             <button
@@ -247,7 +251,11 @@ export class WebSoundMeterApp extends LitElement {
       this.workspace.audioInputMode === 'hardware'
     ) {
       return html`
-        <div class="audio-status-banner" data-testid="audio-status-banner">
+        <div
+          class="audio-status-banner"
+          data-testid="audio-status-banner"
+          data-doc-region="status-banner"
+        >
           <span>
             ${this.audio.hardwareDisconnectReason === 'manual'
               ? html`Hardware audio capture is disconnected (OS mic released) — tap
@@ -326,11 +334,12 @@ export class WebSoundMeterApp extends LitElement {
           `
         : html`
             <div class="workspace" data-mode=${this.workspace.workspaceMode}>
-              <main class="charts-column">
+              <main class="charts-column" data-doc-region="charts-column">
                 ${this.workspace.chartPlotTypes.map(
                   (pt, idx) => html`
                     <chart-panel
                       data-testid="chart-panel-${idx}"
+                      data-doc-region="chart-${idx}"
                       .plotType=${pt}
                       .sources=${chartSources}
                       .extraFeedbackTracks=${extraFeedbackTracks}

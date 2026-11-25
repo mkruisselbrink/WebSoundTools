@@ -44,6 +44,87 @@ export class WsmPageDriver {
   async waitForLiveSignal(): Promise<void> {
     const splValue = this.byTestId(WSM_TEST_IDS.splMainValue);
     await expect(splValue).not.toHaveText('0.0', { timeout: 6000 });
+    await this.waitForFrames(8);
+  }
+
+  async waitForUiSettled(): Promise<void> {
+    await this.page.evaluate(async () => {
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+      const flushLit = async (root: ParentNode): Promise<void> => {
+        const els = Array.from(root.querySelectorAll('*'));
+        for (const el of els) {
+          const litEl = el as Element & { updateComplete?: Promise<boolean> };
+          if (litEl.updateComplete) {
+            await litEl.updateComplete;
+          }
+          if (el.shadowRoot) {
+            await flushLit(el.shadowRoot);
+          }
+        }
+      };
+      await flushLit(document);
+      await flushLit(document);
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+    });
+  }
+
+  async waitForFrames(count: number = 10, timeoutMs: number = 4000): Promise<void> {
+    if (count > 0) {
+      await this.page.evaluate(
+        ({ targetCount, maxWaitMs }) =>
+          new Promise<void>((resolve) => {
+            const app = document.querySelector('web-sound-meter-app') as unknown as {
+              audio?: { isPaused?: boolean };
+              sourceStore?: {
+                subscribe?: (fn: (kind: string) => void) => () => void;
+              };
+            } | null;
+            if (!app?.sourceStore?.subscribe || app.audio?.isPaused) {
+              resolve();
+              return;
+            }
+            let seen = 0;
+            let done = false;
+            const finish = () => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              unsub();
+              resolve();
+            };
+            const unsub = app.sourceStore.subscribe((kind) => {
+              if (kind === 'live') {
+                seen++;
+                if (seen >= targetCount) {
+                  finish();
+                }
+              }
+            });
+            const timer = setTimeout(finish, maxWaitMs);
+          }),
+        { targetCount: count, maxWaitMs: timeoutMs }
+      );
+    }
+    await this.waitForUiSettled();
+  }
+
+  async waitForFeedbackRing(minCount: number = 1, timeoutMs: number = 6000): Promise<void> {
+    await expect
+      .poll(
+        async () =>
+          this.app
+            .locator(
+              '[data-testid^="ring-log-item-"], [data-testid="mobile-ring-alert-banner"]'
+            )
+            .count(),
+        { timeout: timeoutMs }
+      )
+      .toBeGreaterThanOrEqual(minCount);
+    await this.waitForFrames(4);
   }
 
   async installMockUsbHardwareInterface(

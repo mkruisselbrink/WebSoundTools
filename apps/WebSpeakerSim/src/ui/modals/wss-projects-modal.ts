@@ -87,6 +87,7 @@ export class WssProjectsModal extends LitElement {
         .open=${this.open}
         modalTitle="Saved Browser Projects (IndexedDB)"
         maxWidth="560px"
+        docRegion="projects-modal"
         dialogTestId="projects-modal"
         @close-modal=${() => this.close()}
       >

@@ -78,6 +78,7 @@ export function renderSplConfigPopover(
       id="wsm-spl-popover"
       popover="auto"
       class="foh-popover"
+      data-doc-region="spl-popover"
       @toggle=${(ev: Event) => {
         if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
       }}

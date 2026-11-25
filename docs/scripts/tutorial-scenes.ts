@@ -3,26 +3,58 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Captures the 15 step-by-step FOH tutorial screenshots (`docs/tutorials/images/t01..t06*.png`).
+ * Captures the 27 annotated step-by-step FOH tutorial screenshots across Tutorials 01–07
+ * (`docs/tutorials/images/t01..t07*.png`) using Markdown-embedded `[data-doc-region]` crops,
+ * Top-Layer SVG callouts, and deterministic DSP / worker readiness gates.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import type { Browser } from '@playwright/test';
+import { expect, type Browser } from '@playwright/test';
 import { WsmPageDriver } from '../../apps/WebSoundMeter/tests/e2e/wsm-page-driver.ts';
 import { WssPageDriver } from '../../apps/WebSpeakerSim/tests/e2e/wss-page-driver.ts';
 import {
   createRetinaPage,
   createTouchRetinaPage,
-  sleep,
-} from './generate-screenshots.ts';
+  type SceneCapturer,
+} from './session-helpers.ts';
+
+export const TUTORIAL_SCENE_IDS = [
+  't01-01-hardware-routing',
+  't01-02-mic-calibration-loaded',
+  't01-03-io-popover-stop-release',
+  't01-04-spl-calibrator-94db',
+  't02-01-dsp-group-eq-handles',
+  't02-02-club-mic-alignment',
+  't02-03-csa-enclosure-schedule',
+  't02-04-scene-file-save-popover',
+  't02-05-main-aiming-and-heatmap',
+  't03-01-unaligned-wrapped-phase',
+  't03-02-sub-top-crossover-notch',
+  't03-03-noisy-coherence-blanking',
+  't03-04-impulse-etc-reflections',
+  't03-05-aligned-phase-and-capture',
+  't03-06-virtual-eq-room-match',
+  't04-01-measured-minus-predicted',
+  't04-02-stored-trace-offset',
+  't05-01-show-spl-compliance-warn',
+  't05-02-show-limit-and-ring-log',
+  't05-03-handheld-phone-spl-trend',
+  't05-04-handheld-phone-mics-cal',
+  't05-05-mixer-input-watch-modal',
+  't05-06-culprit-notch-eq-cheatsheet',
+  't06-01-custom-raked-balcony-zones',
+  't06-02-outdoor-endfire-delay-ring',
+  't06-03-acoustic-ruler-delay-check',
+  't06-04-venue-bounds-and-slice',
+  't06-05-delay-ring-handoff-alignment',
+  't07-01-hardware-resume-and-help',
+] as const;
 
 export interface CaptureTutorialParams {
   readonly browser: Browser;
   readonly wsmUrl: string;
   readonly wssUrl: string;
-  readonly repoRoot: string;
   readonly exportedFrdPath: string;
+  readonly capturer: SceneCapturer;
 }
 
 const SAMPLE_MIC_CALIBRATION = [
@@ -46,15 +78,12 @@ export async function captureTutorialScenes({
   browser,
   wsmUrl,
   wssUrl,
-  repoRoot,
   exportedFrdPath,
+  capturer,
 }: CaptureTutorialParams): Promise<void> {
-  const outDir = path.join(repoRoot, 'docs/tutorials/images');
-  fs.mkdirSync(outDir, { recursive: true });
+  console.log('Capturing 27 annotated step-by-step FOH tutorial screenshots...');
 
-  console.log('Capturing 15 step-by-step FOH tutorial screenshots...');
-
-  // 1. Tutorial 01 — Hardware Routing, Live Preamp dBFS Meters & Mic Calibration Upload
+  // 1. Tutorial 01 — Hardware Routing, IO Popover, Mic Calibration Upload & 94 dB SPL Calibrator
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
@@ -63,54 +92,78 @@ export async function captureTutorialScenes({
     await wsm.waitForLiveSignal();
 
     await wsm.selectInputSource('hardware:usb-4ch-interface');
-    await sleep(300);
-    // Explicitly enable generator after switching to hardware (showing GEN ON + Out Ch 1+2)
+    await wsm.waitForFrames(6);
     await wsm.toggleGenerator();
-    await sleep(650);
+    await wsm.waitForFrames(10);
     await wsm.applyAutoDelay();
-    await sleep(500);
-    // Crop cleanly to full Topbar (including GEN ON + Out Ch 1+2) + Charts + Right Inspector (Meas M / Ref R dBFS meters)
-    await page.screenshot({
-      path: path.join(outDir, 't01-01-hardware-routing-and-generator.png'),
-      clip: { x: 0, y: 0, width: 1440, height: 615 },
-    });
+    await wsm.waitForFrames(10);
+    await capturer.capture('t01-01-hardware-routing', page);
 
+    // t01-03: Open Audio Input & Reference Popover showing Loopback Ref, Auto-Release & Disconnect
+    await wsm.byTestId('btn-io-popover').click();
+    await expect(wsm.byTestId('select-ref-channel')).toBeVisible();
+    await wsm.waitForUiSettled();
+    await capturer.capture('t01-03-io-popover-stop-release', page);
+    await wsm.byTestId('btn-io-popover').click();
+    await wsm.waitForUiSettled();
+
+    // t01-04: Open SPL Calibrator Popover (94 dB / 114 dB pistonphone match)
+    await wsm.byTestId('btn-calibrate-spl').click();
+    await expect(page.locator('[data-doc-region="cal-popover"]')).toBeVisible();
+    await wsm.waitForUiSettled();
+    await capturer.capture('t01-04-spl-calibrator-94db', page);
+    await wsm.byTestId('btn-calibrate-spl').click();
+    await wsm.waitForUiSettled();
+
+    // t01-02: Mic Calibration Curve Uploaded & Selected in Advanced Settings
     await wsm.toggleAdvancedMeasurementSettings();
-    await sleep(250);
     await wsm.uploadCalibrationText('M30-Serial-8412.cal', SAMPLE_MIC_CALIBRATION);
-    await sleep(450);
-    // Scroll right sidebar so both Mic Calibration Curve dropdown and Upload button are fully visible
+    await wsm.waitForFrames(6);
     await wsm.app.locator('.sidebar').evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    await sleep(200);
-    await page.screenshot({
-      path: path.join(outDir, 't01-02-mic-calibration-loaded.png'),
-      clip: { x: 1096, y: 40, width: 344, height: 860 },
-    });
+    await wsm.waitForUiSettled();
+    await capturer.capture('t01-02-mic-calibration-loaded', page);
 
     await context.close();
   }
 
-  // 2. Tutorial 02 — Live Club CSA Schedule, Club Virtual Mic Alignment & Multi-Band EQ Handles
+  // 2. Tutorial 02 — Scene File Save Popover, Main Aiming + Heatmap Popover, CSA Schedule, Mic Alignment & EQ Handles
   {
     const { context, page } = await createRetinaPage(browser);
     const wss = new WssPageDriver(page);
     await wss.goto(wssUrl);
 
-    // t02-03: Cropped CSA Subwoofer Array Designer + Generated Enclosure Schedule
+    // t02-04: Open Scene & Project File Popover (Cmd/Ctrl+S direct .json save, Open .json, Saved Projects)
+    await wss.byTestId('btn-scene-popover').click();
+    await expect(wss.byTestId('preset-select')).toBeVisible();
+    await wss.waitForUiSettled();
+    await capturer.capture('t02-04-scene-file-save-popover', page);
+    await wss.byTestId('btn-scene-popover').click();
+    await wss.waitForUiSettled();
+
+    // t02-05: Main L Selected + SPL Heatmap & Contours Popover Open (Auto ±6 dB, 2 dB contours)
+    await wss.selectPointSource('ps-main-l');
+    await wss.setColormapRange('auto-12');
+    await wss.setIsolineStep(2);
+    await wss.byTestId('btn-heatmap-popover').click();
+    await expect(wss.byTestId('colormap-range-select')).toBeVisible();
+    await wss.waitForUiSettled();
+    await capturer.capture('t02-05-main-aiming-and-heatmap', page);
+    await wss.byTestId('btn-heatmap-popover').click();
+    await wss.waitForUiSettled();
+
+    // t02-03: CSA Subwoofer Array Designer + Generated Enclosure Schedule
     await wss.setColormapRange('auto-36');
+    await wss.setIsolineStep(3);
     await wss.selectBand('hz-63');
     await wss.selectSubArray('sa-center-cardioid');
     await wss.setSubArrayMode('cardioid-csa');
     await wss.applyQuarterWaveSpacing();
-    await sleep(650);
-    await page.screenshot({
-      path: path.join(outDir, 't02-03-csa-enclosure-schedule.png'),
-      clip: { x: 1088, y: 392, width: 352, height: 508 },
-    });
+    await wss.waitForUiSettled();
+    await capturer.capture('t02-03-csa-enclosure-schedule', page);
 
-    // t02-02: Live Club Virtual Mic Phase & Auto Time-Alignment (toast cleared)
+    // t02-02: Live Club Virtual Mic Phase & Auto Time-Alignment
     await wss.selectBand('pink-A');
     await wss.setColormapRange('auto-21');
     await wss.selectVirtualMic('mic-foh');
@@ -120,27 +173,22 @@ export async function captureTutorialScenes({
       targetGroupId: 'grp-mains',
     });
     await wss.dismissToast();
-    await sleep(650);
-    await page.screenshot({
-      path: path.join(outDir, 't02-02-club-mic-alignment.png'),
-    });
+    await wss.waitForUiSettled();
+    await capturer.capture('t02-02-club-mic-alignment', page);
 
-    // t02-01: Cropped Chart + DSP Group Inspector with 3 sculpted EQ handles
+    // t02-01: Chart + DSP Group Inspector with 3 interactive EQ handles
     await wss.selectChartTab('magnitude');
     await wss.selectFirstDspGroup();
     await wss.addEqBand();
     await wss.addEqBand();
     await wss.addEqBand();
-    await sleep(650);
-    await page.screenshot({
-      path: path.join(outDir, 't02-01-wss-dsp-group-eq-handles.png'),
-      clip: { x: 0, y: 392, width: 1440, height: 508 },
-    });
+    await wss.waitForUiSettled();
+    await capturer.capture('t02-01-dsp-group-eq-handles', page);
 
     await context.close();
   }
 
-  // 3. Tutorial 03 — Unaligned Phase, Fixed 100 Hz Crossover Notch, Coherence Masking & Impulse ETC
+  // 3. Tutorial 03 — Unaligned Phase, Locked Delay + Capture, Crossover Notch, Coherence, ETC & Virtual EQ Room Match
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
@@ -150,50 +198,64 @@ export async function captureTutorialScenes({
     await wsm.selectLayout('pa-triple');
     await wsm.selectLiveSlotPreset('flat-delayed');
     await wsm.setReferenceDelayMs(0);
-    await sleep(950);
-    await page.screenshot({
-      path: path.join(outDir, 't03-01-unaligned-wrapped-phase.png'),
-    });
+    await wsm.waitForFrames(14);
+    await capturer.capture('t03-01-unaligned-wrapped-phase', page);
 
-    // Preset 3 (+5.0 ms sub delay -> deep -20+ dB 100 Hz notch unsmoothed + +5.0 ms sub arrival)
+    // t03-05: Locked Reference Delay (10.0 ms -> flat 0° phase + centered 0.0 ms impulse) + Captured Baseline
+    await wsm.applyAutoDelay();
+    await wsm.waitForFrames(14);
+    await wsm.captureStoredTrace('FOH Flat Baseline');
+    await wsm.app.locator('[data-testid^="source-item-live-"]').first().click();
+    await wsm.waitForFrames(6);
+    await capturer.capture('t03-05-aligned-phase-and-capture', page);
+
+    // Hide baseline stored trace for remaining live diagnostics
+    await wsm.setSourceVisibilityByName('FOH Flat Baseline', false);
+
+    // t03-02: Sub + Top Misaligned (+5.0 ms sub delay -> deep 100 Hz notch + +5.0 ms sub arrival)
     await wsm.setOctaveSmoothing('off');
     await wsm.selectLiveSlotPreset('sub-top-misaligned');
-    await sleep(850);
+    await wsm.waitForFrames(12);
     await wsm.applyAutoDelay();
-    await sleep(1050);
-    await page.screenshot({
-      path: path.join(outDir, 't03-02-sub-top-crossover-notch.png'),
-    });
+    await wsm.waitForFrames(14);
+    await capturer.capture('t03-02-sub-top-crossover-notch', page);
     await wsm.setOctaveSmoothing('1/12');
 
-    // Noisy Venue: Magnitude on Alpha Fade (>= 35%), Phase on Hard Cutoff (>= 50%), Panel 3 on Coherence
+    // t03-03: Noisy Venue Coherence Blanking
     await wsm.selectLiveSlotPreset('noisy-crowd');
-    await sleep(850);
+    await wsm.waitForFrames(12);
     await wsm.applyAutoDelay();
     await wsm.setChartCoherence(1, 'cutoff', 0.5);
     await wsm.setChartPlotType(2, 'coherence');
-    await sleep(1100);
-    await page.screenshot({
-      path: path.join(outDir, 't03-03-noisy-venue-coherence-blanking.png'),
-    });
+    await wsm.waitForFrames(16);
+    await capturer.capture('t03-03-noisy-coherence-blanking', page);
 
-    // t03-04: Impulse (Linear) vs. Impulse (ETC dB) exposing floor & rear-wall reflections
+    // t03-04: Impulse (Linear) vs. Impulse (ETC dB) Reflections
     await wsm.selectLayout('tf-dual');
     await wsm.selectLiveSlotPreset('comb-filtering');
-    await sleep(800);
+    await wsm.waitForFrames(12);
     await wsm.applyAutoDelay();
     await wsm.setChartPlotType(0, 'impulse');
     await wsm.setChartPlotType(1, 'etc');
-    await sleep(900);
-    await page.screenshot({
-      path: path.join(outDir, 't03-04-impulse-etc-reflections.png'),
-      clip: { x: 0, y: 40, width: 1096, height: 860 },
-    });
+    await wsm.waitForFrames(12);
+    await capturer.capture('t03-04-impulse-etc-reflections', page);
+
+    // t03-06: Offline Virtual EQ Room Match + LR24 80 Hz HPF on Captured PA Room Modes Trace
+    await wsm.selectLayout('tf-dual');
+    await wsm.selectLiveSlotPreset('pa-room-modes');
+    await wsm.waitForFrames(12);
+    await wsm.applyAutoDelay();
+    await wsm.waitForFrames(12);
+    await wsm.captureStoredTrace('FOH Room Avg');
+    await wsm.setSourceVisibilityByName('Live Measurement', false);
+    await wsm.addVirtualEq({ autoFlatten: true, hpfTopology: 'linkwitz-riley-24' });
+    await wsm.waitForFrames(6);
+    await capturer.capture('t03-06-virtual-eq-room-match', page);
 
     await context.close();
   }
 
-  // 4. Tutorial 04 — Clean Smoothed Measured Minus Predicted dB Difference Curve
+  // 4. Tutorial 04 — Stored Predicted .FRD Offset Inspector & Measured Minus Predicted dB Difference
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
@@ -203,33 +265,32 @@ export async function captureTutorialScenes({
     await wsm.selectLayout('tf-dual');
     await wsm.setOctaveSmoothing('1/3');
     await wsm.selectLiveSlotPreset('pa-room-modes');
-    await sleep(850);
+    await wsm.waitForFrames(12);
     await wsm.applyAutoDelay();
-    await sleep(750);
+    await wsm.waitForFrames(12);
     await wsm.captureStoredTrace('FOH Measured');
-    await sleep(300);
 
     await wsm.importFrdFile(exportedFrdPath);
-    await sleep(500);
+    await wsm.waitForUiSettled();
 
-    // Hide live trace so only FOH Measured, foh-mix-position-predicted, and smoothed dB Difference show
+    // t04-02: Imported Stored Trace Inspector (passband auto-aligned + Gain/Delay offsets + Export .FRD)
     await wsm.setSourceVisibilityByName('Live Measurement', false);
+    await wsm.waitForUiSettled();
+    await capturer.capture('t04-02-stored-trace-offset', page);
 
+    // t04-01: Measured Minus Predicted dB Difference Curve
     await wsm.addMathUnion({
       operation: 'diff-db',
       sourceAPattern: /FOH Measured/i,
       sourceBPattern: /foh-mix-position-predicted/i,
     });
-    // Show Magnitude + Coherence/RTA or clean Magnitude focus; set Phase coherence cutoff cleanly
-    await sleep(750);
-    await page.screenshot({
-      path: path.join(outDir, 't04-01-measured-minus-predicted-diff.png'),
-    });
+    await wsm.waitForFrames(6);
+    await capturer.capture('t04-01-measured-minus-predicted', page);
 
     await context.close();
   }
 
-  // 5. Tutorial 05 — Seeded 15m Show SPL Warning Timeline + Cropped LIMIT & Ring Log Notch EQ
+  // 5. Tutorial 05 — Show SPL Warning, Mixer Input Watch Modal, Culprit Ring Log & Notch EQ Cheat-Sheet
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
@@ -243,22 +304,37 @@ export async function captureTutorialScenes({
     await wsm.setMode('show');
     await wsm.selectShowSlotPreset(0, 'feedback-ring-demo');
     await wsm.setShowSplThresholds(94, 98);
-    await sleep(2200);
-    await page.screenshot({
-      path: path.join(outDir, 't05-01-show-spl-compliance-warn.png'),
-    });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(10);
+    await capturer.capture('t05-01-show-spl-compliance-warn', page);
 
-    // Click Notch EQ on first detected feedback ring and lower Limit to 95 dB to show ◆ LIMIT badge
-    const notchBtn = wsm.app.locator('.btn-notch-eq').first();
-    if ((await notchBtn.count()) > 0) {
-      await notchBtn.click();
+    // t05-05: Open Mixer Input Watch & Patch Presets Modal, enable culprit attribution & save patch preset
+    await wsm.openMixerWatchModal('show');
+    const mwEnable = wsm.byTestId('toggle-mixer-watch-enabled');
+    if (!(await mwEnable.isChecked())) {
+      await mwEnable.check();
     }
+    const presetName = wsm.byTestId('input-mixer-preset-name');
+    await presetName.fill('Headliner Stage Patch');
+    await wsm.byTestId('btn-save-mixer-preset').click();
+    await wsm.waitForFrames(14);
+    await capturer.capture('t05-05-mixer-input-watch-modal', page);
+
+    // Close modal & capture culprit attribution + ◆ LIMIT badge + Notch EQ
+    await page.keyboard.press('Escape');
     await wsm.setShowSplThresholds(91, 94);
-    await sleep(600);
-    await page.screenshot({
-      path: path.join(outDir, 't05-02-show-limit-and-ring-log.png'),
-      clip: { x: 0, y: 0, width: 1440, height: 525 },
-    });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(12);
+    await capturer.capture('t05-02-show-limit-and-ring-log', page);
+
+    // Click Notch EQ on top culprit ring and switch to Tuning to inspect surgical console cheat-sheet
+    await wsm.app.locator('.btn-notch-eq').first().click();
+    await wsm.setMode('tuning');
+    await wsm.selectLayout('single');
+    await wsm.setChartPlotType(0, 'magnitude');
+    await wsm.app.locator('[data-testid^="source-item-eq-"]').first().click();
+    await wsm.waitForFrames(8);
+    await capturer.capture('t05-06-culprit-notch-eq-cheatsheet', page);
 
     await context.close();
   }
@@ -280,66 +356,98 @@ export async function captureTutorialScenes({
     await wsm.waitForLiveSignal();
 
     await wsm.selectInputSource('hardware:usb-4ch-interface');
-    await sleep(450);
     await wsm.setMode('show');
     await wsm.app.getByTestId('mobile-tab-mics').click();
     await wsm.setShowSplThresholds(94, 98);
 
-    // t05-03: Handheld Phone SPL Trend (15m compliance curve + Hero Scoreboard + Active Ring Banner)
     await wsm.app.getByTestId('mobile-tab-history').click();
-    await sleep(2200);
-    await page.screenshot({
-      path: path.join(outDir, 't05-03-handheld-phone-spl-trend.png'),
-    });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(8);
+    await capturer.capture('t05-03-handheld-phone-spl-trend', page);
 
-    // t05-04: Handheld Phone Mics & Cal Tab with Bottom-Sheet SPL Calibrator Open
     await wsm.app.getByTestId('mobile-tab-mics').click();
-    await sleep(250);
+    await wsm.waitForUiSettled();
     await wsm.app.getByTestId('btn-show-cal-live-measurement').click();
-    await sleep(300);
-    await page.screenshot({
-      path: path.join(outDir, 't05-04-handheld-phone-mics-calibration.png'),
-    });
+    await expect(page.locator('[data-doc-region="cal-popover"]')).toBeVisible();
+    await wsm.waitForUiSettled();
+    await capturer.capture('t05-04-handheld-phone-mics-cal', page);
 
     await context.close();
   }
 
-  // 6. Tutorial 06 — Custom Multi-Zone Venue, Outdoor End-Fire Subs + Delay Ring & Acoustic Ruler
+  // 6. Tutorial 06 — Venue Bounds, Multi-Zone Balcony, Outdoor End-Fire, Acoustic Ruler & Delay-Ring Handoff
   {
     const { context, page } = await createRetinaPage(browser);
     const wss = new WssPageDriver(page);
     await wss.goto(wssUrl);
 
-    // t06-01: Raked Auditorium & Overhanging Balcony Zone Inspector
     await wss.selectVenuePreset('theater-raked-balcony');
     await wss.dismissToast();
-    await wss.selectSurface('surf-balcony');
-    await sleep(650);
-    await page.screenshot({
-      path: path.join(outDir, 't06-01-custom-raked-balcony-zones.png'),
-    });
+    await wss.selectEnvironment();
+    await wss.waitForUiSettled();
+    await capturer.capture('t06-04-venue-bounds-and-slice', page);
 
-    // t06-02: Outdoor Festival Field — End-Fire Subs + 26 m Delay Ring
+    await wss.selectSurface('surf-balcony');
+    await wss.waitForUiSettled();
+    await capturer.capture('t06-01-custom-raked-balcony-zones', page);
+
     await wss.selectVenuePreset('festival-endfire-delays');
     await wss.dismissToast();
     await wss.selectSubArray('sa-endfire-c');
-    await sleep(750);
-    const festivalMetrics = await wss.byTestId('coverage-metrics').textContent();
-    console.log('  [WSS Outdoor Festival]:', festivalMetrics?.trim());
-    await page.screenshot({
-      path: path.join(outDir, 't06-02-outdoor-endfire-delay-ring.png'),
-    });
+    await wss.waitForUiSettled();
+    await capturer.capture('t06-02-outdoor-endfire-delay-ring', page);
 
-    // t06-03: Shift + Drag Acoustic Ruler measuring throw distance (m) & flight time (ms) in Plan View
     await wss.setViewportLayout('plan');
-    await sleep(350);
+    await wss.waitForUiSettled();
     await wss.dragAcousticRulerOnPlan({ x: 0.36, y: 0.4 }, { x: 0.52, y: 0.38 });
-    await sleep(250);
-    await page.screenshot({
-      path: path.join(outDir, 't06-03-acoustic-ruler-delay-check.png'),
-      clip: { x: 0, y: 40, width: 1090, height: 550 },
-    });
+    await wss.waitForUiSettled();
+    await capturer.capture('t06-03-acoustic-ruler-delay-check', page);
     await wss.releaseAcousticRuler();
+
+    // t06-05: Delay Ring Handoff Virtual Mic Arrivals Stem Plot + Auto Time-Alignment
+    await wss.setViewportLayout('split');
+    await wss.selectVirtualMic('mic-rear');
+    await wss.selectChartTab('arrivals');
+    await wss.applyAutoTimeAlignment({
+      referenceGroupId: 'grp-mains',
+      targetGroupId: 'grp-delays',
+    });
+    await wss.dismissToast();
+    await wss.waitForUiSettled();
+    await capturer.capture('t06-05-delay-ring-handoff-alignment', page);
+
+    await context.close();
+  }
+
+  // 7. Tutorial 07 — Hardware Reload Standby Safety Banner, Help Shortcuts & Staged PWA Update Banner
+  {
+    const { context, page } = await createRetinaPage(browser);
+    const wsm = new WsmPageDriver(page);
+    await wsm.installMockUsbHardwareInterface();
+    await wsm.goto(wsmUrl);
+    await wsm.waitForLiveSignal();
+
+    await wsm.selectInputSource('hardware:usb-4ch-interface');
+    await wsm.waitForFrames(6);
+    // Disconnect hardware to show OS-mic-released standby banner ("▶ Resume Mic")
+    await wsm.byTestId('btn-stop-hardware').click();
+    await expect(wsm.byTestId('audio-status-banner')).toBeVisible();
+
+    // Preview staged offline PWA update indicator + Help shortcuts dialog
+    await page.evaluate(() => {
+      const app = document.querySelector('web-sound-meter-app') as unknown as {
+        shellWindow?: { swUpdateReady?: boolean };
+        requestUpdate?: () => void;
+      } | null;
+      if (app?.shellWindow) {
+        app.shellWindow.swUpdateReady = true;
+        app.requestUpdate?.();
+      }
+    });
+    await wsm.byTestId('btn-help').click();
+    await expect(wsm.byTestId('help-modal')).toBeVisible();
+    await wsm.waitForUiSettled();
+    await capturer.capture('t07-01-hardware-resume-and-help', page);
 
     await context.close();
   }

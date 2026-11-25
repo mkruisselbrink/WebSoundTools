@@ -26,8 +26,8 @@ export interface SidebarViewProps {
 
 export function renderSidebar(props: SidebarViewProps): TemplateResult {
   return html`
-    <aside class="sidebar">
-      <div class="foh-form-section">
+    <aside class="sidebar" data-doc-region="tuning-sidebar">
+      <div class="foh-form-section" data-doc-region="sources-card">
         ${renderEntityTreeSection({
           title: `Sources (${props.allSources.length})`,
           listTestId: 'source-list',

@@ -19,7 +19,11 @@ export function renderStoredInspector(
   handlers: StoredInspectorHandlers
 ): TemplateResult {
   return html`
-    <div class="foh-form-section" data-testid="inspector-stored-source">
+    <div
+      class="foh-form-section"
+      data-testid="inspector-stored-source"
+      data-doc-region="stored-inspector"
+    >
       <div class="foh-form-section-title">
         <span>Stored Trace</span>
         <div style="display:flex;gap:4px;">

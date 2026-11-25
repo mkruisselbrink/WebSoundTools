@@ -149,6 +149,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
       .open=${props.open}
       modalTitle="Mixer Input Watch & Patch Presets"
       maxWidth="660px"
+      docRegion="mixer-watch-modal"
       dialogTestId="mixer-watch-modal"
       @close-modal=${props.onClose}
     >

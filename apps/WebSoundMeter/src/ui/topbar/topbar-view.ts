@@ -73,6 +73,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
       role="toolbar"
       aria-label="WebSoundMeter Workspace Toolbar"
       data-testid="app-topbar"
+      data-doc-region="topbar"
       data-wco-visible=${String(Boolean(props.wcoVisible))}
     >
       <div class="foh-topbar-track">
@@ -210,6 +211,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
                   id="wsm-layout-popover"
                   popover="auto"
                   class="foh-popover"
+                  data-doc-region="layout-popover"
                   @toggle=${(ev: Event) => {
                     if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
                   }}

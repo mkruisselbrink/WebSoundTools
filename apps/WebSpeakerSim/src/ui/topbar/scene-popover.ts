@@ -46,6 +46,7 @@ export function renderScenePopover(props: ScenePopoverProps): TemplateResult {
       id="wss-scene-popover"
       popover="auto"
       class="foh-popover"
+      data-doc-region="scene-popover"
       @toggle=${(ev: Event) => {
         if (popoverRoot) syncAnchoredPopoverToggle(ev, popoverRoot);
       }}

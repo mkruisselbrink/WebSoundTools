@@ -3,103 +3,103 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Captures the 6 WebSoundMeter reference screenshots (`apps/WebSoundMeter/docs/images/01..06*.png`)
- * plus the Predict-to-Measure `.FRD` import & overlay screenshot (`docs/images/02-wsm-import-and-compare-frd.png`).
+ * Captures the 8 WebSoundMeter reference screenshots (`apps/WebSoundMeter/docs/images/01..08*.png`)
+ * plus the Predict-to-Measure `.FRD` import & overlay scene (`docs/images/02-wsm-import-and-compare-frd.png`)
+ * using Markdown-defined `[data-doc-region]` crops and deterministic DSP frame gates.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Browser } from '@playwright/test';
 import { WsmPageDriver } from '../../apps/WebSoundMeter/tests/e2e/wsm-page-driver.ts';
 import {
   createRetinaPage,
   createTouchRetinaPage,
-  sleep,
-} from './generate-screenshots.ts';
+  type SceneCapturer,
+} from './session-helpers.ts';
+
+export const WSM_GUIDE_SCENE_IDS = [
+  'wsm-guide-01-tuning-overview',
+  'wsm-guide-02-delay-and-capture',
+  'wsm-guide-03-virtual-eq-crossovers',
+  'wsm-guide-04-multi-mic-spatial-avg',
+  'wsm-guide-05-live-show-spl-feedback',
+  'wsm-guide-06-advanced-meas-settings',
+  'wsm-guide-07-mobile-show-handheld',
+  'wsm-guide-08-tablet-portrait-show',
+  't04-wsm-import-and-compare-frd',
+] as const;
 
 export interface CaptureWsmGuideParams {
   readonly browser: Browser;
   readonly wsmUrl: string;
-  readonly repoRoot: string;
   readonly exportedFrdPath: string;
+  readonly capturer: SceneCapturer;
 }
 
 export async function captureWsmGuideScenes({
   browser,
   wsmUrl,
-  repoRoot,
   exportedFrdPath,
+  capturer,
 }: CaptureWsmGuideParams): Promise<void> {
-  const wsmOutDir = path.join(repoRoot, 'apps/WebSoundMeter/docs/images');
-  const rootImagesDir = path.join(repoRoot, 'docs/images');
-  fs.mkdirSync(wsmOutDir, { recursive: true });
-  fs.mkdirSync(rootImagesDir, { recursive: true });
-
   console.log('Capturing WebSoundMeter reference & cross-app import screenshots...');
 
-  // 01..04 & 06 — Tuning Mode Alignment, Capture, Virtual EQ, N-Input Spatial Average & Advanced Settings
+  // 01..04 & 06 — Tuning Mode Alignment, Capture, Virtual EQ, Spatial Average & Advanced Settings
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
     await wsm.goto(wsmUrl);
     await wsm.waitForLiveSignal();
-    await sleep(750);
+    await wsm.waitForFrames(10);
 
-    // 01: Tuning Workspace Overview (unaligned 8.50 ms delay + live dBFS meters)
-    await page.screenshot({ path: path.join(wsmOutDir, '01-tuning-workspace-overview.png') });
+    await capturer.capture('wsm-guide-01-tuning-overview', page);
 
-    // 06: Cropped Right Inspector showing expanded Advanced Settings (FFT, Window, Smoothing, Estimator, Filter)
     await wsm.toggleAdvancedMeasurementSettings();
-    await sleep(250);
-    await page.screenshot({
-      path: path.join(wsmOutDir, '06-advanced-measurement-settings.png'),
-      clip: { x: 1096, y: 40, width: 344, height: 860 },
-    });
+    await wsm.waitForUiSettled();
+    await capturer.capture('wsm-guide-06-advanced-meas-settings', page);
     await wsm.toggleAdvancedMeasurementSettings();
 
-    // 02: Lock Delay (8.50 ms) + Capture Stored Trace ("FOH Center Baseline")
     await wsm.applyAutoDelay();
-    await sleep(800);
+    await wsm.waitForFrames(12);
     await wsm.captureStoredTrace('FOH Center Baseline');
-    await sleep(350);
-    await page.screenshot({ path: path.join(wsmOutDir, '02-delay-alignment-and-capture.png') });
+    await wsm.waitForUiSettled();
+    await capturer.capture('wsm-guide-02-delay-and-capture', page);
 
-    // 03: Switch to Transfer Function 2x, Add Virtual EQ + target-aware Auto-Match Room (no steep HPF clipping bottom)
     await wsm.selectLayout('tf-dual');
     await wsm.addVirtualEq({ autoFlatten: true });
-    await sleep(650);
-    await page.screenshot({ path: path.join(wsmOutDir, '03-virtual-eq-and-crossovers.png') });
+    await wsm.waitForFrames(8);
+    await capturer.capture('wsm-guide-03-virtual-eq-crossovers', page);
 
-    // 04: Hide Virtual EQ clutter, add 2nd & 3rd Live Mics, and combine all 3 in N-input Power Average checklist
     await wsm.setSourceVisibilityByName('Virtual EQ #1', false);
     await wsm.addLiveMeasurement('House Left Mid');
     await wsm.selectLiveSlotPreset('comb-filtering');
-    await sleep(700);
+    await wsm.waitForFrames(10);
     await wsm.applyAutoDelay();
 
     await wsm.addLiveMeasurement('Balcony Lip');
     await wsm.selectLiveSlotPreset('flat-delayed');
-    await sleep(700);
+    await wsm.waitForFrames(10);
     await wsm.applyAutoDelay();
-    await sleep(450);
+    await wsm.waitForFrames(6);
 
     await wsm.addMathUnion({
       operation: 'power-avg',
       sourcePatterns: [/Live Measurement/i, /House Left Mid/i, /Balcony Lip/i],
     });
-    await sleep(600);
-    await page.screenshot({ path: path.join(wsmOutDir, '04-multi-mic-spatial-average.png') });
+    await wsm.waitForFrames(8);
+    await capturer.capture('wsm-guide-04-multi-mic-spatial-avg', page);
 
     await context.close();
   }
 
-  // 05 — Live Show Mode (Hardware Mode: Generator safety hidden + Seeded 15m SPL History + Feedback Callouts)
+  // 05 — Desktop Live Show Mode (Hardware Mode: Generator safety hidden + Seeded 15m SPL + Feedback Callouts)
   {
     const { context, page } = await createRetinaPage(browser);
     const wsm = new WsmPageDriver(page);
-    await wsm.installMockUsbHardwareInterface('usb-4ch-interface', 'Focusrite Scarlett 4i4 USB (4ch)', {
-      withFeedbackRings: true,
-    });
+    await wsm.installMockUsbHardwareInterface(
+      'usb-4ch-interface',
+      'Focusrite Scarlett 4i4 USB (4ch)',
+      { withFeedbackRings: true }
+    );
     await wsm.installSeededShowSplHistory({
       slotIds: ['live-measurement'],
       baseSplDbA: 94.8,
@@ -108,22 +108,24 @@ export async function captureWsmGuideScenes({
     await wsm.waitForLiveSignal();
 
     await wsm.selectInputSource('hardware:usb-4ch-interface');
-    await sleep(450);
     await wsm.setMode('show');
     await wsm.setShowSplThresholds(95, 98);
-    await sleep(2200);
-    await page.screenshot({ path: path.join(wsmOutDir, '05-live-show-spl-and-feedback.png') });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(10);
+    await capturer.capture('wsm-guide-05-live-show-spl-feedback', page);
 
     await context.close();
   }
 
-  // 07 — Handheld Phone Live Show Deck (390×844 @ 2x DPR, Coarse Touch + Wake Lock + Ring Banner + RTA)
+  // 07 — Handheld Phone Live Show Deck (390×844 @ 2x DPR)
   {
     const { context, page } = await createTouchRetinaPage(browser, 390, 844);
     const wsm = new WsmPageDriver(page);
-    await wsm.installMockUsbHardwareInterface('usb-4ch-interface', 'Focusrite Scarlett 4i4 USB (4ch)', {
-      withFeedbackRings: true,
-    });
+    await wsm.installMockUsbHardwareInterface(
+      'usb-4ch-interface',
+      'Focusrite Scarlett 4i4 USB (4ch)',
+      { withFeedbackRings: true }
+    );
     await wsm.installSeededShowSplHistory({
       slotIds: ['live-measurement'],
       baseSplDbA: 94.8,
@@ -132,26 +134,26 @@ export async function captureWsmGuideScenes({
     await wsm.waitForLiveSignal();
 
     await wsm.selectInputSource('hardware:usb-4ch-interface');
-    await sleep(450);
     await wsm.setMode('show');
     await wsm.app.getByTestId('mobile-tab-mics').click();
     await wsm.setShowSplThresholds(95, 98);
     await wsm.app.getByTestId('mobile-tab-rta').click();
-    await sleep(2200);
-    await page.screenshot({
-      path: path.join(wsmOutDir, '07-mobile-show-handheld-deck.png'),
-    });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(8);
+    await capturer.capture('wsm-guide-07-mobile-show-handheld', page);
 
     await context.close();
   }
 
-  // 08 — Tablet Portrait Live Show Split-Deck (820×1180 @ 2x DPR, Full-Width Charts Over 2-Col Deck)
+  // 08 — Tablet Portrait Live Show Split-Deck (820×1180 @ 2x DPR)
   {
     const { context, page } = await createTouchRetinaPage(browser, 820, 1180);
     const wsm = new WsmPageDriver(page);
-    await wsm.installMockUsbHardwareInterface('usb-4ch-interface', 'Focusrite Scarlett 4i4 USB (4ch)', {
-      withFeedbackRings: true,
-    });
+    await wsm.installMockUsbHardwareInterface(
+      'usb-4ch-interface',
+      'Focusrite Scarlett 4i4 USB (4ch)',
+      { withFeedbackRings: true }
+    );
     await wsm.installSeededShowSplHistory({
       slotIds: ['live-measurement'],
       baseSplDbA: 94.8,
@@ -160,13 +162,11 @@ export async function captureWsmGuideScenes({
     await wsm.waitForLiveSignal();
 
     await wsm.selectInputSource('hardware:usb-4ch-interface');
-    await sleep(450);
     await wsm.setMode('show');
     await wsm.setShowSplThresholds(95, 98);
-    await sleep(2200);
-    await page.screenshot({
-      path: path.join(wsmOutDir, '08-tablet-portrait-show-split-deck.png'),
-    });
+    await wsm.waitForFeedbackRing(1);
+    await wsm.waitForFrames(8);
+    await capturer.capture('wsm-guide-08-tablet-portrait-show', page);
 
     await context.close();
   }
@@ -181,12 +181,10 @@ export async function captureWsmGuideScenes({
     await wsm.selectLayout('tf-dual');
     await wsm.setOctaveSmoothing('1/3');
     await wsm.applyAutoDelay();
-    await sleep(700);
+    await wsm.waitForFrames(10);
     await wsm.importFrdFile(exportedFrdPath);
-    await sleep(650);
-    await page.screenshot({
-      path: path.join(rootImagesDir, '02-wsm-import-and-compare-frd.png'),
-    });
+    await wsm.waitForFrames(6);
+    await capturer.capture('t04-wsm-import-and-compare-frd', page);
 
     await context.close();
   }

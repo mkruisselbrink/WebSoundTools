@@ -96,6 +96,9 @@ export class FohModal extends LitElement {
   public dialogTestId = '';
 
   @property({ type: String })
+  public docRegion = '';
+
+  @property({ type: String })
   public closeButtonTestId = '';
 
   private pressedOutside = false;
@@ -167,6 +170,7 @@ export class FohModal extends LitElement {
         closedby="any"
         aria-labelledby="foh-modal-title"
         data-testid=${this.dialogTestId || nothing}
+        data-doc-region=${this.docRegion || nothing}
         style="--foh-modal-max-width:${this.maxWidth}"
         @close=${this.handleNativeClose}
         @pointerdown=${this.handlePointerDown}

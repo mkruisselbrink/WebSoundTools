@@ -44,6 +44,7 @@ export function renderHeatmapPopover(props: HeatmapPopoverProps): TemplateResult
       id="wss-heatmap-popover"
       popover="auto"
       class="foh-popover"
+      data-doc-region="heatmap-popover"
       @toggle=${(ev: Event) => {
         if (popoverRoot) syncAnchoredPopoverToggle(ev, popoverRoot);
       }}

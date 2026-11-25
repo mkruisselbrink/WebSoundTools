@@ -84,7 +84,11 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
   const canDeleteSlot = props.liveSlots.length > 1;
 
   return html`
-    <div class="foh-form-section card-live-mics" data-testid="card-live-mics-watch">
+    <div
+      class="foh-form-section card-live-mics"
+      data-testid="card-live-mics-watch"
+      data-doc-region="show-live-mics"
+    >
       <div class="foh-form-section-title">
         <span>Live Mics & SPL Watch (${props.liveSlots.length})</span>
         <div style="display:flex;align-items:center;gap:4px;">
@@ -369,7 +373,11 @@ export function renderFeedbackRingLogCard(
   >
 ): TemplateResult {
   return html`
-    <div class="foh-form-section card-ring-log" data-testid="card-feedback-ring-log">
+    <div
+      class="foh-form-section card-ring-log"
+      data-testid="card-feedback-ring-log"
+      data-doc-region="show-ring-log"
+    >
       <div class="foh-form-section-title">
         <span>Feedback Ring Log (${props.feedbackRingLog.length})</span>
         <button
@@ -477,7 +485,11 @@ export function renderShowLimitsExportCard(
   >
 ): TemplateResult {
   return html`
-    <div class="foh-form-section card-show-limits" data-testid="card-show-limits-export">
+    <div
+      class="foh-form-section card-show-limits"
+      data-testid="card-show-limits-export"
+      data-doc-region="show-limits"
+    >
       <div class="foh-form-section-title">
         <span>Show Limits & Log</span>
         <div style="display:flex;gap:4px;">
@@ -570,7 +582,11 @@ export function renderShowLimitsExportCard(
 
 export function renderShowSidebar(props: ShowSidebarViewProps): TemplateResult {
   return html`
-    <aside class="sidebar show-sidebar" data-testid="show-sidebar">
+    <aside
+      class="sidebar show-sidebar"
+      data-testid="show-sidebar"
+      data-doc-region="show-sidebar"
+    >
       ${renderLiveMicsWatchCard(props)}
       ${renderFeedbackRingLogCard(props)}
       ${renderShowLimitsExportCard(props)}

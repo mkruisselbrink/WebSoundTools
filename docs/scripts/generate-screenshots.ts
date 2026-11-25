@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Regenerates all Retina (2x DPR, 1440×900 + targeted UI crops) documentation and tutorial
- * screenshots across `docs/images/`, `docs/tutorials/images/`, `apps/WebSoundMeter/docs/images/`,
- * and `apps/WebSpeakerSim/docs/images/`.
+ * Regenerates all Retina (2x DPR) documentation and tutorial screenshots directly from
+ * `<!-- screenshot ... -->` YAML metadata blocks embedded in Markdown files across
+ * `docs/tutorials/*.md`, `apps/WebSoundMeter/docs/user-guide.md`, and
+ * `apps/WebSpeakerSim/docs/user-guide.md`, then downscales clean PWA manifest carousels.
  *
  * Executed directly via Node 26 native TypeScript:
  *   npm run docs:screenshots
@@ -14,64 +15,23 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { chromium, type Browser } from '@playwright/test';
 import { syncPwaManifestScreenshots } from './pwa-manifest-screenshots.ts';
-import { captureTutorialScenes } from './tutorial-scenes.ts';
-import { captureWsmGuideScenes } from './wsm-guide-scenes.ts';
-import { captureWssGuideScenes } from './wss-guide-scenes.ts';
+import { parseAllMarkdownScreenshotSpecs } from './screenshot-spec.ts';
+import { createSceneCapturer } from './session-helpers.ts';
+import { TUTORIAL_SCENE_IDS, captureTutorialScenes } from './tutorial-scenes.ts';
+import { WSM_GUIDE_SCENE_IDS, captureWsmGuideScenes } from './wsm-guide-scenes.ts';
+import { WSS_GUIDE_SCENE_IDS, captureWssGuideScenes } from './wss-guide-scenes.ts';
+
+export const ALL_REGISTERED_SCENE_IDS: ReadonlySet<string> = new Set([
+  ...WSS_GUIDE_SCENE_IDS,
+  ...WSM_GUIDE_SCENE_IDS,
+  ...TUTORIAL_SCENE_IDS,
+]);
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const WSM_PORT = Number(process.env.WSM_SCREENSHOT_PORT || 5373);
 const WSS_PORT = Number(process.env.WSS_SCREENSHOT_PORT || 5374);
-
-export const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-export interface RetinaSession {
-  readonly context: BrowserContext;
-  readonly page: Page;
-}
-
-export async function createRetinaPage(browser: Browser): Promise<RetinaSession> {
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 2,
-    acceptDownloads: true,
-  });
-  context.setDefaultTimeout(4500);
-  const page = await context.newPage();
-  return { context, page };
-}
-
-export async function createTouchRetinaPage(
-  browser: Browser,
-  width: number,
-  height: number
-): Promise<RetinaSession> {
-  const context = await browser.newContext({
-    viewport: { width, height },
-    deviceScaleFactor: 2,
-    hasTouch: true,
-    isMobile: width < 680,
-    acceptDownloads: true,
-  });
-  context.setDefaultTimeout(4500);
-  const page = await context.newPage();
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'wakeLock', {
-      configurable: true,
-      value: {
-        request: async () => ({
-          released: false,
-          release: async () => {},
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }),
-      },
-    });
-  });
-  return { context, page };
-}
 
 function startPreviewServer(
   appFolder: 'WebSoundMeter' | 'WebSpeakerSim',
@@ -91,7 +51,11 @@ function startPreviewServer(
     let stderrBuf = '';
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
-      reject(new Error(`Timed out starting ${appFolder} preview on port ${port}: ${stderrBuf}`));
+      reject(
+        new Error(
+          `Timed out starting ${appFolder} preview on port ${port}: ${stderrBuf}`
+        )
+      );
     }, 15000);
 
     proc.stdout?.on('data', (chunk: Buffer) => {
@@ -133,7 +97,11 @@ function cleanGeneratedPngDirs(repoRoot: string): void {
   }
 }
 
-async function main(): Promise<void> {
+export async function runScreenshotGeneration(): Promise<void> {
+  const specs = parseAllMarkdownScreenshotSpecs(REPO_ROOT);
+  console.log(`Parsed ${specs.length} Markdown <!-- screenshot --> specs.`);
+  const capturer = createSceneCapturer(specs);
+
   cleanGeneratedPngDirs(REPO_ROOT);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wst-screenshots-'));
   console.log('Starting Vite preview servers for WebSoundMeter & WebSpeakerSim...');
@@ -150,28 +118,31 @@ async function main(): Promise<void> {
     const { exportedFrdPath } = await captureWssGuideScenes({
       browser,
       wssUrl,
-      repoRoot: REPO_ROOT,
       tmpDir,
+      capturer,
     });
 
     await captureWsmGuideScenes({
       browser,
       wsmUrl,
-      repoRoot: REPO_ROOT,
       exportedFrdPath,
+      capturer,
     });
 
     await captureTutorialScenes({
       browser,
       wsmUrl,
       wssUrl,
-      repoRoot: REPO_ROOT,
       exportedFrdPath,
+      capturer,
     });
 
+    capturer.assertAllCaptured();
     await syncPwaManifestScreenshots(browser, REPO_ROOT);
 
-    console.log('Successfully generated all Retina documentation & tutorial screenshots.');
+    console.log(
+      `Successfully generated all ${specs.length} Retina documentation & tutorial screenshots.`
+    );
   } finally {
     if (browser) {
       await browser.close();
@@ -182,8 +153,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
-  console.error(err);
-  process.exit(1);
-});
-
+if (import.meta.main) {
+  runScreenshotGeneration().catch((err: unknown) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

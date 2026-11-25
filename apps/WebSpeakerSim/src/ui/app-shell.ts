@@ -453,6 +453,7 @@ export class WebSpeakerSimApp extends LitElement {
               ? html`
                   <wss-viewport-panel
                     data-testid="viewport-plan"
+                    data-doc-region="viewport-plan"
                     mode="plan"
                     .store=${this.store}
                     .snapshot=${this.snapshot}
@@ -464,6 +465,7 @@ export class WebSpeakerSimApp extends LitElement {
               ? html`
                   <wss-viewport-panel
                     data-testid="viewport-section"
+                    data-doc-region="viewport-section"
                     mode="section"
                     .store=${this.store}
                     .snapshot=${this.snapshot}
@@ -475,7 +477,11 @@ export class WebSpeakerSimApp extends LitElement {
 
           ${this.chartDrawerExpanded
             ? html`
-                <div class="chart-drawer" data-testid="chart-drawer">
+                <div
+                  class="chart-drawer"
+                  data-testid="chart-drawer"
+                  data-doc-region="chart-drawer"
+                >
                   <wss-chart-panel
                     .store=${this.store}
                     .snapshot=${this.snapshot}
@@ -486,9 +492,13 @@ export class WebSpeakerSimApp extends LitElement {
             : ''}
         </div>
 
-        <aside class="right-dock">
+        <aside class="right-dock" data-doc-region="right-dock">
           ${renderSceneSidebar(this.store)}
-          <div class="inspector-pane" data-testid="inspector-pane">
+          <div
+            class="inspector-pane"
+            data-testid="inspector-pane"
+            data-doc-region="inspector-pane"
+          >
             ${renderEntityInspector(this.store, this.snapshot, {
               refGroupId: this.alignRefGroupId,
               targetGroupId: this.alignTargetGroupId,

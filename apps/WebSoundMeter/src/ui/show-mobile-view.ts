@@ -175,11 +175,16 @@ export function renderMobileShowWorkspace(
   };
 
   return html`
-    <div class="mobile-show-shell" data-testid="mobile-show-shell">
+    <div
+      class="mobile-show-shell"
+      data-testid="mobile-show-shell"
+      data-doc-region="mobile-show-shell"
+    >
       <!-- 1. Pinned Hero SPL & Compliance Scoreboard -->
       <section
         class="mobile-spl-hero ${alertClass}"
         data-testid="spl-meter-bar"
+        data-doc-region="mobile-spl-hero"
         aria-label="Broadband SPL & Show Compliance Scoreboard"
       >
         <div class="mobile-spl-hero-top">

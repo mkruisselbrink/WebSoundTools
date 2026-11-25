@@ -36,6 +36,7 @@ export class SimulationController {
   private inFlight = false;
   private pendingQuality: 'coarse' | 'fine' | null = null;
   private refineTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly idleWaiters = new Set<() => void>();
 
   private latestSnapshot: SimulationSnapshot = {
     planGrid: null,
@@ -84,6 +85,33 @@ export class SimulationController {
     return this.latestSnapshot;
   }
 
+  public get isIdle(): boolean {
+    return (
+      !this.inFlight &&
+      this.pendingQuality === null &&
+      this.refineTimer === null &&
+      this.latestSnapshot.planGrid !== null
+    );
+  }
+
+  public whenIdle(): Promise<void> {
+    if (this.isIdle) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.add(resolve);
+    });
+  }
+
+  private flushIdleWaitersIfIdle(): void {
+    if (!this.isIdle || this.idleWaiters.size === 0) return;
+    const waiters = Array.from(this.idleWaiters);
+    this.idleWaiters.clear();
+    for (const resolve of waiters) {
+      resolve();
+    }
+  }
+
   public subscribe(listener: SimulationSnapshotListener): () => void {
     this.listeners.add(listener);
     if (this.latestSnapshot.planGrid) {
@@ -106,6 +134,11 @@ export class SimulationController {
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;
+    }
+    const waiters = Array.from(this.idleWaiters);
+    this.idleWaiters.clear();
+    for (const resolve of waiters) {
+      resolve();
     }
   }
 
@@ -211,6 +244,8 @@ export class SimulationController {
       const nextQ = this.pendingQuality;
       this.pendingQuality = null;
       this.dispatchNow(nextQ);
+    } else {
+      this.flushIdleWaitersIfIdle();
     }
   }
 }

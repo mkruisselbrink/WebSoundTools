@@ -92,6 +92,7 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
         id="wsm-gen-popover"
         popover="auto"
         class="foh-popover"
+        data-doc-region="gen-popover"
         @toggle=${(ev: Event) => {
           if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
         }}

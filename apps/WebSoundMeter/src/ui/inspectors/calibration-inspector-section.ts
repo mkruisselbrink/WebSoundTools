@@ -64,6 +64,7 @@ export function renderSplCalibratorPopover(params: {
       id=${popoverId}
       popover="auto"
       class="foh-popover"
+      data-doc-region="cal-popover"
       @click=${(e: Event) => e.stopPropagation()}
       @toggle=${(ev: Event) => {
         if (popoverRoot) syncAnchoredPopoverToggle(ev, popoverRoot);

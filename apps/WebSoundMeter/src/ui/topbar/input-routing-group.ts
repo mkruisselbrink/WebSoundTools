@@ -161,6 +161,7 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
         id="wsm-io-popover"
         popover="auto"
         class="foh-popover"
+        data-doc-region="io-popover"
         @toggle=${(ev: Event) => {
           if (props.popoverRoot) syncAnchoredPopoverToggle(ev, props.popoverRoot);
         }}

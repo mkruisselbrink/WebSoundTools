@@ -33,9 +33,13 @@ function collectFiles(dir: string, ext: string, ignoreDirs: ReadonlySet<string>)
 }
 
 function stripCodeBlocksAndSpans(markdown: string): string {
-  // Strip fenced code blocks (3+ backticks or tildes) and inline code spans
-  const withoutFenced = markdown.replace(/^(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?^(?:`{3,}|~{3,})\s*$/gm, '');
-  return withoutFenced.replace(/`[^`\n]+`/g, '');
+  // Strip fenced code blocks, HTML comments, and inline code spans
+  const withoutFenced = markdown.replace(
+    /^(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?^(?:`{3,}|~{3,})\s*$/gm,
+    ''
+  );
+  const withoutComments = withoutFenced.replace(/<!--[\s\S]*?-->/g, '');
+  return withoutComments.replace(/`[^`\n]+`/g, '');
 }
 
 function githubSlugifyHeading(rawHeading: string): string {
@@ -375,11 +379,20 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
       const lines = fs.readFileSync(mdFile, 'utf8').split('\n');
       let inFence = false;
       let fenceLang = '';
+      let inHtmlComment = false;
       let expectedTableCols = -1;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const lineNo = i + 1;
+
+        if (inHtmlComment) {
+          if (line.includes('-->')) {
+            inHtmlComment = false;
+          }
+          continue;
+        }
+
         const fenceMatch = /^(?:`{3,}|~{3,})(.*)$/.exec(line.trim());
 
         if (fenceMatch) {
@@ -391,6 +404,13 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
             fenceLang = '';
           }
           expectedTableCols = -1;
+          continue;
+        }
+
+        if (!inFence && line.trimStart().startsWith('<!--')) {
+          if (!line.includes('-->')) {
+            inHtmlComment = true;
+          }
           continue;
         }
 

@@ -308,6 +308,7 @@ export class FohHelpModal extends LitElement {
         .open=${this.open}
         .modalTitle=${`${this.appName} — Help, Shortcuts & Open Source`}
         maxWidth="620px"
+        docRegion="help-modal"
         .dialogTestId=${this.dialogTestId}
         .closeButtonTestId=${this.closeButtonTestId}
       >

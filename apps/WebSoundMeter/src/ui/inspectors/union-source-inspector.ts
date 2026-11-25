@@ -34,7 +34,11 @@ export function renderUnionInspector(
   const selectedIds = new Set(union.sourceIds);
 
   return html`
-    <div class="foh-form-section" data-testid="inspector-union-source">
+    <div
+      class="foh-form-section"
+      data-testid="inspector-union-source"
+      data-doc-region="union-inspector"
+    >
       <div class="foh-form-section-title">
         <span>${union.name}</span>
         ${handlers.onDelete

@@ -125,7 +125,11 @@ export function renderLiveMeasurementInspector(
   const showAdvanced = handlers.showAdvanced ?? false;
 
   return html`
-    <div class="foh-form-section" data-testid="inspector-live-measurement">
+    <div
+      class="foh-form-section"
+      data-testid="inspector-live-measurement"
+      data-doc-region="live-inspector"
+    >
       <div class="foh-form-section-title">
         <span>${slot ? `${slot.name} Settings` : 'Live Measurement Settings'}</span>
         <div style="display:flex;gap:4px;">

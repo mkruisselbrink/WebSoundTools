@@ -35,7 +35,11 @@ export function renderEqInspector(
   const dsp = resolveEqDspConfig(eq);
 
   return html`
-    <div class="foh-form-section" data-testid="inspector-eq-source">
+    <div
+      class="foh-form-section"
+      data-testid="inspector-eq-source"
+      data-doc-region="eq-inspector"
+    >
       <div class="foh-form-section-title">
         <span>${eq.name}</span>
         <div style="display:flex;gap:4px;">

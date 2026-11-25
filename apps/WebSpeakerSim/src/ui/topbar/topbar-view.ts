@@ -89,6 +89,7 @@ export function renderTopbar(
       role="toolbar"
       aria-label="WebSpeakerSim Workspace Toolbar"
       data-testid="app-topbar"
+      data-doc-region="topbar"
       data-wco-visible=${String(Boolean(cb.wcoVisible))}
     >
       <div class="foh-topbar-track">

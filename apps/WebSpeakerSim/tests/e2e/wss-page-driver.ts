@@ -72,6 +72,36 @@ export class WssPageDriver {
     await expect(metrics).toBeVisible({ timeout: 8000 });
     await expect(metrics).toContainText('Mean');
     await expect(metrics).toContainText('dB');
+    await this.waitForUiSettled();
+  }
+
+  async waitForUiSettled(): Promise<void> {
+    await this.page.evaluate(async () => {
+      const app = document.querySelector('web-speaker-sim-app') as unknown as {
+        simController?: { whenIdle?: () => Promise<void> };
+      } | null;
+      await app?.simController?.whenIdle?.();
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+      const flushLit = async (root: ParentNode): Promise<void> => {
+        const els = Array.from(root.querySelectorAll('*'));
+        for (const el of els) {
+          const litEl = el as Element & { updateComplete?: Promise<boolean> };
+          if (litEl.updateComplete) {
+            await litEl.updateComplete;
+          }
+          if (el.shadowRoot) {
+            await flushLit(el.shadowRoot);
+          }
+        }
+      };
+      await flushLit(document);
+      await flushLit(document);
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+    });
   }
 
   async selectVenuePreset(presetId: VenuePresetId): Promise<void> {

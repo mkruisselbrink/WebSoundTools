@@ -23,7 +23,11 @@ export function renderSceneSidebar(store: ProjectStore): TemplateResult {
     scene.dspGroups.find((g) => g.id === groupId)?.color ?? '#38bdf8';
 
   return html`
-    <div class="scene-sidebar" data-testid="scene-sidebar">
+    <div
+      class="scene-sidebar"
+      data-testid="scene-sidebar"
+      data-doc-region="scene-sidebar"
+    >
       ${renderEntityTreeSection({
         title: `Point Sources (${scene.pointSources.length})`,
         headerActions: html`
