@@ -113,6 +113,7 @@ export class WssTopbar extends LitElement {
   @property({ type: String }) public layoutMode: ViewportLayoutMode = 'split';
   @property({ type: Boolean }) public chartDrawerExpanded = true;
   @property({ type: Boolean }) public wcoVisible = false;
+  @property({ type: Boolean }) public updateReady = false;
   @property({ type: Boolean }) public isSceneModified = false;
 
   @property({ attribute: false }) public onSelectPreset: (presetId: string) => void = () => {};
@@ -156,6 +157,7 @@ export class WssTopbar extends LitElement {
       this.chartDrawerExpanded,
       {
         wcoVisible: this.wcoVisible,
+        updateReady: this.updateReady,
         isSceneModified: this.isSceneModified,
         popoverRoot: this.renderRoot,
         onSelectPreset: this.onSelectPreset,

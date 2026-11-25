@@ -8,7 +8,10 @@
  * and `<wss-speaker-library-modal>`.
  */
 
-import { observeWindowControlsOverlay } from '@foh/pwa/client';
+import {
+  observeServiceWorkerUpdate,
+  observeWindowControlsOverlay,
+} from '@foh/pwa/client';
 import '@foh/ui';
 import { ShellWindowController, hasOpenPopover } from '@foh/ui';
 import { LitElement, html } from 'lit';
@@ -92,6 +95,8 @@ export class WebSpeakerSimApp extends LitElement {
 
   private readonly shellWindow = new ShellWindowController(this, {
     observeWco: (cb) => observeWindowControlsOverlay((snap) => cb(snap.visible)),
+    observeSwUpdate: observeServiceWorkerUpdate,
+    onFlushPersistence: () => this.flushAutosave(),
     onKeyDown: (ev) => this.handleKeyDown(ev),
   });
 
@@ -219,15 +224,22 @@ export class WebSpeakerSimApp extends LitElement {
       clearTimeout(this.autosaveTimer);
     }
     this.autosaveTimer = setTimeout(() => {
-      this.autosaveTimer = null;
-      saveWorkspaceSession({
-        activePresetId: this.activePresetId,
-        scene: this.store.scene,
-        colormap: this.store.colormap,
-        layoutMode: this.layoutMode,
-        chartDrawerExpanded: this.chartDrawerExpanded,
-      });
+      this.flushAutosave();
     }, 220);
+  }
+
+  private flushAutosave(): void {
+    if (this.autosaveTimer !== null) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+    saveWorkspaceSession({
+      activePresetId: this.activePresetId,
+      scene: this.store.scene,
+      colormap: this.store.colormap,
+      layoutMode: this.layoutMode,
+      chartDrawerExpanded: this.chartDrawerExpanded,
+    });
   }
 
   private syncUrlBar(): void {
@@ -301,6 +313,7 @@ export class WebSpeakerSimApp extends LitElement {
         .layoutMode=${this.layoutMode}
         .chartDrawerExpanded=${this.chartDrawerExpanded}
         .wcoVisible=${this.shellWindow.wcoVisible}
+        .updateReady=${this.shellWindow.swUpdateReady}
         .isSceneModified=${this.isSceneModified}
         .onSelectPreset=${(id: string) => this.handleSelectPreset(id)}
         .onOpenProjectsModal=${() => {
@@ -453,12 +466,14 @@ export class WebSpeakerSimApp extends LitElement {
 
       <foh-help-modal
         .open=${this.helpModalOpen}
+        .updateReady=${this.shellWindow.swUpdateReady}
         appName="WebSpeakerSim"
         .appSummary=${WSS_HELP_SUMMARY}
         .resources=${WSS_HELP_RESOURCES}
         .shortcuts=${WSS_HELP_SHORTCUTS}
         .attribution=${WSS_HELP_ATTRIBUTION}
         dialogTestId="help-modal"
+        @apply-app-update=${() => this.shellWindow.applyServiceWorkerUpdate()}
         @close-modal=${() => {
           this.helpModalOpen = false;
         }}

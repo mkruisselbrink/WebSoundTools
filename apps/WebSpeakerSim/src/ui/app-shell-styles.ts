@@ -14,23 +14,6 @@ export const appShellStyles = [
   fohPanelsCss,
   css`
     :host {
-      --bg-app: var(--_foh-bg-app);
-      --bg-panel: var(--_foh-bg-panel);
-      --bg-header: var(--_foh-bg-header);
-      --bg-elevated: var(--_foh-bg-elevated);
-      --bg-input: var(--_foh-bg-input);
-      --border-subtle: var(--_foh-border-subtle);
-      --border-strong: var(--_foh-border-strong);
-      --text-primary: var(--_foh-text-primary);
-      --text-secondary: var(--_foh-text-secondary);
-      --text-muted: var(--_foh-text-muted);
-      --accent: var(--_foh-accent);
-      --accent-bright: var(--_foh-accent-bright);
-      --success: var(--_foh-success);
-      --warning: var(--_foh-warning);
-      --danger: var(--_foh-danger);
-      --font-mono: var(--_foh-font-mono);
-
       display: flex;
       flex-direction: column;
       width: 100%;

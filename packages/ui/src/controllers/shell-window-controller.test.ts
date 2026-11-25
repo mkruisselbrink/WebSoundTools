@@ -38,6 +38,39 @@ describe('ShellWindowController', () => {
     expect(unsubSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('tracks staged SW updates and flushes persistence before applying update', () => {
+    let swCb: ((apply: () => void) => void) | undefined;
+    const applySpy = vi.fn();
+    const flushSpy = vi.fn();
+    const requestUpdate = vi.fn(() => {});
+    const host: ReactiveControllerHost = {
+      addController: vi.fn(),
+      removeController: vi.fn(),
+      requestUpdate,
+      updateComplete: Promise.resolve(true),
+    };
+
+    const ctrl = new ShellWindowController(host, {
+      onFlushPersistence: flushSpy,
+      observeSwUpdate: (cb) => {
+        swCb = cb;
+        return () => {};
+      },
+    });
+
+    ctrl.hostConnected();
+    expect(ctrl.swUpdateReady).toBe(false);
+
+    swCb?.(applySpy);
+    expect(ctrl.swUpdateReady).toBe(true);
+    expect(requestUpdate).toHaveBeenCalledTimes(1);
+
+    ctrl.applyServiceWorkerUpdate();
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    expect(applySpy).toHaveBeenCalledTimes(1);
+    ctrl.hostDisconnected();
+  });
+
   it('blurs focused number inputs across composedPath on wheel without touching unfocused or text inputs', () => {
     const focusedNumberBlur = vi.fn();
     const focusedNumber = {

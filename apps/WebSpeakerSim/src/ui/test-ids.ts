@@ -33,7 +33,6 @@ export const WSS_TEST_IDS = {
   layoutSectionBtn: 'layout-section',
   toggleChartsBtn: 'btn-toggle-charts',
   helpBtn: 'btn-help',
-  githubLink: 'link-github',
   helpModal: 'help-modal',
   helpIssuesLink: 'help-link-issues',
   helpSourceLink: 'help-link-source',

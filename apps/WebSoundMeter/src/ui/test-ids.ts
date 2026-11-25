@@ -39,7 +39,6 @@ export const WSM_TEST_IDS = {
   splStatusBadge: 'spl-status-badge',
   splShowComplianceMetrics: 'spl-show-compliance-metrics',
   helpBtn: 'btn-help',
-  githubLink: 'link-github',
   helpModal: 'help-modal',
   helpIssuesLink: 'help-link-issues',
   helpSourceLink: 'help-link-source',

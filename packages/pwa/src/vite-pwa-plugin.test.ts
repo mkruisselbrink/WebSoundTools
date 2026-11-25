@@ -23,6 +23,7 @@ describe('vite-pwa-plugin', () => {
     ]);
     expect(script).toContain('const CACHE_PREFIX = "wsm-precache-";');
     expect(script).toContain('Cross-Origin-Embedder-Policy');
+    expect(script).toContain("event.data.type === 'SKIP_WAITING'");
 
     const plugin = fohPwaPlugin({ cachePrefix: 'wsm-precache-', cacheVersion: 'v2' });
     expect(plugin.name).toBe('foh-offline-sw-plugin');

@@ -139,6 +139,9 @@ export class WsmTopbar extends LitElement {
   @property({ type: Boolean })
   public wcoVisible = false;
 
+  @property({ type: Boolean })
+  public updateReady = false;
+
   @property({ attribute: false })
   public onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
 
@@ -168,6 +171,7 @@ export class WsmTopbar extends LitElement {
       layoutPreset: this.workspace.layoutPreset,
       isMobileShow: this.isMobileShow,
       wcoVisible: this.wcoVisible,
+      updateReady: this.updateReady,
       canUndo: this.sources.canUndo,
       canRedo: this.sources.canRedo,
       popoverRoot: this.renderRoot,

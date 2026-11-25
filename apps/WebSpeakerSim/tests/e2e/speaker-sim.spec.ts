@@ -18,13 +18,13 @@ test.describe('WebSpeakerSim End-to-End Application Suite', () => {
     await expect(page.getByTestId('viewport-section')).toBeVisible();
     await expect(page.getByTestId('chart-drawer')).toBeVisible();
 
-    // Verify Topbar GitHub link & Help modal open/close via button and Escape
-    await expect(page.getByTestId('link-github')).toHaveAttribute(
+    // Verify Help modal open/close via button and Escape
+    await page.getByTestId('btn-help').click();
+    await expect(page.getByTestId('help-modal')).toBeVisible();
+    await expect(page.getByTestId('help-link-source')).toHaveAttribute(
       'href',
       'https://github.com/mkruisselbrink/WebSoundTools'
     );
-    await page.getByTestId('btn-help').click();
-    await expect(page.getByTestId('help-modal')).toBeVisible();
     await expect(page.getByTestId('help-link-issues')).toHaveAttribute(
       'href',
       'https://github.com/mkruisselbrink/WebSoundTools/issues'

@@ -667,6 +667,19 @@ export class SourceStore {
     this.authoredStore.endTransaction();
   }
 
+  flushPendingPersistence(): void {
+    this.authoredStore.endTransaction();
+    if (this.eqDragSaveTimer !== null) {
+      clearTimeout(this.eqDragSaveTimer);
+      this.eqDragSaveTimer = null;
+    }
+    if (this.pendingDraggedEq) {
+      const toSave = this.pendingDraggedEq;
+      this.pendingDraggedEq = null;
+      void this.persistence.saveEq?.(toSave);
+    }
+  }
+
   private scheduleDebouncedEqSave(updated: EqualizerSourceConfig): void {
     if (this.eqDragSaveTimer === null) {
       void this.persistence.saveEq?.(updated);

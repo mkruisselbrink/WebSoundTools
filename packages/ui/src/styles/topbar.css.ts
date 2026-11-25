@@ -210,7 +210,20 @@ export const fohTopbarCss = css`
   }
 
   .foh-tb-icon-btn {
+    position: relative;
     padding: 0 6px;
+  }
+
+  .foh-update-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: var(--_foh-accent-bright, #38bdf8);
+    box-shadow: 0 0 0 1.5px var(--_foh-bg-elevated, #162033);
+    pointer-events: none;
   }
 
   @media (hover: hover) {

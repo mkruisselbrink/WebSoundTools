@@ -252,6 +252,11 @@ export class AudioSessionController {
     });
   }
 
+  public flushPendingPersistence(): void {
+    this.sourceStore.flushPendingPersistence();
+    this.persistState('none');
+  }
+
   public syncWakeLock(): void {
     void this.wakeLock.setDesired(
       this.workspace.workspaceMode === 'show' && !this.isPaused

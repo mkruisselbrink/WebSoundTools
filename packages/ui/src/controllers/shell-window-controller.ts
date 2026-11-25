@@ -44,6 +44,12 @@ export interface ShellWindowControllerOptions {
   readonly onKeyDown?: (ev: KeyboardEvent) => void;
   /** Browser Back/Forward `popstate` handler attached on `window` while connected. */
   readonly onPopState?: (ev: PopStateEvent) => void;
+  /**
+   * Invoked immediately when the document transitions to `visibilityState === 'hidden'`,
+   * on `window` `pagehide`, and right before applying a staged Service Worker update
+   * so debounced `localStorage` / `IndexedDB` writes are never lost on tab close or swipe-away.
+   */
+  readonly onFlushPersistence?: () => void;
   /** Optional responsive viewport media query (e.g. `'(max-width: 679px)'`). */
   readonly mediaQuery?: string;
   /** Invoked on connect and whenever `mediaQuery` match state changes. */
@@ -53,6 +59,11 @@ export interface ShellWindowControllerOptions {
    * from `@foh/pwa/client`), keeping `@foh/ui` decoupled from `@foh/pwa`.
    */
   readonly observeWco?: (onChange: (visible: boolean) => void) => () => void;
+  /**
+   * Optional staged Service Worker update observer (e.g. `observeServiceWorkerUpdate`
+   * from `@foh/pwa/client`).
+   */
+  readonly observeSwUpdate?: (onReady: (applyUpdate: () => void) => void) => () => void;
   /**
    * Blurs focused `<input type="number">` elements on `wheel` capture so scrolling
    * over an inspector field scrolls the sidebar instead of stepping live parameters.
@@ -68,17 +79,20 @@ const WHEEL_CAPTURE_OPTIONS: AddEventListenerOptions = {
 
 /**
  * Reusable Lit `ReactiveController` managing top-level application shell `window` listeners
- * (`keydown`, `popstate`, passive `<input type="number">` wheel guard, responsive `matchMedia`,
- * and PWA Window Controls Overlay state).
+ * (`keydown`, `popstate`, `visibilitychange`/`pagehide` persistence flush, passive
+ * `<input type="number">` wheel guard, responsive `matchMedia`, WCO state, and staged PWA updates).
  */
 export class ShellWindowController implements ReactiveController {
   public wcoVisible = false;
   public mediaMatches = false;
+  public swUpdateReady = false;
 
   private readonly host: ReactiveControllerHost;
   private readonly options: ShellWindowControllerOptions;
   private mql: MediaQueryList | null = null;
   private unsubWco: (() => void) | null = null;
+  private unsubSwUpdate: (() => void) | null = null;
+  private applySwUpdateFn: (() => void) | null = null;
 
   private readonly handleMediaChange = (ev: MediaQueryListEvent): void => {
     this.mediaMatches = ev.matches;
@@ -90,10 +104,27 @@ export class ShellWindowController implements ReactiveController {
     blurFocusedNumberInputOnWheel(ev);
   };
 
+  private readonly handleVisibilityChange = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      this.options.onFlushPersistence?.();
+    }
+  };
+
+  private readonly handlePageHide = (): void => {
+    this.options.onFlushPersistence?.();
+  };
+
   constructor(host: ReactiveControllerHost, options: ShellWindowControllerOptions) {
     this.host = host;
     this.options = options;
     host.addController(this);
+  }
+
+  /** Flushes pending persistence and activates the waiting Service Worker (`SKIP_WAITING`). */
+  public applyServiceWorkerUpdate(): void {
+    if (!this.applySwUpdateFn) return;
+    this.options.onFlushPersistence?.();
+    this.applySwUpdateFn();
   }
 
   public hostConnected(): void {
@@ -103,6 +134,12 @@ export class ShellWindowController implements ReactiveController {
       }
       if (this.options.onPopState) {
         window.addEventListener('popstate', this.options.onPopState);
+      }
+      if (this.options.onFlushPersistence) {
+        window.addEventListener('pagehide', this.handlePageHide);
+        if (typeof document !== 'undefined') {
+          document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        }
       }
       if (this.options.disableNumberInputWheel !== false) {
         window.addEventListener('wheel', this.handleWindowWheel, WHEEL_CAPTURE_OPTIONS);
@@ -123,6 +160,16 @@ export class ShellWindowController implements ReactiveController {
         }
       });
     }
+
+    if (this.options.observeSwUpdate) {
+      this.unsubSwUpdate = this.options.observeSwUpdate((apply) => {
+        this.applySwUpdateFn = apply;
+        if (!this.swUpdateReady) {
+          this.swUpdateReady = true;
+          this.host.requestUpdate();
+        }
+      });
+    }
   }
 
   public hostDisconnected(): void {
@@ -133,6 +180,12 @@ export class ShellWindowController implements ReactiveController {
       if (this.options.onPopState) {
         window.removeEventListener('popstate', this.options.onPopState);
       }
+      if (this.options.onFlushPersistence) {
+        window.removeEventListener('pagehide', this.handlePageHide);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+        }
+      }
       if (this.options.disableNumberInputWheel !== false) {
         window.removeEventListener('wheel', this.handleWindowWheel, true);
       }
@@ -141,5 +194,7 @@ export class ShellWindowController implements ReactiveController {
     this.mql = null;
     this.unsubWco?.();
     this.unsubWco = null;
+    this.unsubSwUpdate?.();
+    this.unsubSwUpdate = null;
   }
 }

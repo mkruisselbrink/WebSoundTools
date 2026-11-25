@@ -32,13 +32,13 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     const refDelayVal = Number(await refDelayInput.inputValue());
     expect(refDelayVal).toBeCloseTo(8.5, 1);
 
-    // Verify Topbar GitHub link and Help modal non-overlapping resource cards + Escape close
-    await expect(wsm.app.getByTestId('link-github')).toHaveAttribute(
+    // Verify Help modal non-overlapping resource cards + Escape close
+    await wsm.app.getByTestId('btn-help').click();
+    await expect(wsm.app.getByTestId('help-modal')).toBeVisible();
+    await expect(wsm.app.getByTestId('help-link-source')).toHaveAttribute(
       'href',
       'https://github.com/mkruisselbrink/WebSoundTools'
     );
-    await wsm.app.getByTestId('btn-help').click();
-    await expect(wsm.app.getByTestId('help-modal')).toBeVisible();
     await expect(wsm.app.getByTestId('help-link-issues')).toHaveAttribute(
       'href',
       'https://github.com/mkruisselbrink/WebSoundTools/issues'

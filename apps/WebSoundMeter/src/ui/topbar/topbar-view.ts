@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import {
-  FOH_GITHUB_REPO_URL,
   type PopoverParentRootLike,
   closePopoverById,
   renderChevronDownSvg,
-  renderGithubMarkSvg,
   renderHelpQuestionSvg,
   renderMeterWaveIconSvg,
   renderRedoIconSvg,
@@ -34,6 +32,7 @@ export interface TopbarViewProps
   readonly layoutPreset: LayoutPreset;
   readonly isMobileShow?: boolean;
   readonly wcoVisible?: boolean;
+  readonly updateReady?: boolean;
   readonly canUndo?: boolean;
   readonly canRedo?: boolean;
   readonly popoverRoot?: PopoverParentRootLike;
@@ -267,23 +266,20 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
             type="button"
             class="foh-tb-pill foh-tb-icon-btn"
             data-testid="btn-help"
-            aria-label="Help, Keyboard Shortcuts and User Guide"
-            title="Help, Keyboard Shortcuts, User Guide & Report Issue (?)"
+            data-update-ready=${String(Boolean(props.updateReady))}
+            aria-label=${props.updateReady
+              ? 'Help, Keyboard Shortcuts and App Update Ready'
+              : 'Help, Keyboard Shortcuts and User Guide'}
+            title=${props.updateReady
+              ? 'Update Ready — Open Help, Shortcuts & Apply Update (?)'
+              : 'Help, Keyboard Shortcuts, User Guide & Report Issue (?)'}
             @click=${() => props.onOpenHelp?.()}
           >
             ${renderHelpQuestionSvg()}
+            ${props.updateReady
+              ? html`<span class="foh-update-dot" aria-hidden="true"></span>`
+              : nothing}
           </button>
-          <a
-            class="foh-tb-pill foh-tb-icon-btn foh-hide-below-wide"
-            href=${FOH_GITHUB_REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="link-github"
-            aria-label="View source code on GitHub"
-            title="View source code & file issues on GitHub"
-          >
-            ${renderGithubMarkSvg()}
-          </a>
         </div>
       </div>
     </header>

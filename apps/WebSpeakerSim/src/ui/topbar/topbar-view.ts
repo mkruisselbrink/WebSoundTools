@@ -7,10 +7,8 @@
  */
 
 import {
-  FOH_GITHUB_REPO_URL,
   type PopoverParentRootLike,
   renderChevronDownSvg,
-  renderGithubMarkSvg,
   renderGroundBounceIconSvg,
   renderHelpQuestionSvg,
   renderRedoIconSvg,
@@ -49,6 +47,7 @@ export {
 
 export interface TopbarRenderCallbacks {
   readonly wcoVisible?: boolean;
+  readonly updateReady?: boolean;
   readonly isSceneModified?: boolean;
   readonly popoverRoot?: PopoverParentRootLike;
   readonly onSelectPreset: (presetId: string) => void;
@@ -320,23 +319,20 @@ export function renderTopbar(
             type="button"
             class="foh-tb-pill foh-tb-icon-btn"
             data-testid="btn-help"
-            aria-label="Help, Keyboard Shortcuts and User Guide"
-            title="Help, Keyboard Shortcuts, User Guide & Report Issue (?)"
+            data-update-ready=${String(Boolean(cb.updateReady))}
+            aria-label=${cb.updateReady
+              ? 'Help, Keyboard Shortcuts and App Update Ready'
+              : 'Help, Keyboard Shortcuts and User Guide'}
+            title=${cb.updateReady
+              ? 'Update Ready — Open Help, Shortcuts & Apply Update (?)'
+              : 'Help, Keyboard Shortcuts, User Guide & Report Issue (?)'}
             @click=${cb.onOpenHelp}
           >
             ${renderHelpQuestionSvg()}
+            ${cb.updateReady
+              ? html`<span class="foh-update-dot" aria-hidden="true"></span>`
+              : nothing}
           </button>
-          <a
-            class="foh-tb-pill foh-tb-icon-btn foh-hide-below-medium"
-            href=${FOH_GITHUB_REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="link-github"
-            aria-label="View source code on GitHub"
-            title="View source code & file issues on GitHub"
-          >
-            ${renderGithubMarkSvg()}
-          </a>
         </div>
       </div>
     </header>

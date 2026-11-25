@@ -8,7 +8,10 @@
  * `SourceStore`, and coarse-grained region custom elements.
  */
 
-import { observeWindowControlsOverlay } from '@foh/pwa/client';
+import {
+  observeServiceWorkerUpdate,
+  observeWindowControlsOverlay,
+} from '@foh/pwa/client';
 import '@foh/ui';
 import {
   ShellWindowController,
@@ -69,6 +72,8 @@ export class WebSoundMeterApp extends LitElement {
   private readonly shellWindow = new ShellWindowController(this, {
     mediaQuery: '(max-width: 679px)',
     observeWco: (cb) => observeWindowControlsOverlay((snap) => cb(snap.visible)),
+    observeSwUpdate: observeServiceWorkerUpdate,
+    onFlushPersistence: () => this.audio.flushPendingPersistence(),
     onKeyDown: (e) => this.handleKeyDown(e),
     onPopState: () => this.handlePopState(),
   });
@@ -300,6 +305,7 @@ export class WebSoundMeterApp extends LitElement {
         .sources=${this.sourceStore}
         .isMobileShow=${isMobileShow}
         .wcoVisible=${this.shellWindow.wcoVisible}
+        .updateReady=${this.shellWindow.swUpdateReady}
         .onWorkspaceModeChange=${(mode: WorkspaceMode) => this.setWorkspaceMode(mode)}
         .onLayoutPresetChange=${(preset: LayoutPreset) => this.setLayoutPreset(preset)}
         .onOpenHelp=${() => {
@@ -390,12 +396,14 @@ export class WebSoundMeterApp extends LitElement {
 
       <foh-help-modal
         .open=${this.helpModalOpen}
+        .updateReady=${this.shellWindow.swUpdateReady}
         appName="WebSoundMeter"
         .appSummary=${WSM_HELP_SUMMARY}
         .resources=${WSM_HELP_RESOURCES}
         .shortcuts=${WSM_HELP_SHORTCUTS}
         .attribution=${WSM_HELP_ATTRIBUTION}
         dialogTestId="help-modal"
+        @apply-app-update=${() => this.shellWindow.applyServiceWorkerUpdate()}
         @close-modal=${() => {
           this.helpModalOpen = false;
         }}

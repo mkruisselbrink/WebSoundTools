@@ -151,7 +151,7 @@ export function renderVirtualMicInspector(
         ? html`
             <div class="foh-form-section" data-testid="mic-predicted-readout">
               <div class="foh-form-section-title">Predicted Level & Arrival</div>
-              <div class="foh-xyz-grid" style="font-family:var(--font-mono);font-size:11px">
+              <div class="foh-xyz-grid" style="font-family:var(--_foh-font-mono);font-size:11px">
                 <div><strong>${micRes.broadbandSplADb.toFixed(1)}</strong> dBA</div>
                 <div><strong>${micRes.broadbandSplCDb.toFixed(1)}</strong> dBC</div>
                 <div><strong>${micRes.referenceDelayMs.toFixed(2)}</strong> ms</div>
@@ -231,12 +231,12 @@ export function renderVirtualMicInspector(
         ${rec
           ? html`
               <div
-                style="margin:6px 0;font-family:var(--font-mono);font-size:10.5px;color:var(--text-secondary)"
+                style="margin:6px 0;font-family:var(--_foh-font-mono);font-size:10.5px;color:var(--_foh-text-secondary)"
               >
                 Ref arrival: ${rec.referenceMeanArrivalMs.toFixed(2)} ms · Target raw:
                 ${rec.targetMeanArrivalMs.toFixed(2)} ms<br />
                 Recommended Δ:
-                <strong style="color:var(--accent-bright)">
+                <strong style="color:var(--_foh-accent-bright)">
                   ${rec.recommendedDeltaDelayMs >= 0 ? '+' : ''}${rec.recommendedDeltaDelayMs.toFixed(
                     2
                   )}

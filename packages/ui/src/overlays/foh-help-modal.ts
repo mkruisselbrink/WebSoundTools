@@ -111,6 +111,20 @@ export class FohHelpModal extends LitElement {
         line-height: 1.45;
       }
 
+      .update-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 8px 11px;
+        background: rgba(2, 132, 199, 0.16);
+        border: 1px solid var(--_foh-accent-bright, #38bdf8);
+        border-radius: var(--_foh-radius-md, 6px);
+        font-size: 11.5px;
+        color: var(--_foh-text-primary, #f8fafc);
+      }
+
       .section-heading {
         margin: 0 0 8px;
         font-size: 11px;
@@ -284,6 +298,9 @@ export class FohHelpModal extends LitElement {
   @property({ type: String })
   public closeButtonTestId = '';
 
+  @property({ type: Boolean })
+  public updateReady = false;
+
   protected render() {
     const commitLink = resolveHelpCommitLink(this.commitSha, this.repoUrl);
     return html`
@@ -294,6 +311,27 @@ export class FohHelpModal extends LitElement {
         .dialogTestId=${this.dialogTestId}
         .closeButtonTestId=${this.closeButtonTestId}
       >
+        ${this.updateReady
+          ? html`
+              <div class="update-banner" data-testid="help-update-banner">
+                <span>A newer offline version of ${this.appName} has been downloaded.</span>
+                <button
+                  type="button"
+                  class="foh-btn foh-btn-primary"
+                  data-testid="btn-apply-app-update"
+                  @click=${() =>
+                    this.dispatchEvent(
+                      new CustomEvent('apply-app-update', {
+                        bubbles: true,
+                        composed: true,
+                      })
+                    )}
+                >
+                  Apply Update &amp; Reload
+                </button>
+              </div>
+            `
+          : nothing}
         ${this.appSummary ? html`<p class="summary">${this.appSummary}</p>` : nothing}
 
         ${this.resources.length > 0

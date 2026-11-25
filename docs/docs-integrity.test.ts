@@ -236,6 +236,27 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
     expect(siblingViolations).toEqual([]);
   });
 
+  it('keeps runtime third-party dependencies strictly limited to lit', () => {
+    const pkgFiles = [
+      path.join(REPO_ROOT, 'package.json'),
+      ...collectFiles(path.join(REPO_ROOT, 'packages'), 'package.json', IGNORE_DIRS),
+      ...collectFiles(path.join(REPO_ROOT, 'apps'), 'package.json', IGNORE_DIRS),
+    ];
+
+    const disallowed: string[] = [];
+    for (const pf of pkgFiles) {
+      const parsed = JSON.parse(fs.readFileSync(pf, 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      for (const dep of Object.keys(parsed.dependencies ?? {})) {
+        if (dep !== 'lit' && !dep.startsWith('@foh/')) {
+          disallowed.push(`${path.relative(REPO_ROOT, pf)} -> unexpected dependency "${dep}"`);
+        }
+      }
+    }
+    expect(disallowed).toEqual([]);
+  });
+
   it('keeps PWA manifests, index.html descriptions, public icons/screenshots, and vite precache lists synchronized', () => {
     const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const apps = ['WebSoundMeter', 'WebSpeakerSim'] as const;
