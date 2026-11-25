@@ -12,6 +12,21 @@ A venue prediction is only half the story until you hang the PA and verify that 
 2. Select **`FOH Mix Position`** under **Virtual Mics** in the right-hand **Scene Tree**.
 3. Inside the **`Predicted Level & Arrival`** card, click **`Export Predicted .FRD`** to download `foh-mix-position-predicted.frd` (standard 3-column `FreqHz  MagDb  PhaseDeg` format across `20 Hz – 20 kHz`, phase-referenced to earliest arrival $t_0$).
 
+<!-- screenshot
+app: wss
+scene: t04-wss-export-predicted-frd
+regions: [chart-drawer, inspector-pane]
+description: WebSpeakerSim FOH Mix Position Virtual Mic inspector exporting direct-field foh-mix-position-predicted.frd alongside its predicted Magnitude response.
+annotations:
+  - badge: 1
+    target: "[data-testid='mic-predicted-readout']"
+    label: "Predicted SPL & Flight t₀"
+    placement: left
+  - badge: 2
+    target: "[data-testid='btn-export-mic-frd']"
+    label: "Export Predicted .FRD"
+    placement: left
+-->
 ![Exporting Predicted .FRD from Predicted Level & Arrival in WebSpeakerSim](../images/01-wss-export-predicted-frd.png)
 
 ---
@@ -24,7 +39,43 @@ A venue prediction is only half the story until you hang the PA and verify that 
    - **Automatic `200 Hz – 2 kHz` Passband Normalization:** **WebSpeakerSim** exports absolute predicted SPL (e.g., `~108 dB SPL`), whereas a dual-FFT transfer function in **WebSoundMeter** centers around `0 dB` relative gain. Whenever an imported `.FRD` curve's `200 Hz – 2 kHz` passband mean exceeds `35 dB`, **WebSoundMeter** automatically subtracts that mean upon import so the predicted trace overlays directly onto your `0 dB` measurement.
    - **Fine Level & Arrival Alignment:** Select the imported trace in **Sources** to open the **Stored Trace** inspector and fine-tune **`Gain Offset (dB)`** or **`Delay Offset (ms)`** (especially when multiple cabinets contribute before the dominant arrival so phase slopes align across `200 Hz – 4 kHz`).
 
+<!-- screenshot
+app: wsm
+scene: t04-wsm-import-and-compare-frd
+description: WebSoundMeter overlaying a 1/3-octave smoothed live FOH measurement against an imported and passband-normalized WebSpeakerSim predicted .FRD target curve.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-import-frd']"
+    label: "Import Predicted .FRD"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='chart-panel-0']"
+    subbox: [0.15, 0.22, 0.65, 0.45]
+    label: "Live FOH vs. Normalized Target"
+    placement: bottom
+-->
 ![Overlaying Smoothed Live FOH Measurement Against Imported Predicted .FRD](../images/02-wsm-import-and-compare-frd.png)
+
+<!-- screenshot
+app: wsm
+scene: t04-02-stored-trace-offset
+regions: [sources-card, stored-inspector]
+description: Stored Trace inspector for the imported foh-mix-position-predicted curve showing automatic passband normalization note, Gain Offset (dB), Delay Offset (ms), and Export .FRD.
+annotations:
+  - badge: 1
+    target: "#wsm-stored-gain"
+    label: "Fine Gain Offset (dB)"
+    placement: top
+  - badge: 2
+    target: "#wsm-stored-delay"
+    label: "Phase Delay Offset (ms)"
+    placement: top
+  - badge: 3
+    target: "[data-testid='btn-export-stored-frd']"
+    label: "Archive As-Built .FRD"
+    placement: bottom
+-->
+![Stored Trace Inspector for Fine Gain & Phase Delay Alignment](./images/t04-02-stored-trace-offset-inspector.png)
 
 ---
 
@@ -39,6 +90,22 @@ Rather than squinting at two overlapping traces, subtract the prediction directl
    - Set **`Source A`** to **`FOH Measured`**.
    - Set **`Source B`** to **`foh-mix-position-predicted`**.
 
+<!-- screenshot
+app: wsm
+scene: t04-01-measured-minus-predicted
+description: Math Union dB Difference (A / B) subtracting foh-mix-position-predicted from FOH Measured to isolate low-frequency room boundary gain and high-frequency air loss.
+annotations:
+  - badge: 1
+    target: "#wsm-union-operation"
+    label: "dB Difference (A / B)"
+    placement: left
+  - badge: 2
+    target: "[data-testid='chart-panel-0']"
+    subbox: [0.14, 0.22, 0.35, 0.45]
+    label: "Room Boundary Gain (< 250 Hz)"
+    tone: warn
+    placement: bottom
+-->
 ![Smoothed Measured Minus Predicted dB Difference Curve](./images/t04-01-measured-minus-predicted-diff.png)
 
 *(Note: when practicing in Demo Simulator mode, Demo Preset 2 models generic room modes rather than the exact `Live Club` geometry; on a real rig, `dB Difference (A / B)` isolates real venue boundary loading and rigging errors directly.)*

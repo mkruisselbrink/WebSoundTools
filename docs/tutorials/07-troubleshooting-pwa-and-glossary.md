@@ -19,6 +19,32 @@ Live venues rarely have reliable Wi-Fi at Front of House. Both **WebSoundMeter**
 - When served with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers (configured automatically in `vite.config.ts` and preserved offline by `@foh/pwa`'s Service Worker), **WebSoundMeter** streams audio from the `AudioWorklet` thread to the DSP Worker over a zero-copy lock-free `SharedArrayBuffer` ring buffer.
 - If hosted on a static file server that omits `COOP`/`COEP` headers, **WebSoundMeter** automatically falls back to batched `1024`-sample `MessagePort` transfers—every chart, transfer function, and SPL meter continues to work without error.
 
+### Staged Offline App Updates & Keyboard Shortcuts (`?`)
+- **Zero-Surprise Show Updates:** When a newer build is downloaded in the background while you are online, neither app ever force-reloads mid-measurement or mid-show. Instead, a subtle cyan dot appears on the **`?` Help** button in the top right; open **`?`** whenever you are ready between sets and click **`Apply Update & Reload`** (which flushes local autosaves before activating the new offline cache).
+
+<!-- screenshot
+app: wsm
+scene: t07-01-hardware-resume-and-help
+regions: [topbar, status-banner, help-modal]
+padding: { top: 0, right: 0, bottom: 20, left: 0 }
+description: Hardware standby safety banner (OS mic released with 1-click Resume Mic) alongside the Help, Shortcuts & Open Source dialog showing the staged Apply Update & Reload banner.
+annotations:
+  - badge: 1
+    target: "[data-testid='audio-status-banner']"
+    label: "Hardware Standby · Resume Mic (Space)"
+    tone: warn
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='btn-help']"
+    label: "Update Dot & Help (?)"
+    placement: left
+  - badge: 3
+    target: "[data-testid='help-update-banner']"
+    label: "Staged Offline Update Banner"
+    placement: bottom
+-->
+![Hardware Standby Resume Banner, Help Shortcuts & Staged Offline PWA Update](./images/t07-01-hardware-resume-and-help.png)
+
 ---
 
 ## 2. Field Troubleshooting FAQ
@@ -38,7 +64,7 @@ Check these four common culprits in order:
 You are measuring with **two separate hardware clocks** (for example, a USB microphone on **`Ref: Internal Gen`** while playing pink noise out of a laptop headphone jack). A `50 ppm` clock mismatch shifts arrival time by `50 µs` per second (`~360°` every `20 seconds` at `1 kHz`, and `10×` faster at `10 kHz`). Use a **2-channel audio interface with a physical TRS loopback cable** so ADC and DAC share a single crystal clock.
 
 ### "Why didn't loading my `.cal` file change the topbar `dBA` SPL number?"
-By design: serial-numbered `.cal` files correct frequency-domain **Transfer Function** and **RTA** bins (where `1–2 dB` HF capsule resonances matter visually), while the `IEC 61672` broadband SPL meter runs directly on time-domain pressure calibrated at `1 kHz` via **`Input Gain (dB)`**.
+By design: serial-numbered `.cal` files correct frequency-domain **Transfer Function** and **RTA** bins (where `1–2 dB` HF capsule resonances matter visually), while the `IEC 61672` broadband SPL meter runs directly on time-domain pressure calibrated at `1 kHz` via **`Calibrate SPL…` (`SPL Offset`)**.
 
 ### "Why did Show Mode's SPL history start empty when I opened my laptop the next day?"
 `IndexedDB` show checkpoints intentionally expire after **`30 minutes`** of inactivity so yesterday's concert never contaminates today's `LAeq15m` / `LAeq60m` averages. During an active set, `10-second` checkpoints protect against accidental page reloads or brief browser restarts.

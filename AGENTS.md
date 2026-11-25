@@ -9,7 +9,7 @@ Operational rules and invariants for coding agents working in `WebSoundTools`. R
 - **Run a single workspace project's tests:** `npx vitest run --project <name>` (e.g. `@foh/dsp`, `web-sound-meter`, `web-speaker-sim`, `docs`)
 - **Build production bundles (`dist/` + `sw.js`):** `npm run build`
 - **Run Playwright E2E suites:** `npm run test:e2e` (`WebSoundMeter` on port `5173`, `WebSpeakerSim` on port `5174`)
-- **Regenerate all Retina tutorial & user-guide screenshots:** `npm run docs:screenshots` (`docs/scripts/generate-screenshots.ts`)
+- **Regenerate all Retina tutorial & user-guide screenshots:** `npm run docs:screenshots` (parses `<!-- screenshot ... -->` YAML specs, `[data-doc-region]` crops, and Top-Layer SVG callout annotations from Markdown via `docs/scripts/generate-screenshots.ts`)
 
 ## Package Dependency DAG (Strict Layering)
 

@@ -4,9 +4,31 @@ Before rolling cases out of the truck, acoustic prediction lets you verify horn 
 
 ---
 
-## 1. Venue Coordinates & Scene Layout
+## 1. Venue Coordinates, Presets & Direct Project Saving (`Cmd/Ctrl + S`)
 
-Load **`Live Club — 12" Mains + Cardioid Subs + Front Fills`** from the **`Venue`** selector in the top bar.
+Click the **`Scene`** pill at the top left and load **`Live Club — 12" Mains + Cardioid Subs + Front Fills`** from **`Load Demo Venue Preset`**. At any point during your design, press **`Cmd / Ctrl + S`** (or click **`Save .json`** inside **`Scene ▾`**) to save your venue, colormap settings, and custom loudspeakers directly to a portable `.wss-project.json` file on disk—subsequent `Cmd / Ctrl + S` presses overwrite that file in place without re-prompting.
+
+<!-- screenshot
+app: wss
+scene: t02-04-scene-file-save-popover
+regions: [topbar, scene-popover]
+padding: { top: 0, right: 24, bottom: 20, left: 16 }
+description: Open Scene & Project File popover showing the 3 built-in demo venue presets, Save .json (Cmd/Ctrl+S), Open .json, and IndexedDB Saved Projects controls.
+annotations:
+  - badge: 1
+    target: "[data-testid='preset-select']"
+    label: "Load Demo Venue Preset"
+    placement: right
+  - badge: 2
+    target: "[data-testid='btn-save-project-file']"
+    label: "Direct Save (Cmd/Ctrl+S)"
+    placement: bottom
+  - badge: 3
+    target: "[data-testid='btn-projects']"
+    label: "Browser Snapshots"
+    placement: bottom
+-->
+![Venue Scene & Direct .wss-project.json File Save Popover](./images/t02-04-scene-file-save-popover.png)
 
 **WebSpeakerSim** uses a right-handed metric coordinate system (`meters`):
 - **`+X` (Throw):** Stage lip (`X = 0 m`) out toward FOH (`X = 13.5 m`) and back wall (`X = 18.5 m`).
@@ -36,7 +58,28 @@ Notice two key details:
 
 ![Balanced Broadband Club Coverage & Audience SPL Histogram](../../apps/WebSpeakerSim/docs/images/03-frontfills-coverage-histogram.png)
 
-Across the entire standing floor, broadband coverage within `±3 dB` reaches **`82%`** (`Mean 105.9 dB`) with the front-row center vocal gap filled smoothly.
+Across the entire standing floor, broadband coverage within `±3 dB` reaches **`82%`** (`Mean 105.9 dB`) with the front-row center vocal gap filled smoothly. You can open the **`SPL Heatmap & Contours`** popover at any time (from the topbar swatch pill or by clicking either viewport's bottom-right colorbar) while inspecting **`Main L`**'s symmetric position and aiming angles:
+
+<!-- screenshot
+app: wss
+scene: t02-05-main-aiming-and-heatmap
+regions: [topbar, viewport-plan, heatmap-popover, inspector-pane]
+description: Plan View with SPL Heatmap & Contours popover open (Auto ±6 dB, 2 dB contours) alongside Main L symmetric L/R aiming controls.
+annotations:
+  - badge: 1
+    target: "[data-testid='colormap-range-select']"
+    label: "Auto ±6 dB Tight Window"
+    placement: right
+  - badge: 2
+    target: "[data-testid='isoline-select']"
+    label: "2 dB Isobar Contours"
+    placement: right
+  - badge: 3
+    target: "[data-testid='ps-mirror-checkbox']"
+    label: "Mirrored Main L/R Pair"
+    placement: left
+-->
+![SPL Heatmap & Contours Popover Alongside Symmetric Main L/R Aiming Inspector](./images/t02-05-main-aiming-and-heatmap-popover.png)
 
 ---
 
@@ -58,6 +101,26 @@ Notice **`Stage Rej: -4.6 dB`** in the top bar—at `63 Hz`, the stage deck is `
 
 ![Cardioid Stack Carving a 63 Hz Null Across the Stage Deck](../../apps/WebSpeakerSim/docs/images/05-subs-cardioid-63hz.png)
 
+<!-- screenshot
+app: wss
+scene: t02-03-csa-enclosure-schedule
+regions: [inspector-pane]
+description: Subwoofer Array inspector configured for a 4-box 63 Hz Cardioid Stack (CSA) with quarter-wave spacing and per-enclosure 3.96 ms / inverted polarity rigging schedule.
+annotations:
+  - badge: 1
+    target: "[data-testid='sa-mode-select']"
+    label: "Cardioid Stack (CSA)"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='btn-sa-quarter-wave']"
+    label: "Set λ/4 @ 63 Hz (1.36 m)"
+    placement: top
+  - badge: 3
+    target: "[data-testid='inspector-pane']"
+    subbox: [0.03, 0.62, 0.94, 0.35]
+    label: "3.96 ms & Ø Inv Schedule"
+    placement: top
+-->
 ![CSA Subwoofer Array Designer & Generated Enclosure Schedule](./images/t02-03-csa-enclosure-schedule.png)
 
 **`Stage Rej`** improves by **`10.2 dB`** (from `-4.6 dB` to **`+5.6 dB`**), turning the stage deck cool blue while preserving full low-end impact out front. Copy the per-cabinet coordinates, `3.96 ms` delay, and `Ø Inv` polarity directly from **`GENERATED ENCLOSURE SCHEDULE (4)`** at the bottom right.
@@ -74,6 +137,25 @@ Notice **`Stage Rej: -4.6 dB`** in the top bar—at `63 Hz`, the stage deck is `
    - Set **`Target`** to **`Main L/R Tops`** and **`Align Freq (Hz)`** to **`90`** (matching the `90 Hz` `LR24` crossover).
    - Click **`Apply Delay & Polarity`** to write the exact electronic alignment delay directly to the `Main L/R Tops` DSP Group.
 
+<!-- screenshot
+app: wss
+scene: t02-02-club-mic-alignment
+description: FOH Mix Position Virtual Mic selected with Phase (°) chart open and Auto Time-Alignment locking Main L/R Tops to the Cardioid Sub Array through 80–90 Hz.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-drawer']"
+    subbox: [0.18, 0.22, 0.24, 0.62]
+    label: "Aligned Crossover Phase"
+    placement: right
+  - badge: 2
+    target: "[data-testid='auto-time-align-panel']"
+    label: "Ref: Subs → Target: Mains"
+    placement: left
+  - badge: 3
+    target: "[data-testid='btn-apply-alignment']"
+    label: "1-Click Delay & Polarity"
+    placement: top
+-->
 ![Live Club FOH Virtual Mic Phase & One-Click Group Alignment](./images/t02-02-club-mic-alignment.png)
 
 ### Sculpting Crossovers & Draggable DSP Group EQ Handles
@@ -85,6 +167,26 @@ Notice **`Stage Rej: -4.6 dB`** in the top bar—at `63 Hz`, the stage deck is `
    - **Vertical drag** adjusts **Gain (`dB`)**.
    - **`Shift + Vertical Drag`** or **`Shift + Mouse Wheel`** narrows or widens **`Q`**.
 
+<!-- screenshot
+app: wss
+scene: t02-01-dsp-group-eq-handles
+regions: [chart-drawer, inspector-pane]
+description: Bottom Magnitude (dB) chart drawer with draggable green EQ handles paired with the DSP Processor Group crossover and parametric EQ inspector.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-drawer']"
+    subbox: [0.35, 0.2, 0.42, 0.55]
+    label: "Drag Freq/Gain · Shift+Drag Q"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='grp-hpf-topology']"
+    label: "LR24 Crossover Slope"
+    placement: left
+  - badge: 3
+    target: "[data-testid='btn-add-eq-band']"
+    label: "Up to 8 PEQ Bands"
+    placement: left
+-->
 ![Interactive DSP Group Crossovers & Multi-Band On-Chart EQ Handles](./images/t02-01-wss-dsp-group-eq-handles.png)
 
 ---

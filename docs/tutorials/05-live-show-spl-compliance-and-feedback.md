@@ -20,13 +20,76 @@ Acoustic feedback begins as a phase-locked, high-`Q` narrowband resonance or pos
    - **Single Measurement Mic (FOH or Stage):** Keep your calibrated mic on `In Ch 1` (`FB Watch: FOH Concert Strict` during a show, or `Soundcheck / Wedge Ring-Out` before doors). If your console Main L/R mix is patched to `Ref (R)` for live Transfer Function, leave **`Feedback Ref (R) Role`** on **`Console Mix (Tag In-Mix vs Stage)`** so closed-loop PA rings are tagged `In Mix` while monitor-only rings are tagged `Stage Only` *(use `Playback / Stem Veto` only when `R` carries non-acoustic backing tracks)*.
    - **Multi-Channel Console USB (`Mixer Watch`):** Click **`Mixer Watch`** (available in both **`🛠 Tuning`** and **`🎚 Show`**) to watch up to **`32` console USB direct outs**—either on the same multi-channel interface or on a **Separate USB Mixer** alongside your 2-channel FOH measurement interface. Label your open stage channels (`Lead Vox`, `Stage Vox 2`, `Acoustic Gtr`…), uncheck DI/playback channels, and click **`Save Preset`** so your channel names recall automatically whenever that console is connected (or switch saved band patches manually between sets).
    - *(Practicing without hardware? Enable **`Mixer Watch`** and set **`SIM RIG`** to **`6. Live Show Feedback Ring (2.5 kHz & 630 Hz)`** to watch the 4-channel stage simulator ignore vibrato vocals and muted wedge bleed while pinpointing `Stage Vox 2 · Ch 2`!)*
+
+<!-- screenshot
+app: wsm
+scene: t05-05-mixer-input-watch-modal
+regions: [mixer-watch-modal]
+padding: { top: 20, right: 215, bottom: 20, left: 215 }
+description: Mixer Input Watch & Patch Presets modal with culprit attribution enabled, Headliner Stage Patch saved, Pre-Fader Direct Outs mode, and live per-channel signal LEDs.
+annotations:
+  - badge: 1
+    target: "[data-testid='toggle-mixer-watch-enabled']"
+    label: "Enable Culprit Attribution"
+    placement: left
+  - badge: 2
+    target: "[data-testid='select-mixer-watch-preset']"
+    label: "Recallable Show Patches"
+    placement: right
+  - badge: 3
+    target: "[data-testid='select-mixer-tap-mode']"
+    label: "Pre-Fader + Mix Bus Guard"
+    placement: left
+-->
+![Mixer Input Watch & Named Patch Presets Modal](./images/t05-05-mixer-input-watch-modal.png)
+
 2. **Reading RTA Callout Flags vs. the Feedback Ring Log:**
    - Simultaneous acoustic bleed across multiple open mics is merged into **one unified alert** showing center frequency, nearest **ISO 31-band GEQ** slider, and top culprit confidence (`◆ 2.48 kHz (ISO 2.5 kHz) • Stage Vox 2 (86%)`).
    - In **`Feedback Ring Log`**, each row shows severity (`◆` runaway feedback, `▲` overhang/persistent ring, `●` 5s latched hold), culprit + runner-up channels, `In Mix` / `Stage Only` tag, and fine **cents offset** (`D#7 (-6c)`).
 3. **Per-Channel Surgical Notch (`Notch EQ`):**
    - Click **`Notch EQ`** next to any ring to insert a narrowband peaking cut (`Q = 8..24`) into an isolated per-culprit Virtual EQ cheat-sheet (`Notch — Stage Vox 2 (Ch 2)`, or `Feedback Notch (<Mic Name>)` in single-mic mode). Clicking **`Notch EQ`** again on the same frequency deepens the notch by `-3.0 dB` per click (down to `-18 dB`) so you can copy clean strip PEQ values (`Hz`, `Q`, `dB`) straight to that mixer channel.
 
+<!-- screenshot
+app: wsm
+scene: t05-02-show-limit-and-ring-log
+regions: [topbar, chart-0, show-live-mics, show-ring-log]
+description: Show mode topbar in LIMIT alert state alongside RTA feedback callout flags, Culprit channel attribution in Feedback Ring Log, and 1-click Notch EQ.
+annotations:
+  - badge: 1
+    target: "[data-testid='spl-status-badge']"
+    label: "◆ LIMIT Alert Badge"
+    tone: danger
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='ring-log-list']"
+    label: "Culprit Channel & ISO Band"
+    tone: warn
+    placement: left
+  - badge: 3
+    target: ".btn-notch-eq"
+    label: "1-Click Surgical Notch"
+    placement: top
+-->
 ![Show Topbar in LIMIT State, RTA Feedback Callout Flags & Ring Log Notch EQ](./images/t05-02-show-limit-and-ring-log.png)
+
+Switching briefly back to **`🛠 Tuning`** reveals the per-culprit Virtual EQ cheat-sheet (`Notch — Stage Vox 2 (Ch 2)`) with exact center frequency, narrow `Q`, and cut depth ready to dial into that input strip on your mixing console:
+
+<!-- screenshot
+app: wsm
+scene: t05-06-culprit-notch-eq-cheatsheet
+regions: [topbar, chart-0, sources-card, eq-inspector]
+description: Auto-generated per-culprit Virtual EQ cheat-sheet in Tuning mode displaying the narrowband surgical peaking notch frequency, gain cut, and Q to copy to the mixing console.
+annotations:
+  - badge: 1
+    target: "[data-testid='inspector-eq-source'] .foh-form-section-title"
+    label: "Per-Culprit Notch Cheat-Sheet"
+    placement: left
+  - badge: 2
+    target: "[data-testid='eq-band-0']"
+    label: "Exact Hz, Cut dB & High Q"
+    placement: left
+-->
+![Per-Culprit Surgical Notch EQ Cheat-Sheet in Tuning Mode](./images/t05-06-culprit-notch-eq-cheatsheet.png)
 
 ---
 
@@ -43,6 +106,26 @@ Municipal ordinances and festival sound limits typically enforce **time-integrat
    - **`LC−LA` (`+11.8 dB`):** Live 1-minute C-minus-A sub-to-mid balance (`+10` to `+15 dB` is typical modern rock/pop; `+18 dB+` indicates heavy sub energy dominating headroom).
    - **Status Badges:** **`● OK`** (green), **`▲ WARN`** (amber + dashed chart guide), and **`◆ LIMIT`** (red + solid chart guide).
 
+<!-- screenshot
+app: wsm
+scene: t05-01-show-spl-compliance-warn
+description: Desktop Live Show mode tracking a 15-minute concert SPL arc crossing the 94 dB Warning threshold while staying below the 98 dB statutory ceiling.
+annotations:
+  - badge: 1
+    target: "[data-testid='spl-show-compliance-metrics']"
+    label: "LAeq1m · LAeq15m · LC−LA · ▲ WARN"
+    tone: warn
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='chart-panel-1']"
+    subbox: [0.18, 0.2, 0.68, 0.55]
+    label: "15-Min Rolling Compliance Arc"
+    placement: top
+  - badge: 3
+    target: "[data-testid='card-show-limits-export']"
+    label: "Warn / Limit & UTC CSV Export"
+    placement: left
+-->
 ![Live Show 15-Minute Concert SPL History Crossing Warning Guide](./images/t05-01-show-spl-compliance-warn.png)
 
 3. **`SPL / Leq History` Timeline Controls:**
@@ -61,6 +144,44 @@ Municipal ordinances and festival sound limits typically enforce **time-integrat
 ## 5. Walking the Venue: Handheld Phone & Tablet Show Mode
 
 When walking the balcony, checking property-line SPL with a USB-C measurement mic, or propping a tablet beside the console, **WebSoundMeter** adapts its **`🎚 Show`** layout automatically and holds a **Screen Wake Lock (`☀ Awake`)** so the display never dims mid-set:
+
+<!-- screenshot
+image: ./images/t05-03-handheld-phone-spl-trend.png
+app: wsm
+scene: t05-03-handheld-phone-spl-trend
+viewport: { width: 390, height: 844, touch: true }
+description: Handheld phone Show mode on the SPL Trend tab showing the pinned Hero SPL scoreboard, Wake Lock badge, 1-tap Active Ring Alert banner, and 15-minute compliance timeline.
+annotations:
+  - badge: 1
+    target: "[data-testid='wake-lock-badge']"
+    label: "Screen Wake Lock"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='mobile-ring-alert-banner']"
+    label: "1-Tap Active Ring & Notch"
+    tone: danger
+    placement: bottom
+  - badge: 3
+    target: "[data-testid='mobile-show-tablist']"
+    label: "Thumb-Zone 4-Tab Bar"
+    placement: top
+-->
+<!-- screenshot
+image: ./images/t05-04-handheld-phone-mics-calibration.png
+app: wsm
+scene: t05-04-handheld-phone-mics-cal
+viewport: { width: 390, height: 844, touch: true }
+description: Handheld phone Show mode on the Mics & Cal tab with the SPL Calibration sheet open for 1-tap 94 dB / 114 dB pistonphone matching.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-show-cal-live-measurement']"
+    label: "Open Calibrator"
+    placement: top
+  - badge: 2
+    target: "[data-doc-region='cal-popover'] .foh-popover-actions"
+    label: "94 / 114 dB Match"
+    placement: bottom
+-->
 
 | Handheld Phone `SPL Trend` & Ring Alert | Handheld `Mics & Cal` Bottom-Sheet Calibrator |
 | :---: | :---: |

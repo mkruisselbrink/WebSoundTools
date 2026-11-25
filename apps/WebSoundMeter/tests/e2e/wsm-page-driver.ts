@@ -206,15 +206,15 @@ export class WsmPageDriver {
             if (injectRings) {
               const osc1 = ac.createOscillator();
               const g1 = ac.createGain();
-              osc1.frequency.value = 2480;
-              g1.gain.value = 0.085;
+              osc1.frequency.value = 2750;
+              g1.gain.value = 0.12;
               osc1.connect(g1).connect(merger, 0, 0);
               osc1.start();
 
               const osc2 = ac.createOscillator();
               const g2 = ac.createGain();
               osc2.frequency.value = 630;
-              g2.gain.value = 0.065;
+              g2.gain.value = 0.105;
               osc2.connect(g2).connect(merger, 0, 0);
               osc2.start();
             }

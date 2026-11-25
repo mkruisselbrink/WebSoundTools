@@ -4,6 +4,11 @@
 
 > **Looking for step-by-step system design walkthroughs?** See the **[FOH Tutorial Series (`docs/tutorials/`)](../../../docs/tutorials/README.md)** for club front-fill & cardioid sub design, custom raked/balcony venues, outdoor end-fire & delay-ring alignment, and Predict-to-Measure field verification.
 
+<!-- screenshot
+app: wss
+scene: wss-guide-01-workspace-overview
+description: Full WebSpeakerSim workspace showing synchronized 2D Plan View and Side Section SPL heatmaps, Virtual Mic response drawer, Scene Tree, and Point Source inspector.
+-->
 ![WebSpeakerSim Workspace Overview](./images/01-workspace-overview.png)
 
 ---
@@ -32,11 +37,16 @@ All spatial coordinates use a right-handed metric coordinate system in **meters 
 ## 2. Top Control Bar & Coverage Readouts
 
 ### Scene, Project & History Controls
-- **`Scene ▾` Popover:** Displays the active venue name (with a cyan indicator dot when modified from a preset) and opens a popover to load any of the `3` built-in demo venues, open **`Saved Projects`** (`IndexedDB` manager + **`Reset Local Autosave`**), **`Save Snapshot`**, or **`Import .json`** / **`Export .json`** portable `.wss-project.json` bundles (containing the scene, colormap settings, and custom speakers).
+- **`Scene ▾` Popover:** Displays the active venue name (with a cyan indicator dot when modified from a preset) and opens a popover to load any of the `3` built-in demo venues, **`Save .json`** (`Cmd / Ctrl + S` direct in-place `.wss-project.json` file save on Chromium with automatic file-handle recall across reloads, or download fallback), **`Open .json`**, **`Export .json / Save As…`**, **`Save Snapshot`**, or open **`Saved Projects`** (`IndexedDB` manager + **`Reset Local Autosave`**).
 - **`Undo` / `Redo` (`↶` / `↷`):** Steps backward/forward through up to `60` scene mutations (continuous CAD drags and EQ handle scrubs coalesce via `txKey` into single undo steps).
 - **Window Controls Overlay (Installed PWA):** When installed as a desktop PWA, the locked `40 px` studio bar merges directly into the native OS titlebar (`window-controls-overlay`).
 
 ### Analysis Band, Ground Bounce & Heatmap Popover
+<!-- screenshot
+app: wss
+scene: wss-guide-02-mains-4khz-gap
+description: Live Club venue analyzed at 4 kHz with stage-lip front fills muted and Stepped Isobars active, exposing the front-center high-frequency gap between L/R main horns.
+-->
 ![Mains Only at 4 kHz with Stepped Isobars Highlighting Front-Center Gap](./images/02-mains-4khz-gap.png)
 
 - **`Band`:**
@@ -49,6 +59,11 @@ All spatial coordinates use a right-handed metric coordinate system in **meters 
 - **`Speakers` (`L`):** Opens the 3-tab Loudspeaker Catalog, Datasheet Spec Builder, and `.gll` / `.clf` / `.frd` file importer modal.
 
 ### Live Coverage Metrics & Layout Switcher
+<!-- screenshot
+app: wss
+scene: wss-guide-03-frontfills-histogram
+description: Balanced Broadband Pink (dBA) club coverage with stage-lip front fills active, Auto ±6 dB 2 dB isobars, and Audience SPL Histogram distribution.
+-->
 ![Balanced Broadband Coverage & Audience SPL Histogram](./images/03-frontfills-coverage-histogram.png)
 
 - **`Mean`:** Mean SPL across active `'audience'` surface cells for the currently selected `Band`.
@@ -85,8 +100,18 @@ Each viewport header contains its own **`Ruler`** toggle and **`Fit`** camera re
 - **Cabinet Trim vs. DSP Group Processing:** Individual enclosures provide **`Trim Gain (dB)`**, **`Trim Delay (ms)`**, and **`Invert Cabinet Polarity (Ø)`** for per-box shading/time-smearing, while crossovers, multi-band EQ, and system alignment delays live on the assigned **DSP Group**.
 
 ### Subwoofer Array Designer (`+ Sub` / `S`)
+<!-- screenshot
+app: wss
+scene: wss-guide-04-subs-broadside-63hz
+description: Omnidirectional Broadside Line subwoofer array at 63 Hz spilling low-frequency energy backward onto the stage deck (-4.6 dB Stage Rej).
+-->
 ![Broadside Subwoofer Array Spilling 63 Hz Energy onto Stage](./images/04-subs-broadside-63hz.png)
 
+<!-- screenshot
+app: wss
+scene: wss-guide-05-subs-cardioid-63hz
+description: Quarter-wave Cardioid Stack (CSA) subwoofer array at 63 Hz steering constructive bass forward while carving a deep cancellation null across the stage (+5.6 dB Stage Rej).
+-->
 ![Quarter-Wave Cardioid Subwoofer Stack Carving a Stage Null at 63 Hz](./images/05-subs-cardioid-63hz.png)
 
 - **Array Modes:**
@@ -102,6 +127,11 @@ Each viewport header contains its own **`Ruler`** toggle and **`Fit`** camera re
 - **Parametric EQ (`1` to `8` bands):** `Peaking`, `Low Shelf`, `High Shelf`, `Notch`, and `All-Pass` bands (`192 kHz` analytical evaluation). Selecting a DSP Group while viewing the **`Magnitude (dB)`** chart overlays interactive green **`EQ1..EQn`** handles anchored to the passband SPL mean (`Drag` = Freq/Gain, **`Shift + Drag / Wheel`** = `Q`).
 
 ### Virtual Microphone Inspector (`+ Mic` / `M`) & Bottom Chart Drawer
+<!-- screenshot
+app: wss
+scene: wss-guide-06-virtual-mic-alignment
+description: Raked Auditorium & Balcony preset with Upper Balcony Virtual Mic selected, Phase plot open, and Auto Time-Alignment locking balcony delay fills to the proscenium hang.
+-->
 ![Raked Auditorium Balcony Time Alignment on Virtual Mic Phase Plot](./images/06-virtual-mic-time-alignment.png)
 
 - **Predicted Level & Arrival:** Displays broadband **`dBA`**, **`dBC`**, **`dBZ`**, first-arrival flight reference **`t₀ (ms)`**, and per-radiator arrival breakdown (direct hangs + ground reflections).
@@ -110,6 +140,12 @@ Each viewport header contains its own **`Ruler`** toggle and **`Fit`** camera re
 - **Chart Tabs:** `Magnitude (dB)` (with `Span: 30 / 60 / 80 dB`), `Phase (°)`, `Group Delay` (magnitude-gated within `50 dB` of peak so deep comb nulls do not distort the `ms` scale), `Arrivals` (stem plot of direct vs. dashed ground-reflection arrivals), and `SPL Histogram`.
 
 ### Audience & Stage Zones (`+ Zone`) and Environment & Venue Bounds
+<!-- screenshot
+app: wss
+scene: wss-guide-08-zone-and-env-inspectors
+regions: [viewport-section, right-dock]
+description: Side Section slice through raked orchestra and overhanging upper balcony paired with the Atmosphere, Colormap & Venue Grid Bounds inspector.
+-->
 ![Raked Auditorium Side Section & Editable Venue Grid Bounds Inspector](./images/08-zone-and-environment-inspectors.png)
 
 - **Audience / Stage Zone Inspector:**
@@ -127,11 +163,25 @@ Each viewport header contains its own **`Ruler`** toggle and **`Fit`** camera re
 ## 5. Loudspeaker Library, Spec Builder & Importers (`L`)
 
 ### Datasheet Spec Builder Tab
+<!-- screenshot
+app: wss
+scene: wss-guide-07-speaker-spec-builder
+regions: [speaker-library-modal]
+padding: 20
+description: Loudspeaker Library modal open on the Datasheet Spec Builder tab for synthesizing custom 3D dispersion balloons from H x V coverage and passband specs.
+-->
 ![Loudspeaker Library Datasheet Spec Builder Modal](./images/07-speaker-library-spec-builder.png)
 
 Synthesizes a 3D frequency-dependent directivity balloon from published manufacturer datasheet specs: **`Model Name`**, **`Manufacturer`**, **`Category`** (`Top / Full-Range` vs. `Subwoofer`), **`Horizontal Coverage (°)`**, **`Vertical Coverage (°)`**, **`Low -3 dB Cut (Hz)`**, **`High -3 dB Cut (Hz)`**, and **`Max Continuous SPL @ 1 m (dB)`**.
 
 ### Catalog & File Import Tab (`.GLL`, `.CLF`, `.FRD`, `.JSON`)
+<!-- screenshot
+app: wss
+scene: wss-guide-09-speaker-file-import
+regions: [speaker-library-modal]
+padding: 20
+description: Loudspeaker Library modal after importing a custom polar dispersion file into the Catalog with status confirmation.
+-->
 ![Loudspeaker Library File Import Tab with Imported Polar Balloon](./images/09-projects-and-speaker-import.png)
 
 - **Catalog Tab:** Inspects built-in and custom enclosures, exports individual custom speakers as portable `.wss-speaker.json` files, or deletes custom speakers from `IndexedDB`.
@@ -149,6 +199,7 @@ Synthesizes a 3D frequency-dependent directivity balloon from published manufact
 
 | Shortcut | Action |
 | :--- | :--- |
+| `Cmd / Ctrl + S` | Save scene directly to active `.wss-project.json` file (or open Save File picker) |
 | `Cmd / Ctrl + Z` | Undo last scene edit |
 | `Cmd / Ctrl + Shift + Z` / `Ctrl + Y` | Redo scene edit |
 | `P` | Add Point Source (`+ Top`) |

@@ -4,6 +4,11 @@
 
 > **Looking for step-by-step field workflows?** See the **[FOH Tutorial Series (`docs/tutorials/`)](../../../docs/tutorials/README.md)** for physical cabling diagrams, preamp gain staging, PA time alignment, Predict-to-Measure verification, Show SPL compliance, and troubleshooting.
 
+<!-- screenshot
+app: wsm
+scene: wsm-guide-01-tuning-overview
+description: Full WebSoundMeter Tuning workspace showing 3-panel PA Alignment stack (Magnitude, Phase, Impulse), topbar routing/generator/SPL LCD, and Live Measurement inspector with dBFS headroom bars.
+-->
 ![WebSoundMeter Tuning Workspace Overview](./images/01-tuning-workspace-overview.png)
 
 ---
@@ -89,6 +94,11 @@ Every chart panel header stays locked to a single `32 px` row; hovering inside a
 The **Sources (N)** card lists all active sources with visibility checkboxes, color dots, type badges (`MEASUREMENT`, `STORED`, `EQ`, `UNION`), and creation buttons (**`+ Meas`**, **`+ EQ`**, **`+ Math`**, **`+ .FRD`**).
 
 ### Live Measurement Inspector
+<!-- screenshot
+app: wsm
+scene: wsm-guide-02-delay-and-capture
+description: Locked propagation delay unwrapping transfer-function phase and centering the impulse peak at 0.0 ms alongside a captured FOH Center Baseline stored trace.
+-->
 ![Locked Reference Delay & Captured Stored Trace](./images/02-delay-alignment-and-capture.png)
 
 - **`Capture` (`C`) / `Reset Avg` (`R`) / `Delete`:** Snapshots the current live curve into a persistent **Stored Trace**, clears FFT/meter accumulators, or deletes secondary measurement slots.
@@ -103,6 +113,12 @@ The **Sources (N)** card lists all active sources with visibility checkboxes, co
 - **`Mic Calibration Curve`:** Selects a saved `.cal` / `.txt` / `.frd` capsule correction curve. Calibration curves correct frequency-domain **Transfer Function** and **RTA** traces; broadband `IEC 61672` SPL meters measure raw time-domain pressure directly from `Input Gain` calibration.
 
 #### Advanced Measurement Settings
+<!-- screenshot
+app: wsm
+scene: wsm-guide-06-advanced-meas-settings
+regions: [tuning-sidebar]
+description: Expanded Advanced Measurement Settings inspector showing shared FFT size, window function, FIFO averaging, fractional-octave smoothing, H1 estimator, pre-filter, and mic calibration upload.
+-->
 ![Advanced Measurement Settings Inspector](./images/06-advanced-measurement-settings.png)
 
 Transform and smoothing settings are synchronized across all live slots so multi-mic `Math Union` combinations always share aligned frequency bins:
@@ -124,6 +140,11 @@ Transform and smoothing settings are synchronized across all live slots so multi
 - *(Note: Stored Traces intentionally omit a direct Polarity toggle; attach a **Virtual EQ** source to preview polarity inversion `Ø` or crossover filters on a stored trace.)*
 
 ### Virtual Equalizer Inspector (`+ EQ`)
+<!-- screenshot
+app: wsm
+scene: wsm-guide-03-virtual-eq-crossovers
+description: Virtual Parametric EQ source with Auto-Match Room bands, Linkwitz-Riley crossovers, and interactive EQ1..EQn handles on the Magnitude plot.
+-->
 ![Virtual Parametric EQ, Crossovers & On-Chart Handles](./images/03-virtual-eq-and-crossovers.png)
 
 - **`Apply Virtual EQ To Source`:** Targets any live measurement or stored trace, or `None (Show Filter Curve Only)`.
@@ -134,6 +155,11 @@ Transform and smoothing settings are synchronized across all live slots so multi
 - **On-Chart Handle Gestures:** Drag any numbered **`EQ1..EQn`** handle horizontally for **Frequency**, vertically for **Gain (`dB`)**, or hold **`Shift` while dragging vertically or scrolling the mouse wheel** to narrow or widen **`Q`** (`0.25` to `36`).
 
 ### Math / Union Inspector (`+ Math`)
+<!-- screenshot
+app: wsm
+scene: wsm-guide-04-multi-mic-spatial-avg
+description: Simultaneous 3-microphone live measurements combined into a phase-blind Power Average (RMS) spatial response via the Math Union checklist.
+-->
 ![Multi-Mic Live Measurements & N-Input Power Spatial Average](./images/04-multi-mic-spatial-average.png)
 
 | Math Operation | Input Selection UI | Acoustic Use Case |
@@ -150,6 +176,11 @@ Transform and smoothing settings are synchronized across all live slots so multi
 
 ## 5. Show Mode Compliance & Feedback Reference (`🎚 Show`)
 
+<!-- screenshot
+app: wsm
+scene: wsm-guide-05-live-show-spl-feedback
+description: Live Show mode connected to a USB hardware interface with Signal Generator locked out, RTA narrowband feedback callouts, seeded 15-minute LAeq compliance history, and Show sidebar cards.
+-->
 ![Live Show Mode Hardware Safety Lockout, Seeded 15m SPL History & Feedback Callouts](./images/05-live-show-spl-and-feedback.png)
 
 ### Live Mics, SPL Watch & Mixer Input Culprit Attribution
@@ -171,6 +202,21 @@ Transform and smoothing settings are synchronized across all live slots so multi
 - **`CSV ⬇` Export:** Downloads `websoundmeter-spl-log-<UTC-ISO-timestamp>.csv` in chronological long format (one row per active slot per second: `timestamp_iso, slot_id, laf_db, lcf_db, laeq_1m_db, lceq_1m_db, laeq_5m_db, laeq_15m_db, laeq_60m_db, lpeak_db`).
 
 ### Tablet & Handheld Phone Show Layouts
+
+<!-- screenshot
+image: ./images/07-mobile-show-handheld-deck.png
+app: wsm
+scene: wsm-guide-07-mobile-show-handheld
+viewport: { width: 390, height: 844, touch: true }
+description: Handheld phone Show mode (< 680 px) with pinned Hero SPL scoreboard, Wake Lock indicator, active feedback ring banner, RTA spectrum, and 4-tab thumb bar.
+-->
+<!-- screenshot
+image: ./images/08-tablet-portrait-show-split-deck.png
+app: wsm
+scene: wsm-guide-08-tablet-portrait-show
+viewport: { width: 820, height: 1180, touch: true }
+description: Tablet portrait Show mode (820x1180) stacking full-width RTA and 15-minute SPL compliance charts over a 2-column control deck.
+-->
 
 | Phone Handheld Show Deck (`< 680 px`) | Tablet Portrait Split-Deck (`680–959 px`) |
 | :---: | :---: |

@@ -14,6 +14,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ALL_REGISTERED_SCENE_IDS } from './scripts/generate-screenshots.js';
+import { parseAllMarkdownScreenshotSpecs } from './scripts/screenshot-spec.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 
@@ -207,6 +209,42 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
       }
       if (!referencedImages.has(imgPath)) {
         issues.push(`${relImg}: orphaned image (not referenced in any .md file)`);
+      }
+    }
+
+    expect(issues).toEqual([]);
+  });
+
+  it('pairs every documentation PNG 1-to-1 with a valid Markdown <!-- screenshot --> YAML spec and registered scene', () => {
+    const specs = parseAllMarkdownScreenshotSpecs(REPO_ROOT);
+    expect(specs.length).toBe(ALL_REGISTERED_SCENE_IDS.size);
+
+    const specOutputPaths = new Set<string>();
+    const specScenes = new Set<string>();
+    const issues: string[] = [];
+
+    for (const spec of specs) {
+      specOutputPaths.add(spec.outputAbsPath);
+      specScenes.add(spec.scene);
+      if (!ALL_REGISTERED_SCENE_IDS.has(spec.scene)) {
+        issues.push(
+          `${path.relative(REPO_ROOT, spec.sourceMarkdownPath)}: unknown scene "${spec.scene}"`
+        );
+      }
+    }
+
+    for (const registeredScene of ALL_REGISTERED_SCENE_IDS) {
+      if (!specScenes.has(registeredScene)) {
+        issues.push(`Registered scene "${registeredScene}" is unused in Markdown specs`);
+      }
+    }
+
+    const docPngs = docRoots.flatMap((root) => collectFiles(root, '.png', IGNORE_DIRS));
+    for (const pngPath of docPngs) {
+      if (!specOutputPaths.has(pngPath)) {
+        issues.push(
+          `${path.relative(REPO_ROOT, pngPath)}: missing <!-- screenshot --> YAML spec in Markdown`
+        );
       }
     }
 

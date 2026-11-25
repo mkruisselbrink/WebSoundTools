@@ -248,7 +248,11 @@ export async function captureTutorialScenes({
     await wsm.waitForFrames(12);
     await wsm.captureStoredTrace('FOH Room Avg');
     await wsm.setSourceVisibilityByName('Live Measurement', false);
-    await wsm.addVirtualEq({ autoFlatten: true, hpfTopology: 'linkwitz-riley-24' });
+    await wsm.addVirtualEq({ hpfTopology: 'linkwitz-riley-24' });
+    await wsm.app
+      .locator('#wsm-eq-target-source')
+      .selectOption({ label: 'FOH Room Avg' });
+    await wsm.byTestId('btn-auto-flatten-eq').click();
     await wsm.waitForFrames(6);
     await capturer.capture('t03-06-virtual-eq-room-match', page);
 

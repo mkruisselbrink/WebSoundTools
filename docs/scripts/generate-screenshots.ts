@@ -99,7 +99,18 @@ function cleanGeneratedPngDirs(repoRoot: string): void {
 
 export async function runScreenshotGeneration(): Promise<void> {
   const specs = parseAllMarkdownScreenshotSpecs(REPO_ROOT);
-  console.log(`Parsed ${specs.length} Markdown <!-- screenshot --> specs.`);
+  const specScenes = new Set(specs.map((s) => s.scene));
+  for (const s of specScenes) {
+    if (!ALL_REGISTERED_SCENE_IDS.has(s)) {
+      throw new Error(`Unknown scene "${s}" in Markdown <!-- screenshot --> spec`);
+    }
+  }
+  for (const reg of ALL_REGISTERED_SCENE_IDS) {
+    if (!specScenes.has(reg)) {
+      throw new Error(`Registered scene "${reg}" has no Markdown <!-- screenshot --> spec`);
+    }
+  }
+  console.log(`Parsed and verified ${specs.length} Markdown <!-- screenshot --> specs.`);
   const capturer = createSceneCapturer(specs);
 
   cleanGeneratedPngDirs(REPO_ROOT);

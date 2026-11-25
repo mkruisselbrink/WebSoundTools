@@ -65,10 +65,11 @@ const DEFAULT_VIEWPORT: ScreenshotViewportSpec = {
 };
 
 function maskFencedCodeBlocks(markdown: string): string {
-  return markdown.replace(
+  const withoutFenced = markdown.replace(
     /^(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?^(?:`{3,}|~{3,})\s*$/gm,
     (block) => block.replace(/[^\n]/g, ' ')
   );
+  return withoutFenced.replace(/`[^`\n]+`/g, (span) => ' '.repeat(span.length));
 }
 
 function validatePadding(raw: unknown, ctx: string): ScreenshotPadding | undefined {

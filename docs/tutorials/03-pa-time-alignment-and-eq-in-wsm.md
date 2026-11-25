@@ -9,14 +9,56 @@ Once your measurement microphone and loopback reference are gain-staged, **WebSo
 Sound travels roughly `343 m/s` (`~2.92 ms` per meter at `20 °C`). If your microphone sits `2.9 m` (`8.5 ms`) from the main hang while your loopback cable arrives in `0.0 ms`, that `8.5 ms` time offset adds a linear phase slope of $\Delta \phi(f) = -360^\circ \times f \times 0.0085\text{ s}$—wrapping `360°` every `118 Hz` and turning the Phase plot into unreadable sawtooth stripes:
 
 1. In **`🛠 Tuning`** mode, choose **`PA Alignment 3x (Mag + Phase + Impulse)`** in the layout dropdown.
-2. Select **`Live Measurement`** (on Demo Simulator preset **`1. Flat System (Delayed 8.5 ms)`** with `Ref Delay` set to `0 ms`, or with your real mic at FOH).
+2. Select **`Live Measurement`** (on Demo Simulator preset **`1. Flat System (Delayed 10ms)`** with `Ref Delay` set to `0 ms`, or with your real mic at FOH).
 
-![Unaligned 8.5 ms Propagation Delay Causing Rapid Sawtooth Phase Wrapping](./images/t03-01-unaligned-wrapped-phase.png)
+<!-- screenshot
+app: wsm
+scene: t03-01-unaligned-wrapped-phase
+description: Uncompensated 10.0 ms air propagation delay producing dense sawtooth phase wrapping and a +10.0 ms shifted impulse spike.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-panel-1']"
+    subbox: [0.35, 0.22, 0.52, 0.62]
+    label: "Unaligned Sawtooth Phase"
+    tone: warn
+    placement: top
+  - badge: 2
+    target: "[data-testid='chart-panel-2']"
+    subbox: [0.44, 0.18, 0.14, 0.66]
+    label: "+10.0 ms Air Arrival"
+    placement: right
+  - badge: 3
+    target: "[data-testid='btn-apply-delay']"
+    label: "Click Find & Apply Delay (D)"
+    placement: left
+-->
+![Unaligned Propagation Delay Causing Rapid Sawtooth Phase Wrapping](./images/t03-01-unaligned-wrapped-phase.png)
 
-3. Check **`Est Delay`** in **Live Measurement Settings** (`8.50 ms`, with a red **`(−POL)`** indicator whenever acoustic polarity is inverted) and click **`Find & Apply Delay`** (shortcut **`D`**):
+3. Check **`Est Delay`** in **Live Measurement Settings** (`10.00 ms`, with a red **`(−POL)`** indicator whenever acoustic polarity is inverted) and click **`Find & Apply Delay`** (shortcut **`D`**):
    - **Impulse (Linear)** snaps its direct-arrival spike to **`0.0 ms`**.
-   - **Phase** unwraps into a smooth curve across the passband, revealing true driver crossover and horn phase behavior.
-4. Click **`Capture`** (`C`) and rename the stored trace **`FOH Baseline`**.
+   - **Phase** unwraps into a flat `0°` horizontal trace across the passband, revealing true driver crossover and horn phase behavior.
+4. Click **`Capture`** (`C`) and rename the stored trace **`FOH Flat Baseline`**.
+
+<!-- screenshot
+app: wsm
+scene: t03-05-aligned-phase-and-capture
+description: Locked 10.0 ms Reference Delay unwrapping Phase flat to 0 degrees, centering the Impulse peak at 0.0 ms, and saving FOH Flat Baseline under Sources.
+annotations:
+  - badge: 1
+    target: "[data-testid='input-ref-delay-ms']"
+    label: "Locked Ref Delay (10 ms)"
+    placement: left
+  - badge: 2
+    target: "[data-testid='chart-panel-1']"
+    subbox: [0.25, 0.38, 0.55, 0.24]
+    label: "Unwrapped Flat 0° Phase"
+    placement: top
+  - badge: 3
+    target: "[data-testid='btn-capture-trace']"
+    label: "Capture Baseline (C)"
+    placement: bottom
+-->
+![Locked Reference Delay Unwrapping Phase Flat at 0 Degrees & Centered 0.0 ms Impulse](./images/t03-05-aligned-unwrapped-phase-and-capture.png)
 
 ---
 
@@ -31,11 +73,48 @@ Sound travels roughly `343 m/s` (`~2.92 ms` per meter at `20 °C`). If your micr
 
 Each Transfer Function chart header lets you choose **`Coh: Alpha Fade`** (smoothly dimming noisy bins) or **`Coh: Hard Cutoff`** (hiding trace segments completely below `γ² ≥ 20%..95%`):
 
+<!-- screenshot
+app: wsm
+scene: t03-03-noisy-coherence-blanking
+description: Noisy crowd measurement comparing Alpha Fade on Magnitude, Hard Cutoff (>= 50%) on Phase, and the raw gamma-squared Coherence trace below.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-panel-0'] [data-testid='select-coherence-mode']"
+    label: "Coh: Alpha Fade"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='chart-panel-1'] [data-testid='select-coherence-mode']"
+    label: "Coh: Hard Cutoff (>= 50%)"
+    placement: bottom
+  - badge: 3
+    target: "[data-testid='chart-panel-2']"
+    subbox: [0.12, 0.25, 0.72, 0.55]
+    label: "Coherence γ²(f) Confidence"
+    placement: top
+-->
 ![Coherence Alpha Fade vs Hard Cutoff Masking Unreliable Frequencies](./images/t03-03-noisy-venue-coherence-blanking.png)
 
 ### Spotting Early Reflections with `Impulse (ETC dB)`
 While **`Impulse (Linear)`** makes polarity obvious (`+` upward spike vs. `-` downward spike), secondary wall or floor reflections `-10` to `-20 dB` down look tiny on a linear amplitude axis. Switch a chart panel to **`Impulse (ETC dB)`** (logarithmic Energy-Time Curve, $20\log_{10}\lvert h(t) \rvert$)—try Simulator Preset **`4. Floor Bounce Comb Filtering`**—to read exact reflection arrival delays (`+2.0 ms` floor bounce at `-3.5 dB` and `+14.5 ms` rear-wall slap at `-14 dB`):
 
+<!-- screenshot
+app: wsm
+scene: t03-04-impulse-etc-reflections
+regions: [charts-column]
+description: Linear Impulse Response stacked above logarithmic Impulse (ETC dB) revealing secondary +2.0 ms floor-bounce and +14.5 ms rear-wall reflection spikes.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-panel-0']"
+    subbox: [0.24, 0.16, 0.1, 0.65]
+    label: "0.0 ms Direct Arrival (+Pol)"
+    placement: right
+  - badge: 2
+    target: "[data-testid='chart-panel-1']"
+    subbox: [0.27, 0.2, 0.45, 0.52]
+    label: "+2 ms Floor & +14.5 ms Wall Spikes"
+    tone: warn
+    placement: right
+-->
 ![Linear Impulse vs Logarithmic Impulse ETC Exposing Floor and Wall Reflections](./images/t03-04-impulse-etc-reflections.png)
 
 ---
@@ -44,6 +123,29 @@ While **`Impulse (Linear)`** makes polarity obvious (`+` upward spike vs. `-` do
 
 **Scenario:** Tops have an `LR24` high-pass at `100 Hz` and Subs have an `LR24` low-pass at `100 Hz` (which are naturally `0°` in phase at `100 Hz`), but the subwoofer path arrives **`+5.0 ms` late** (`180°` half-wavelength lag at `100 Hz` — preset **`3. Sub + Top Crossover (Misaligned)`**).
 
+<!-- screenshot
+app: wsm
+scene: t03-02-sub-top-crossover-notch
+description: Misaligned Sub + Top crossover (+5.0 ms sub lag) showing a -20 dB destructive notch at 100 Hz, phase discontinuity, and secondary +5.0 ms sub arrival wave.
+annotations:
+  - badge: 1
+    target: "[data-testid='chart-panel-0']"
+    subbox: [0.22, 0.35, 0.14, 0.52]
+    label: "-20 dB Null @ 100 Hz"
+    tone: danger
+    placement: right
+  - badge: 2
+    target: "[data-testid='chart-panel-1']"
+    subbox: [0.22, 0.22, 0.14, 0.6]
+    label: "180° Phase Fight"
+    tone: warn
+    placement: right
+  - badge: 3
+    target: "[data-testid='chart-panel-2']"
+    subbox: [0.34, 0.3, 0.18, 0.5]
+    label: "+5.0 ms Late Sub Arrival"
+    placement: right
+-->
 ![Misaligned Sub + Top Crossover Carving a Deep Cancellation Notch at 100 Hz](./images/t03-02-sub-top-crossover-notch.png)
 
 Look at the three diagnostic signatures around `100 Hz`:
@@ -85,7 +187,26 @@ Once your spatial average or baseline trace is captured, press **`Space` (`Pause
    - Drag **`EQ1..EQn`** handles horizontally for **Frequency**, vertically for **Gain (`dB`)**, or hold **`Shift` while dragging/scrolling** to adjust **`Q`**.
    - Enable **`Linkwitz-Riley 24 dB/oct`** (`BW/LR 12–48 dB/oct`) under **High-Pass & Low-Pass Crossovers** to preview magnitude and phase impact simultaneously, then copy the final filter values into your system processor.
 
-![Offline Virtual Parametric EQ & On-Chart Handles](../../apps/WebSoundMeter/docs/images/03-virtual-eq-and-crossovers.png)
+<!-- screenshot
+app: wsm
+scene: t03-06-virtual-eq-room-match
+description: Offline Virtual EQ applied to a captured FOH Room Avg stored trace with Auto-Match Room subtractive cuts, Linkwitz-Riley 24 dB/oct high-pass crossover, and draggable on-chart handles.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-auto-flatten-eq']"
+    label: "Auto-Match Room"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='eq-hpf-topology']"
+    label: "LR24 High-Pass Preview"
+    placement: left
+  - badge: 3
+    target: "[data-testid='chart-panel-0']"
+    subbox: [0.22, 0.2, 0.55, 0.45]
+    label: "Interactive EQ1..EQn Handles"
+    placement: bottom
+-->
+![Offline Virtual Parametric EQ, Auto-Match Room & LR24 Crossover Preview](./images/t03-06-virtual-eq-room-match.png)
 
 ---
 

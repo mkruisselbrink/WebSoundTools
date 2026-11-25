@@ -104,7 +104,55 @@ Laptop operating systems often enable conference-call voice processing that roll
    - Raise your interface's **Input 2 (`Ref R`)** trim until the **`Ref R`** bar sits in the green zone around **`-18` to `-12 dBFS`** (`OK` badge, well below `-0.5 dBFS` `CLIP`).
    - Bring up your PA processor input to a comfortable conversational pink-noise level (`~75–82 dBC` in the room) and raise **Input 1 (`Meas M`)** mic preamp gain until **`Meas M`** also reads around **`-18` to `-12 dBFS`** without triggering **`CLIP`**.
 
+<!-- screenshot
+app: wsm
+scene: t01-01-hardware-routing
+regions: [topbar, chart-0, chart-1, sources-card, live-inspector]
+description: Hardware USB interface active at 48 kHz with Pink Noise generator routed to Out Ch 1+2 and green Meas M / Ref R preamp headroom bars.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-io-popover']"
+    label: "USB Interface · Ref Ch 2"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='btn-generator-toggle']"
+    label: "Gen ON (Pink -12 dBFS)"
+    placement: bottom
+  - badge: 3
+    target: "[data-testid='input-dbfs-meter-strip']"
+    label: "Meas M & Ref R (-18..-12 dBFS)"
+    placement: left
+-->
 ![Hardware Routing, Generator Output & Preamp Headroom dBFS Meters](./images/t01-01-hardware-routing-and-generator.png)
+
+### Warm `Pause` (`Space`) vs. Releasing the OS Microphone (`⏹` / `Shift + Space`)
+
+Clicking the interface pill in the top bar opens **`Audio Input & Reference`**:
+- **`Pause` (`Space`):** Freezes live FFT integration, SPL meters, and generator output while keeping the USB stream warm for instant resume between pink-noise bursts.
+- **`Stop / Disconnect` (`⏹` split-pill button or `Shift + Space`):** Stops hardware capture tracks and turns off the OS active-microphone indicator while preserving your selected device and channel routing in standby.
+- **`Auto-Release Mic When Paused`:** Automatically releases the OS microphone if left paused for `5 minutes` (configurable from `2` to `30` minutes, or `Never`).
+
+<!-- screenshot
+app: wsm
+scene: t01-03-io-popover-stop-release
+regions: [topbar, io-popover]
+padding: { top: 0, right: 24, bottom: 20, left: 24 }
+description: Open Audio Input & Reference popover showing Global Reference Channel Ch 2 loopback, idle mic auto-release timer, and warm Pause vs. Stop/Disconnect transport split-pill.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-stop-hardware']"
+    label: "Stop & Release OS Mic"
+    placement: bottom
+  - badge: 2
+    target: "[data-testid='select-ref-channel']"
+    label: "In Ch 2 Loopback Ref"
+    placement: right
+  - badge: 3
+    target: "[data-testid='select-auto-release-minutes']"
+    label: "Idle Mic Auto-Release"
+    placement: right
+-->
+![Audio Input & Reference Popover with Loopback Channel, Idle Auto-Release & Hardware Stop](./images/t01-03-io-popover-and-stop-release.png)
 
 ---
 
@@ -117,22 +165,56 @@ Measurement condenser capsules typically exhibit a `+1.5` to `+3 dB` diffraction
 3. Under **`Upload Calibration (.cal / .txt / .frd)`**, choose your 2-column (`Freq_Hz  Mag_dB`) or 3-column (`Freq_Hz  Mag_dB  Phase_Deg`) calibration file.
 4. Confirm the file is active in the **`Mic Calibration Curve`** dropdown (`M30-Serial-8412.cal (13 pts)`). Calibration curves persist in `IndexedDB` across offline reloads.
 
+<!-- screenshot
+app: wsm
+scene: t01-02-mic-calibration-loaded
+regions: [tuning-sidebar]
+description: Right Tuning sidebar scrolled to Advanced Settings with serial-numbered M30-Serial-8412.cal curve active in Mic Calibration Curve.
+annotations:
+  - badge: 1
+    target: "[data-testid='select-calibration-curve']"
+    label: "Active .cal Curve (13 pts)"
+    placement: top
+  - badge: 2
+    target: "#wsm-calibration-upload"
+    label: "Upload .cal / .txt / .frd"
+    placement: top
+-->
 ![Loaded Serial-Numbered Microphone Calibration Curve](./images/t01-02-mic-calibration-loaded.png)
 
 ---
 
 ## 6. Calibrating Absolute SPL (`94.0 dB` / `114.0 dB @ 1 kHz`)
 
-A digital interface reports **`dBFS`** (decibels relative to full-scale ADC clipping). To reference **WebSoundMeter**'s broadband SPL meter and Show Mode compliance logs to true acoustic Pascals (`20 µPa`):
+A digital interface reports **`dBFS`** (decibels relative to full-scale ADC clipping). To reference **WebSoundMeter**'s broadband SPL meter and Show Mode compliance logs to true acoustic Pascals (`20 µPa`) **without shifting `0 dB` on your Transfer Function or RTA traces**:
 
 1. **Lock physical preamp gain first:** Set your Input 1 preamp knob low enough that peak concert levels (`122–126 dB Peak`) will never clip `0 dBFS`, and mark or tape the knob.
 2. Fit your **Acoustic SPL Calibrator** over the microphone capsule and turn it on at **`94.0 dB`** (or **`114.0 dB`**) at **`1 kHz`**.
-3. Set the topbar SPL meter to **`dBZ`** (or **`dBA`**, which has `0.0 dB` weighting at `1,000 Hz`) and **`Slow`**.
-4. Adjust **`Input Gain (dB)`** in **Live Measurement Settings** until the topbar SPL readout matches **`94.0 dB`**.
-5. Remove the calibrator.
+3. In **Live Measurement Settings** (or on any mic row in **`🎚 Show`** mode), click **`Calibrate SPL…`** (`Cal…`):
+   - Click **`94 dB Cal`** (or **`114 dB Cal`**) for a 1-click pistonphone calibration, or enter a side-by-side reference SPL meter reading and click **`Match Live`**.
+   - **WebSoundMeter** computes and stores the exact **`SPL Offset (0 dBFS = X dB SPL)`** for that microphone channel.
+4. Remove the calibrator.
+
+<!-- screenshot
+app: wsm
+scene: t01-04-spl-calibrator-94db
+regions: [live-inspector, cal-popover]
+padding: { top: 14, right: 12, bottom: 44, left: 215 }
+description: Live Measurement inspector with the SPL Calibration popover open showing live dBA/dBFS level, Match Live reference field, and 1-click 94 dB / 114 dB pistonphone buttons.
+annotations:
+  - badge: 1
+    target: "[data-testid='btn-calibrate-spl']"
+    label: "Open SPL Calibrator"
+    placement: left
+  - badge: 2
+    target: "[data-doc-region='cal-popover'] .foh-popover-actions"
+    label: "1-Click 94 / 114 dB Pistonphone"
+    placement: bottom
+-->
+![One-Click 94 dB / 114 dB SPL Calibration Popover](./images/t01-04-spl-calibrator-94db.png)
 
 > [!IMPORTANT]
-> **`Input Gain (dB)` vs. Transfer Function Magnitude:** Because `Input Gain (dB)` scales the incoming measurement stream, changing it shifts **both** broadband SPL readouts and Transfer Function Magnitude (`dB`). Complete your SPL calibration *before* capturing `0 dB` baseline transfer-function traces. (Conversely, loading a `.cal` curve corrects frequency-domain TF/RTA plots without altering broadband time-domain `dBA`/`dBC`/`dBZ` SPL.)
+> **`SPL Offset (0 dBFS)` vs. `Input Gain (dB)`:** `SPL Offset` (`Calibrate SPL…`) calibrates broadband SPL, `Leq`, `Peak`, and Show History while leaving Transfer Function and RTA `dBFS` traces untouched. Use `Input Gain (dB)` only when digitally trimming channel level into the FFT (for example, matching `M` to `R` gain on a Transfer Function plot).
 
 ---
 
