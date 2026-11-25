@@ -8,13 +8,11 @@
  * Manages:
  *  - `navigator.mediaDevices.enumerateDevices()` and raw `getUserMedia` capture (up to 64 channels)
  *  - `AudioContext`, `ChannelSplitterNode`, `ChannelMergerNode`, and `CaptureWorkletNode`
- *  - Dynamic multi-channel input routing: connects up to 8 actively used physical device channels
- *    from a 2..64+ channel interface into the worklet's 8 capture tap inputs
- *  - Multi-channel hardware output routing for the real-time Signal Generator
- *  - iOS / iPadOS standalone PWA lifecycle resilience: calls `getUserMedia` directly inside the
- *    user gesture before async module fetches, tolerates rotated `deviceId` UUIDs, resumes
- *    `'interrupted'` / `'suspended'` `AudioContext` states after `PlayAndRecord` negotiation,
- *    and detects OS-terminated `MediaStreamTrack`s on foreground return.
+ *  - Dynamic multi-channel input routing: connects up to `maxTapSlots` actively used physical
+ *    device channels from a 2..64+ channel interface into the worklet's capture tap inputs
+ *  - Optional `inputOnly` mode for a secondary USB console stream running on its own independent
+ *    native-clock `AudioContext` without touching generator outputs
+ *  - iOS / iPadOS standalone PWA lifecycle resilience
  */
 
 import { SignalGeneratorConfig } from '../dsp/signal-generator.js';
@@ -37,6 +35,9 @@ export interface HardwareStreamStartOptions {
 }
 
 export class HardwareAudioRouter {
+  private readonly maxTapSlots: number;
+  private readonly inputOnly: boolean;
+
   private audioContext: AudioContext | null = null;
   private workletModuleLoaded = false;
   private mediaStream: MediaStream | null = null;
@@ -51,6 +52,11 @@ export class HardwareAudioRouter {
   private generatorOutputChannel = -1;
   private availableChannels = 2;
   private availableOutputChannels = 2;
+
+  constructor(maxTapSlots: number = MAX_CAPTURE_TAP_SLOTS, inputOnly: boolean = false) {
+    this.maxTapSlots = Math.max(1, maxTapSlots);
+    this.inputOnly = inputOnly;
+  }
 
   async listInputDevices(): Promise<AudioDeviceOption[]> {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -77,6 +83,10 @@ export class HardwareAudioRouter {
     return this.availableOutputChannels;
   }
 
+  getSampleRate(): number {
+    return this.audioContext?.sampleRate ?? 48000;
+  }
+
   getGeneratorOutputChannel(): number {
     return this.generatorOutputChannel;
   }
@@ -85,10 +95,6 @@ export class HardwareAudioRouter {
     return this.activePhysicalChannels;
   }
 
-  /**
-   * Returns true when an active hardware capture stream has at least one live audio track
-   * and its `AudioContext` is actively running (not `'suspended'` or WebKit `'interrupted'`).
-   */
   isStreamHealthy(): boolean {
     if (!this.audioContext || !this.mediaStream) return false;
     if ((this.audioContext.state as string) !== 'running') return false;
@@ -97,11 +103,6 @@ export class HardwareAudioRouter {
     return tracks.some((t) => (t.readyState ?? 'live') !== 'ended');
   }
 
-  /**
-   * Recovers from iOS/iPadOS standalone Home Screen interruptions:
-   * - Resumes `'suspended'` or `'interrupted'` `AudioContext` when tracks are still live.
-   * - Re-acquires the hardware stream if the OS ended the `MediaStreamTrack` while backgrounded.
-   */
   async recoverStreamIfInterrupted(): Promise<number | null> {
     if (!this.lastStartOptions) return null;
     const tracks = this.mediaStream?.getAudioTracks?.() ?? [];
@@ -118,10 +119,6 @@ export class HardwareAudioRouter {
     return this.startStream(this.lastStartOptions);
   }
 
-  /**
-   * Computes the mapping from physical hardware channel index (0-based, e.g. 0..63)
-   * to capture worklet tap slot index (0..7).
-   */
   getChannelTapMap(): Record<number, number> {
     const map: Record<number, number> = {};
     for (let tapIdx = 0; tapIdx < this.activePhysicalChannels.length; tapIdx++) {
@@ -134,7 +131,7 @@ export class HardwareAudioRouter {
   setActivePhysicalChannels(physicalChannels: readonly number[]): Record<number, number> {
     const deduped: number[] = [];
     for (const ch of physicalChannels) {
-      if (ch >= 0 && !deduped.includes(ch) && deduped.length < MAX_CAPTURE_TAP_SLOTS) {
+      if (ch >= 0 && !deduped.includes(ch) && deduped.length < this.maxTapSlots) {
         deduped.push(ch);
       }
     }
@@ -152,6 +149,7 @@ export class HardwareAudioRouter {
   }
 
   updateGeneratorConfig(config: SignalGeneratorConfig): void {
+    if (this.inputOnly) return;
     if (this.captureWorkletNode) {
       this.captureWorkletNode.port.postMessage({
         type: 'update-generator-config',
@@ -192,10 +190,9 @@ export class HardwareAudioRouter {
       });
     } catch (err) {
       const errName = (err as { name?: string })?.name;
-      // On iOS/iPadOS Home Screen apps, saved deviceId UUIDs rotate across launches:
-      // fall back to the default input with raw un-processed audio constraints.
       if (
         deviceId &&
+        !this.inputOnly &&
         (errName === 'OverconstrainedError' || errName === 'NotFoundError')
       ) {
         try {
@@ -211,7 +208,11 @@ export class HardwareAudioRouter {
         }
       }
       if (errName === 'OverconstrainedError') {
-        return navigator.mediaDevices.getUserMedia({ audio: true });
+        return navigator.mediaDevices.getUserMedia(
+          deviceId && this.inputOnly
+            ? { audio: { deviceId: { exact: deviceId } } }
+            : { audio: true }
+        );
       }
       throw err;
     }
@@ -223,10 +224,6 @@ export class HardwareAudioRouter {
     this.generatorOutputChannel = options.generatorOutputChannel;
     this.setActivePhysicalChannels(options.activePhysicalChannels);
 
-    // Unlock AudioContext AND request getUserMedia synchronously in the same user-gesture
-    // tick before the first `await`: WebKit requires AudioContext creation/resume inside an
-    // active user gesture (which would expire during a multi-second mic permission prompt),
-    // AND requires getUserMedia inside an active user gesture before async module fetches.
     if (!this.audioContext || (this.audioContext.state as string) === 'closed') {
       this.audioContext = new AudioContext({ latencyHint: 'interactive' });
       this.workletModuleLoaded = false;
@@ -257,14 +254,16 @@ export class HardwareAudioRouter {
       }
     }
 
-    const maxOut = Math.min(64, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
-    this.availableOutputChannels = maxOut;
-    try {
-      this.audioContext.destination.channelCount = maxOut;
-      this.audioContext.destination.channelCountMode = 'explicit';
-      this.audioContext.destination.channelInterpretation = 'discrete';
-    } catch {
-      // Fallback to default stereo destination if browser disallows explicit channelCount
+    if (!this.inputOnly) {
+      const maxOut = Math.min(64, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
+      this.availableOutputChannels = maxOut;
+      try {
+        this.audioContext.destination.channelCount = maxOut;
+        this.audioContext.destination.channelCountMode = 'explicit';
+        this.audioContext.destination.channelInterpretation = 'discrete';
+      } catch {
+        // Fallback to default stereo destination if browser disallows explicit channelCount
+      }
     }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -274,24 +273,34 @@ export class HardwareAudioRouter {
       trackSettings?.channelCount || this.sourceNode.channelCount || 2
     );
     this.splitterNode = this.audioContext.createChannelSplitter(this.availableChannels);
-    this.outputMergerNode = this.audioContext.createChannelMerger(this.availableOutputChannels);
-    this.outputMergerNode.connect(this.audioContext.destination);
+    if (!this.inputOnly) {
+      this.outputMergerNode = this.audioContext.createChannelMerger(this.availableOutputChannels);
+      this.outputMergerNode.connect(this.audioContext.destination);
+    }
 
     if (useWorklet) {
       this.captureWorkletNode = new AudioWorkletNode(
         this.audioContext,
         'capture-tap-processor',
         {
-          numberOfInputs: MAX_CAPTURE_TAP_SLOTS,
+          numberOfInputs: this.maxTapSlots,
           numberOfOutputs: 1,
           outputChannelCount: [1],
         }
       );
 
       this.captureWorkletNode.port.postMessage({
-        type: 'update-generator-config',
-        config: options.generatorConfig,
+        type: 'configure-taps',
+        channelCount: this.inputOnly ? this.maxTapSlots : this.maxTapSlots + 1,
+        inputOnly: this.inputOnly,
       });
+
+      if (!this.inputOnly) {
+        this.captureWorkletNode.port.postMessage({
+          type: 'update-generator-config',
+          config: options.generatorConfig,
+        });
+      }
       if (options.isPaused) {
         this.captureWorkletNode.port.postMessage({
           type: 'pause',
@@ -310,6 +319,7 @@ export class HardwareAudioRouter {
           this.captureWorkletNode.port.postMessage({
             type: 'init-ring-buffer',
             storage: options.ringBufferStorage,
+            inputOnly: this.inputOnly,
           });
         } catch {
           this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
@@ -329,16 +339,16 @@ export class HardwareAudioRouter {
       this.sourceNode.connect(this.splitterNode);
       this.reconnectChannels();
     } else if (typeof this.audioContext.createScriptProcessor === 'function') {
-      // Fallback capture node if AudioWorklet module loading fails in a standalone WebView
-      const tapCount = Math.min(MAX_CAPTURE_TAP_SLOTS, this.availableChannels);
+      const tapCount = Math.min(this.maxTapSlots, this.availableChannels);
       const sp = this.audioContext.createScriptProcessor(2048, tapCount, 1);
+      const chunkChannelCount = this.inputOnly ? this.maxTapSlots : this.maxTapSlots + 1;
       sp.onaudioprocess = (ev: AudioProcessingEvent) => {
         if (this.lastStartOptions?.isPaused) return;
         const inBuf = ev.inputBuffer;
         const len = inBuf.length;
         const zero = new Float32Array(len);
-        const chunks: Float32Array[] = new Array(MAX_CAPTURE_TAP_SLOTS + 1);
-        for (let t = 0; t < MAX_CAPTURE_TAP_SLOTS; t++) {
+        const chunks: Float32Array[] = new Array(chunkChannelCount);
+        for (let t = 0; t < this.maxTapSlots; t++) {
           const physCh = this.activePhysicalChannels[t];
           if (physCh !== undefined && physCh < inBuf.numberOfChannels) {
             chunks[t] = new Float32Array(inBuf.getChannelData(physCh));
@@ -346,7 +356,9 @@ export class HardwareAudioRouter {
             chunks[t] = zero;
           }
         }
-        chunks[MAX_CAPTURE_TAP_SLOTS] = zero;
+        if (!this.inputOnly) {
+          chunks[this.maxTapSlots] = zero;
+        }
         options.onFallbackChunk(chunks);
       };
       this.fallbackScriptNode = sp;
@@ -354,8 +366,6 @@ export class HardwareAudioRouter {
       sp.connect(this.audioContext.destination);
     }
 
-    // Always resume AudioContext AFTER getUserMedia & graph connection so WebKit
-    // recovers from 'suspended' or 'interrupted' PlayAndRecord session transitions.
     if ((this.audioContext.state as string) !== 'running') {
       await this.audioContext.resume();
     }
@@ -372,6 +382,14 @@ export class HardwareAudioRouter {
       const requestedCh = this.activePhysicalChannels[tapIdx];
       const physicalCh = Math.max(0, Math.min(requestedCh, this.availableChannels - 1));
       this.splitterNode.connect(this.captureWorkletNode, physicalCh, tapIdx);
+    }
+
+    if (this.inputOnly) {
+      // Keep zero-filled output 0 connected to destination so pull-based audio graphs always tick process()
+      if (this.audioContext) {
+        this.captureWorkletNode.connect(this.audioContext.destination);
+      }
+      return;
     }
 
     if (this.outputMergerNode && this.generatorOutputChannel !== -2) {

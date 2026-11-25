@@ -14,9 +14,10 @@ const WRITE_INDEX_OFFSET = 0;
 const READ_INDEX_OFFSET = 1;
 const HEADER_INTS = 2; // writeIndex, readIndex (Uint32Array with Atomics)
 
-export const MAX_CAPTURE_TAP_SLOTS = 8;
-export const INTERNAL_LOOPBACK_SLOT_INDEX = MAX_CAPTURE_TAP_SLOTS; // Slot 8
-export const TOTAL_RING_BUFFER_SLOTS = MAX_CAPTURE_TAP_SLOTS + 1; // 9 slots total
+export const MAX_CAPTURE_TAP_SLOTS = 40;
+export const MIXER_CAPTURE_TAP_SLOTS = 33; // Up to 32 watched inputs + 1 Mix Bus on secondary device
+export const INTERNAL_LOOPBACK_SLOT_INDEX = MAX_CAPTURE_TAP_SLOTS; // Slot 40
+export const TOTAL_RING_BUFFER_SLOTS = MAX_CAPTURE_TAP_SLOTS + 1; // 41 slots total
 
 export interface RingBufferStorage {
   readonly headerBuffer: SharedArrayBuffer | ArrayBuffer;

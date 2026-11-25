@@ -25,6 +25,11 @@ import {
 } from '../dsp/weighting-meters.js';
 import type { LayoutPreset } from '../ui/app-shell.js';
 import { DEFAULT_URL_VIEW_STATE, WorkspaceMode } from '../ui/url-state.js';
+import {
+  MixerWatchSessionConfig,
+  createDefaultMixerWatchSessionConfig,
+  hydrateMixerWatchSessionConfig,
+} from './mixer-patch-storage.js';
 
 export const WORKSPACE_SESSION_STORAGE_KEY = 'web-sound-meter:workspace:v1';
 
@@ -65,6 +70,7 @@ export interface WorkspaceSessionSnapshot {
     'enabled' | 'type' | 'levelDbFs' | 'sineFrequencyHz'
   >;
   readonly hardwareRouting: HardwareDeviceRoutingSnapshot;
+  readonly mixerWatch?: MixerWatchSessionConfig;
 }
 
 function hydrateLiveSlot(
@@ -128,6 +134,7 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
       globalReferenceChannel: 1,
       generatorOutputChannel: -1,
     },
+    mixerWatch: createDefaultMixerWatchSessionConfig(),
   };
 }
 
@@ -178,6 +185,7 @@ export function loadWorkspaceSession(
       ...defaults.hardwareRouting,
       ...(parsed.hardwareRouting ?? {}),
     },
+    mixerWatch: hydrateMixerWatchSessionConfig(parsed.mixerWatch),
   };
 }
 

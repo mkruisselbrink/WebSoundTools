@@ -7,6 +7,7 @@
  */
 
 import type { RingBufferStorage } from '../audio/ring-buffer.js';
+import type { MixerWatchSessionConfig } from '../sources/mixer-patch-storage.js';
 import type { MeasurementPipelineConfig } from './analyzer-pipeline.js';
 import type { SignalGeneratorConfig } from './signal-generator.js';
 import type { SplHistoryCheckpoint, SplHistoryWindowSec } from './spl-history.js';
@@ -28,13 +29,25 @@ export interface LiveMeasurementSlotConfig {
 }
 
 export type WorkerInboundMessage =
-  | { type: 'init'; sampleRate: number; ringBufferStorage?: RingBufferStorage }
+  | {
+      type: 'init';
+      sampleRate: number;
+      ringBufferStorage?: RingBufferStorage;
+      mixerRingBufferStorage?: RingBufferStorage;
+    }
   | { type: 'set-input-mode'; mode: InputSourceMode }
   | {
       type: 'sync-live-slots';
       slots: readonly LiveMeasurementSlotConfig[];
       channelTapMap: Record<number, number>;
       globalReferenceChannel?: number;
+    }
+  | {
+      type: 'sync-mixer-watch';
+      config: MixerWatchSessionConfig;
+      channelTapMap: Record<number, number>;
+      mixerSampleRate?: number;
+      useSeparateRingBuffer?: boolean;
     }
   | {
       type: 'set-simulator-preset';
@@ -57,4 +70,5 @@ export type WorkerInboundMessage =
   | { type: 'hydrate-spl-history'; checkpoints: readonly SplHistoryCheckpoint[] }
   | { type: 'export-spl-csv' }
   | { type: 'audio-chunk'; channels: Float32Array[] }
+  | { type: 'mixer-audio-chunk'; channels: Float32Array[] }
   | { type: 'pause'; paused: boolean };
