@@ -10,6 +10,7 @@ import {
 } from './audio-engine.js';
 import { HardwareAudioRouter } from './hardware-audio-router.js';
 import { DEFAULT_GENERATOR_CONFIG } from '../dsp/signal-generator.js';
+import { createDefaultMixerWatchSessionConfig } from '../sources/mixer-patch-storage.js';
 
 describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
   const origWorker = globalThis.Worker;
@@ -372,6 +373,93 @@ describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
     });
     await expect(engine.recoverHardwareStreamIfInterrupted()).resolves.toBe(true);
     expect(engine.isHardwareStreamHealthy()).toBe(true);
+
+    engine.dispose();
+  });
+
+  it('supports opening a separate secondary USB mixer stream for Mixer Input Watch and falls back if a single-route OS preempts the primary mic', async () => {
+    let primaryTrackState: MediaStreamTrackState = 'live';
+    let preemptPrimaryOnSecondDevice = false;
+
+    const gumSpy = vi.fn(async (constraints?: MediaStreamConstraints) => {
+      const audioObj = constraints?.audio as MediaTrackConstraints | undefined;
+      const exactId = (audioObj?.deviceId as { exact?: string } | undefined)?.exact;
+      if (exactId === 'x-usb-32') {
+        if (preemptPrimaryOnSecondDevice) {
+          primaryTrackState = 'ended';
+        }
+        return {
+          getAudioTracks: () => [
+            { readyState: 'live', getSettings: () => ({ channelCount: 32 }) },
+          ],
+          getTracks: () => [{ stop: vi.fn() }],
+        };
+      }
+      primaryTrackState = 'live';
+      return {
+        getAudioTracks: () => [
+          {
+            get readyState() {
+              return primaryTrackState;
+            },
+            getSettings: () => ({ channelCount: 2 }),
+          },
+        ],
+        getTracks: () => [{ stop: vi.fn() }],
+      };
+    });
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        mediaDevices: {
+          enumerateDevices: vi.fn(async () => [
+            { kind: 'audioinput', deviceId: 'scarlett-2i2', label: 'Scarlett 2i2' },
+            { kind: 'audioinput', deviceId: 'x-usb-32', label: 'X-USB (32ch)' },
+          ]),
+          getUserMedia: gumSpy,
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const engine = new AudioEngine();
+    await engine.setInputMode('hardware', 'scarlett-2i2');
+    expect(engine.getAvailableChannels()).toBe(2);
+
+    // 1. Desktop dual-device mode: Scarlett 2i2 (2 ch) + X-USB (32 ch) run simultaneously
+    await engine.setMixerWatchConfig({
+      ...createDefaultMixerWatchSessionConfig(),
+      enabled: true,
+      deviceMode: 'separate-device',
+      separateDeviceId: 'x-usb-32',
+      separateDeviceLabel: 'X-USB (32ch)',
+    });
+    expect(engine.getMixerWatchAvailableChannels()).toBe(32);
+    expect(engine.getMixerWatchConfig().deviceMode).toBe('separate-device');
+    expect(mockWorkerPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sync-mixer-watch',
+        useSeparateRingBuffer: true,
+      })
+    );
+
+    // 2. Single-route mobile OS preemption: opening a second device ends primary track -> recovers primary & falls back to follow-main
+    await engine.setMixerWatchConfig({
+      ...engine.getMixerWatchConfig(),
+      enabled: false,
+    });
+    preemptPrimaryOnSecondDevice = true;
+    await engine.setMixerWatchConfig({
+      ...createDefaultMixerWatchSessionConfig(),
+      enabled: true,
+      deviceMode: 'separate-device',
+      separateDeviceId: 'x-usb-32',
+      separateDeviceLabel: 'X-USB (32ch)',
+    });
+    expect(engine.isHardwareStreamHealthy()).toBe(true);
+    expect(engine.getMixerWatchConfig().deviceMode).toBe('follow-main');
+    expect(engine.getMixerWatchStatusNotice()).toContain('Follow Main Input');
 
     engine.dispose();
   });

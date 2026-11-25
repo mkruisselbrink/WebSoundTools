@@ -237,4 +237,103 @@ describe('SourceStore', () => {
     store.clearFeedbackRingLog();
     expect(store.getFeedbackRingLog()).toHaveLength(0);
   });
+
+  it('merges culprit-attributed mixer rings with FOH slot rings and creates isolated per-culprit Notch EQs', () => {
+    const { adapter } = createMemoryPersistence();
+    const store = new SourceStore(adapter);
+    const fohFrame = createMockLiveFrame('live-measurement', 'FOH Mic', 1.0);
+    fohFrame.feedbackTracks = [
+      {
+        id: 'live-measurement-fb-1',
+        slotId: 'live-measurement',
+        slotName: 'FOH Mic',
+        slotColor: '#38bdf8',
+        state: 'ringing',
+        frequencyHz: 2480,
+        isoBandHz: 2500,
+        isoBandLabel: '2.5 kHz',
+        musicalNote: 'D#7 (-23c)',
+        prominenceDb: 13.0,
+        peakLevelDb: 80.0,
+        estimatedQ: 18,
+        durationMs: 200,
+        firstDetectedAt: '20:00:00',
+        latchRemainingRatio: 1.0,
+        loopLocation: 'in-mix',
+      },
+    ];
+    store.setLiveFrames([fohFrame]);
+    expect(store.getFeedbackRingLog()).toHaveLength(1);
+
+    // Next frame resolves Stage Vox 2 (Ch 2) as the culprit at 2481 Hz + a stage-only 630 Hz ring on Acoustic Gtr (Ch 3)
+    const enrichedFoh = createMockLiveFrame('live-measurement', 'FOH Mic', 1.0);
+    enrichedFoh.feedbackTracks = [
+      {
+        ...fohFrame.feedbackTracks[0],
+        state: 'feedback',
+        frequencyHz: 2481,
+        prominenceDb: 18.0,
+        culprit: {
+          channelIndex: 1,
+          channelName: 'Stage Vox 2',
+          confidencePct: 86,
+          runnerUpLabel: 'Acoustic Gtr (9%)',
+        },
+        notchTargetKey: 'mixer-ch-1',
+        notchTargetLabel: 'Stage Vox 2 (Ch 2)',
+      },
+    ];
+    const stageOnlyTracks = [
+      {
+        id: 'mixer-ch-2-fb-1',
+        slotId: 'mixer-ch-2',
+        slotName: 'Acoustic Gtr',
+        slotColor: '#10b981',
+        state: 'ringing' as const,
+        frequencyHz: 630,
+        isoBandHz: 630,
+        isoBandLabel: '630 Hz',
+        musicalNote: 'D#5 (+15c)',
+        prominenceDb: 12.5,
+        peakLevelDb: 78.0,
+        estimatedQ: 16,
+        durationMs: 160,
+        firstDetectedAt: '20:00:01',
+        latchRemainingRatio: 1.0,
+        loopLocation: 'stage-only' as const,
+        culprit: {
+          channelIndex: 2,
+          channelName: 'Acoustic Gtr',
+          confidencePct: 81,
+        },
+        notchTargetKey: 'mixer-ch-2',
+        notchTargetLabel: 'Acoustic Gtr (Ch 3)',
+      },
+    ];
+
+    store.setLiveFrames([enrichedFoh], stageOnlyTracks);
+    // 2480/2481 Hz merged in-place (not duplicated!), plus 630 Hz stage-only track = 2 log items total
+    expect(store.getFeedbackRingLog()).toHaveLength(2);
+    const voxEntry = store
+      .getFeedbackRingLog()
+      .find((t) => t.isoBandHz === 2500)!;
+    const gtrEntry = store
+      .getFeedbackRingLog()
+      .find((t) => t.isoBandHz === 630)!;
+    expect(voxEntry.culprit?.channelName).toBe('Stage Vox 2');
+
+    // Applying Notch EQ creates separate Virtual EQ cheat-sheets per culprit channel
+    const voxEqId = store.applyFeedbackNotchToEq(voxEntry);
+    const gtrEqId = store.applyFeedbackNotchToEq(gtrEntry);
+    expect(voxEqId).not.toBe(gtrEqId);
+
+    const voxEq = store.getEqSources().find((e) => e.id === voxEqId)!;
+    const gtrEq = store.getEqSources().find((e) => e.id === gtrEqId)!;
+    expect(voxEq.name).toBe('Notch — Stage Vox 2 (Ch 2)');
+    expect(voxEq.culpritKey).toBe('mixer-ch-1');
+    expect(voxEq.targetSourceId).toBe('live-measurement');
+    expect(gtrEq.name).toBe('Notch — Acoustic Gtr (Ch 3)');
+    expect(gtrEq.culpritKey).toBe('mixer-ch-2');
+    expect(gtrEq.targetSourceId).toBe('live-measurement');
+  });
 });

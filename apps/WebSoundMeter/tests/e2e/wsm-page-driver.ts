@@ -462,6 +462,16 @@ export class WsmPageDriver {
     await limitInput.dispatchEvent('change');
   }
 
+  async openMixerWatchModal(fromMode: WorkspaceMode = 'tuning'): Promise<Locator> {
+    const btnId =
+      fromMode === 'show'
+        ? WSM_TEST_IDS.openMixerWatchBtn
+        : WSM_TEST_IDS.tuningMixerWatchBtn;
+    await this.byTestId(btnId).click();
+    await expect(this.byTestId(WSM_TEST_IDS.mixerWatchModal)).toBeVisible();
+    return this.app.locator('foh-modal.mixer-watch-modal-host');
+  }
+
   private async selectOptionMatching(selectLocator: Locator, pattern: RegExp): Promise<void> {
     const options = await selectLocator.locator('option').evaluateAll((els) =>
       els.map((el) => ({

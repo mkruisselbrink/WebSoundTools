@@ -145,6 +145,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
 
   return html`
     <foh-modal
+      class="mixer-watch-modal-host"
       .open=${props.open}
       modalTitle="Mixer Input Watch & Patch Presets"
       maxWidth="660px"
@@ -317,7 +318,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
                 id="wsm-mixer-preset-name"
                 name="mixer-preset-name"
                 data-testid="input-mixer-preset-name"
-                placeholder="e.g. X32 — Headliner Vox, Sunday Lavs…"
+                placeholder="e.g. Festival Headliner Vox, Sunday Lavs…"
                 maxlength="48"
                 autocorrect="off"
                 autocapitalize="none"

@@ -267,4 +267,58 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await expect(banner).toHaveCount(0);
     await wsm.waitForLiveSignal();
   });
+
+  test('identifies feedback culprit mixer channels, rejects vibrato vocals on non-feedback presets, saves named patch presets, and creates per-culprit Notch EQs', async ({
+    page,
+  }) => {
+    const wsm = new WsmPageDriver(page);
+    await wsm.goto('/');
+    await wsm.waitForLiveSignal();
+
+    // 1. Open Mixer Input Watch modal in Tuning mode, enable watching, and save a named patch preset
+    const modal = await wsm.openMixerWatchModal('tuning');
+    const enableCheckbox = modal.getByTestId('toggle-mixer-watch-enabled');
+    await enableCheckbox.check();
+
+    const presetNameInput = modal.getByTestId('input-mixer-preset-name');
+    await presetNameInput.fill('Festival Headliner Vox');
+    await modal.getByTestId('btn-save-mixer-preset').click();
+    await expect(modal.getByTestId('select-mixer-watch-preset')).not.toHaveValue('');
+
+    await page.keyboard.press('Escape');
+    await expect(wsm.byTestId('mixer-watch-modal')).not.toBeVisible();
+
+    // 2. On default 'pa-room-modes' preset, simulated Lead Vox (vibrato singing) & guitars must NOT false-trigger
+    await page.waitForTimeout(450);
+    await expect(wsm.app.getByTestId('empty-ring-log')).toBeVisible();
+
+    // 3. Switch to Show mode + 'feedback-ring-demo' -> pinpoints 'Stage Vox 2 · Ch 2' as culprit without duplicate bleed rows
+    await wsm.setMode('show');
+    await wsm.selectShowSlotPreset(0, 'feedback-ring-demo');
+
+    const ringList = wsm.app.getByTestId('ring-log-list');
+    await expect(ringList).toBeVisible({ timeout: 5000 });
+    await expect(ringList).toContainText('Culprit: Stage Vox 2 · Ch 2', {
+      timeout: 5000,
+    });
+
+    // 4. Click Notch EQ on the Stage Vox 2 ring -> creates dedicated 'Notch — Stage Vox 2 (Ch 2)' Virtual EQ
+    const voxRow = ringList
+      .locator('.ring-log-row', { hasText: 'Stage Vox 2' })
+      .first();
+    await voxRow.locator('.btn-notch-eq').click();
+
+    await wsm.setMode('tuning');
+    await expect(
+      wsm.app.locator('#source-list, [data-testid="source-list"]')
+    ).toContainText('Notch — Stage Vox 2 (Ch 2)');
+
+    // 5. Reload and verify both Mixer Watch enabled state and saved 'Festival Headliner Vox' preset persist
+    await page.reload();
+    await expect(wsm.app.getByTestId('btn-tuning-mixer-watch')).toContainText('ON · 4 ch');
+    const reopenedModal = await wsm.openMixerWatchModal('tuning');
+    await expect(reopenedModal.getByTestId('select-mixer-watch-preset')).toContainText(
+      'Festival Headliner Vox'
+    );
+  });
 });

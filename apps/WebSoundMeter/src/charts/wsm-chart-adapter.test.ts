@@ -159,6 +159,49 @@ describe('WSM plot-types & wsm-chart-adapter', () => {
     expect(magScene.eqOverlay?.referenceZeroDbY).toBe(0);
     expect(magScene.calloutFlags?.[0].line1).toContain('2.48 kHz');
 
+    // Culprit-attributed & stage-only extraFeedbackTracks format cleanly onto callout flags
+    const culpritScene = buildWsmChartScene({
+      plotType: 'rta',
+      bounds: { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 },
+      sources: [{ ...src, feedbackTracks: [] }],
+      eqBands: null,
+      rtaMode: 'line',
+      showPeakHold: false,
+      coherenceThreshold: 0.35,
+      showFeedbackWatch: true,
+      extraFeedbackTracks: [
+        {
+          id: 'mixer-ch-1-fb-1',
+          slotId: 'mixer-ch-1',
+          slotName: 'Stage Vox 2',
+          slotColor: '#f59e0b',
+          state: 'feedback',
+          frequencyHz: 2480,
+          isoBandHz: 2500,
+          isoBandLabel: '2.5 kHz',
+          musicalNote: 'D#7 (-23c)',
+          prominenceDb: 18.4,
+          peakLevelDb: 86.0,
+          estimatedQ: 24,
+          durationMs: 320,
+          firstDetectedAt: '21:00:00',
+          latchRemainingRatio: 1.0,
+          loopLocation: 'in-mix',
+          culprit: {
+            channelIndex: 1,
+            channelName: 'Stage Vox 2',
+            confidencePct: 86,
+          },
+        },
+      ],
+      splTraceMode: 'compliance-15m',
+      showSplThresholds: false,
+      splAlertThresholds: DEFAULT_SPL_ALERT_THRESHOLDS,
+    });
+    expect(culpritScene.calloutFlags).toHaveLength(1);
+    expect(culpritScene.calloutFlags![0].line1).toContain('Stage Vox 2 (86%)');
+    expect(culpritScene.calloutFlags![0].line2).toContain('In Mix');
+
     const rtaScene = buildWsmChartScene({
       plotType: 'rta',
       bounds: { xMin: 20, xMax: 20000, yMin: -90, yMax: 0 },
