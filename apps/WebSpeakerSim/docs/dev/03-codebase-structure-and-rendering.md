@@ -71,6 +71,7 @@ apps/WebSpeakerSim/
 │   │   ├── project-types.ts                   # Venue surfaces, PointSources, SubArrays, DspGroups, VirtualMics
 │   │   ├── colormap-config.ts                 # Turbo/Inferno/Viridis palettes, Auto/Manual range & isoline config
 │   │   ├── project-store.ts                   # ProjectStore extending @foh/state ReactiveUndoStore
+│   │   ├── project-io.ts                      # .wss-project.json bundle import/export & IndexedDB scene snapshots
 │   │   ├── url-state.ts                       # Tier 1 URL query parser & serializer
 │   │   ├── workspace-session.ts               # Tier 2 localStorage ('wss.workspace.v1')
 │   │   └── session-storage.ts                 # Tier 3 IndexedDB v1 ('web-speaker-sim-db') & .wss-project.json
@@ -85,12 +86,13 @@ apps/WebSpeakerSim/
 │   │   └── canvas-cad-painter.ts              # Top-level 2D CAD overlay coordinator
 │   ├── charts/                                # @foh/charts Scene Adapter
 │   │   └── wss-chart-adapter.ts               # Virtual Mic, Histogram & referenceZeroDbY DSP Group EQ scene builder
-│   └── ui/                                    # Application Shell, Topbar, Sidebar & Per-Entity Inspectors
-│       ├── app-shell.ts                       # <wss-app-shell> root coordinator
-│       ├── app-shell-styles.ts                # App layout styles extending @foh/ui tokens/controls/panels
+│   └── ui/                                    # Application Shell, Topbar, Modals, Sidebar & Inspectors
+│       ├── app-shell.ts                       # <web-speaker-sim-app> root coordinator
+│       ├── app-shell-styles.ts                # Workspace layout & horizontal field-row styles extending @foh/ui
 │       ├── keyboard-shortcuts.ts              # Shortcut bindings via @foh/ui shortcut-router
-│       ├── topbar/                            # Venue presets, Band/Palette/Contours, Coverage badges & Layout
-│       ├── sidebar/                           # Scene tree built on @foh/ui renderEntityTree
+│       ├── modals/                            # <wss-projects-modal> IndexedDB browser projects dialog
+│       ├── topbar/                            # <wss-topbar>, analysis-band-options, scene-popover & heatmap-popover
+│       ├── sidebar/                           # Scene tree built on @foh/ui renderEntityTreeSection
 │       └── inspectors/                        # Modular PointSource, SubArray, DspGroup, Surface, Mic, Env & Library modal
 └── tests/
     ├── integration/                           # simulation-worker-presets.test.ts

@@ -14,13 +14,13 @@ Operational rules and architectural invariants for coding agents modifying `WebS
 1. **Audio Thread (`src/audio/worklets/capture-worklet.ts`):**
    - Runs in `AudioWorkletGlobalScope` on 128-sample quanta (~2.67 ms at 48 kHz).
    - **Zero heap allocations** inside `process()`. Writes up to 8 physical hardware tap channels + 1 internal generator loopback channel (`slot 8`) into `MultiChannelRingBuffer` (`SharedArrayBuffer`), falling back to batched 1024-sample `MessagePort` chunks when cross-origin isolation is unavailable.
-2. **DSP Worker Thread (`src/dsp/dsp.worker.ts`):**
-   - Pure TypeScript + `@foh/dsp` + `@foh/acoustics` (zero DOM / Lit imports).
-   - Drives `MeasurementPipeline` instances across simultaneous live measurement slots (`SHARED_MEASUREMENT_CONFIG_KEYS` synchronize FFT size, window, averaging, and octave smoothing across slots so `Math Union` traces always share identical frequency bins).
+2. **DSP Worker Thread (`src/dsp/dsp.worker.ts`, `src/dsp/dsp-worker-runtime.ts`):**
+   - Pure TypeScript + `@foh/dsp` + `@foh/acoustics` (zero DOM / Lit imports). `dsp.worker.ts` is a thin Web Worker host delegating all message handling, ring-buffer/simulator consumption, and 32-ch `MixerInputWatchScanner` sweeps to the directly unit-testable `DspWorkerRuntime` class.
+   - Drives `MeasurementPipeline` instances across simultaneous live measurement slots (`SHARED_MEASUREMENT_CONFIG_KEYS` in `src/dsp/measurement-config.ts` synchronize FFT size, window, averaging, and octave smoothing across slots so `Math Union` traces always share identical frequency bins).
    - Stateful time-domain `BroadbandMeterBank` (`src/dsp/weighting-meters.ts`) uses explicit runtime `sampleRateHz` (`createWeightingBiquadCoeffs` from `@foh/acoustics`) and preserves `consumeEpochEnergy()` for SPL/Leq logging.
 3. **UI & Rendering Thread (`src/ui/`, `src/charts/`, `src/sources/`):**
-   - `WorkspaceLayoutController` (`src/ui/workspace-store.ts`) manages Tuning vs. Show mode, mode-scoped plot layouts, routing, SPL alert thresholds, and URL / `localStorage` autosave.
-   - `SourceStore` (`src/sources/source-store.ts`) composes `@foh/state`'s `ReactiveUndoStore` **strictly around user-authored state** (`storedSources`, `eqSources`, `unionSources`, and live slot user metadata). **Never** store 25 FPS telemetry (`liveSourcesById`, `feedbackRingLog`, or `Float32Array` bins) inside undo snapshots.
+   - `AudioSessionController` (`src/ui/controllers/audio-session-controller.ts`), `MixerWatchController` (`src/ui/controllers/mixer-watch-controller.ts`), and `WorkspaceLayoutController` (`src/ui/workspace-store.ts`) own audio lifecycle, dual-device Mixer Input Watch (`DualDeviceCaptureCoordinator`), Tuning vs. Show mode layouts, routing, SPL alerts, and URL / `localStorage` autosave, feeding `<wsm-topbar>`, `<wsm-tuning-sidebar>`, `<wsm-show-sidebar>`, `<wsm-mobile-show-deck>`, and `<wsm-mixer-watch-modal>`.
+   - `SourceStore` (`src/sources/source-store.ts`) composes `@foh/state`'s `ReactiveUndoStore` **strictly around user-authored state** (`storedSources`, `eqSources`, `unionSources`, and live slot user metadata) while delegating 25 FPS telemetry to `LiveTelemetryFeed` (`src/sources/live-telemetry-feed.ts`) and virtual EQ/Union evaluation to `DerivedSourceEvaluator` (`src/sources/derived-source-evaluator.ts`), emitting `'live' | 'authored' | 'selection'` change kinds. **Never** store 25 FPS telemetry (`liveSourcesById`, `feedbackRingLog`, or `Float32Array` bins) inside undo snapshots.
 
 ## Browser Persistence Invariants (Do Not Rename)
 

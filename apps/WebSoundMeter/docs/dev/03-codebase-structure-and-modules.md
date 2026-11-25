@@ -44,6 +44,7 @@ apps/WebSoundMeter/
 │   │   └── register-sw.ts                     # @foh/pwa/client wrapper
 │   ├── audio/
 │   │   ├── audio-engine.ts                    # Multi-slot coordinator between DSP Worker & HardwareAudioRouter
+│   │   ├── dual-device-capture.ts             # Secondary USB console MediaStream + AudioContext capture coordinator
 │   │   ├── live-slot-manager.ts               # Live slot config management & shared FFT/averaging sync
 │   │   ├── hardware-audio-router.ts           # AudioContext, 64ch getUserMedia, dynamic 40-tap + secondary mixer router
 │   │   ├── ring-buffer.ts                     # Lock-free SPSC MultiChannelRingBuffer (SharedArrayBuffer)
@@ -51,9 +52,12 @@ apps/WebSoundMeter/
 │   │       └── capture-worklet.ts             # AudioWorkletProcessor: signal generator + multi-ch + loopback tap
 │   ├── dsp/                                   # 100% Pure TypeScript (Zero DOM/WebAudio dependencies)
 │   │   ├── dsp-worker-protocol.ts             # Typed main <-> DSP worker message contracts
-│   │   ├── dsp.worker.ts                      # Background Web Worker running AnalyzerPipeline & MixerInputWatchScanner
+│   │   ├── dsp-worker-runtime.ts              # Directly testable worker runtime orchestrating slots & Mixer Watch
+│   │   ├── dsp.worker.ts                      # Thin DedicatedWorkerGlobalScope host wiring DspWorkerRuntime
+│   │   ├── measurement-config.ts              # MeasurementConfig types, defaults & shared FFT/averaging keys
 │   │   ├── analyzer-pipeline.ts               # Dual-channel measurement pipeline orchestrator
-│   │   ├── synthetic-rig.ts                   # Deterministic PA/Room & 4-ch Stage Mixer simulator
+│   │   ├── synthetic-rig.ts                   # Deterministic PA/Room acoustic simulator
+│   │   ├── simulated-stage-mixer-rig.ts       # Deterministic 4-ch Stage Mixer Input Watch simulator
 │   │   ├── signal-generator.ts                # Pink (Voss-McCartney), White, Sine, and Log Sweep synthesis
 │   │   ├── transfer-function.ts               # H1 & Ratio estimators, FIFO/Bessel LPF averaging, coherence γ²(f)
 │   │   ├── deconvolution.ts                   # Regularized IFFT impulse/step response & auto delay finder
@@ -70,7 +74,9 @@ apps/WebSoundMeter/
 │   │   └── calibration.ts                     # Microphone calibration curve adapter (@foh/acoustics .frd/.cal)
 │   ├── sources/                               # SourceData Model, Virtual Sources & Persistence
 │   │   ├── source-data.ts                     # Structure-of-Arrays (SoA) Float32Array data structures & .frd export
-│   │   ├── source-store.ts                    # Authored ReactiveUndoStore + 25 FPS live telemetry store
+│   │   ├── source-store.ts                    # Authored ReactiveUndoStore + derived/telemetry coordinator
+│   │   ├── live-telemetry-feed.ts             # 25 FPS live frame merge, active-ring dedup & ring-log history
+│   │   ├── derived-source-evaluator.ts        # Recomputes Virtual EQ & Math Union traces from authored configs
 │   │   ├── eq-source.ts                       # Full @foh/dsp SourceDspConfig virtual crossover/delay/PEQ model
 │   │   ├── auto-eq-matcher.ts                 # Room-mode inverse PEQ synthesizer & per-culprit Notch EQ builder
 │   │   ├── mixer-patch-storage.ts             # Named Mixer Input Patch presets & deviceId/label affinity storage
@@ -82,17 +88,20 @@ apps/WebSoundMeter/
 │   │   ├── plot-types.ts                      # Plot metadata, coordinate mappers, Group Delay & Crest Factor math
 │   │   ├── wsm-chart-adapter.ts               # Zero-GC Float32Array ChartScene & WeakMap RTA bar builder
 │   │   └── wsm-chart-controls.ts              # Plot-specific header controls (RTA bars, Span, SPL trace mode)
-│   └── ui/                                    # Application Shell, WorkspaceStore, Topbar, Sidebars & Inspectors
-│       ├── app-shell.ts                       # <wsm-app-shell> root coordinator
-│       ├── app-shell-styles.ts                # App layout styles extending @foh/ui tokens/controls/panels
+│   └── ui/                                    # Application Shell, Controllers, Region Elements & Inspectors
+│       ├── app-shell.ts                       # <web-sound-meter-app> root coordinator
+│       ├── app-shell-styles.ts                # Workspace grid & status banner styles extending @foh/ui
 │       ├── workspace-store.ts                 # Tuning/Show mode, plot layouts, routing & autosave/URL sync
 │       ├── url-state.ts                       # Tier 1 URL query parser & serializer
 │       ├── keyboard-shortcuts.ts              # Shortcut bindings via @foh/ui shortcut-router
-│       ├── sidebar-view.ts                    # Tuning Mode sidebar built on @foh/ui renderEntityTree
-│       ├── show-sidebar-view.ts               # Show Mode compliance dashboard & Feedback Watch ring log
-│       ├── mixer-watch-modal.ts               # 32-ch Mixer Input Watch & Named Patch Presets dialog
-│       ├── topbar/                            # Input routing, generator, and live SPL/Leq meter groups
-│       └── inspectors/                        # Live, Calibration, Stored (.frd), EQ (dsp-chain-editor) & Union views
+│       ├── controllers/                       # AudioSessionController & MixerWatchController
+│       ├── styles/                            # Shared show-cards.css.ts compliance & ring-log styles
+│       ├── wsm-tuning-sidebar.ts              # <wsm-tuning-sidebar> + sidebar-view.ts (@foh/ui renderEntityTreeSection)
+│       ├── wsm-show-sidebar.ts                # <wsm-show-sidebar> + show-sidebar-view.ts compliance & ring log
+│       ├── wsm-mobile-show-deck.ts            # <wsm-mobile-show-deck> + show-mobile-view.ts phone Show layout
+│       ├── wsm-mixer-watch-modal.ts           # <wsm-mixer-watch-modal> + mixer-watch-modal.ts 32-ch Watch dialog
+│       ├── topbar/                            # <wsm-topbar>, input routing, generator & live SPL/Leq meter groups
+│       └── inspectors/                        # index.ts router + Live, Calibration, Stored (.frd), EQ & Union views
 └── tests/
     ├── integration/                           # analyzer-pipeline, demo-simulator-workflow & ring-buffer suites
     └── e2e/                                   # demo-simulator.spec.ts (Playwright, port 5173)

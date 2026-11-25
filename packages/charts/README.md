@@ -9,4 +9,4 @@ Unified WebGL2 + 2D Canvas acoustic charting engine for WebSoundTools (`WebSound
 - **`gl-trace-renderer.ts`**: Scissored WebGL2 screen-space variable-width ribbon (`TRIANGLES`) trace renderer with per-vertex alpha blending and zero-alpha break skipping.
 - **`canvas-grid-painter.ts`**: 2D HiDPI Canvas axes, ISO frequency & relative-time grids, `2px` anti-aliased coherence-bucketed trace strokes, fractional-octave RTA bars, arrival stems, SPL histograms, and compliance threshold guides.
 - **`canvas-overlays.ts`**: `referenceZeroDbY`-aware draggable parametric EQ handles, collision-avoiding feedback callout flags, and floating canvas cursor HUD with curve-tracking dots.
-- **`foh-chart-panel.ts`**: `FohChartPanelBase`, `<foh-chart-panel>`, and `paintChartScene` powered by `@foh/canvas`'s `DualCanvasController`.
+- **`foh-chart-panel.ts`**, **`foh-chart-panel.css.ts`**, **`paint-chart-scene.ts`**: `FohChartPanelBase`, `<foh-chart-panel>`, locked single-row `.chart-header` styles, and stateless `paintChartScene` pipeline powered by `@foh/canvas`'s `DualCanvasController`.
