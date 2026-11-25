@@ -1,6 +1,6 @@
 {
   "id": "./",
-  "name": "WebSoundMeter — Multi-Channel Acoustic Analyzer & Show SPL Meter",
+  "name": "WebSoundMeter",
   "short_name": "WebSoundMeter",
   "description": "Offline-capable multi-channel dual-FFT acoustic analyzer for transfer function, phase, coherence, impulse response, virtual crossover & EQ modeling, RTA, and Live Show SPL compliance + feedback watch.",
   "start_url": "./",

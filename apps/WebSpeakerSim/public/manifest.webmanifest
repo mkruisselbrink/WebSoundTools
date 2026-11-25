@@ -1,6 +1,6 @@
 {
   "id": "./",
-  "name": "WebSpeakerSim — 3D Venue Loudspeaker & Subwoofer SPL Predictor",
+  "name": "WebSpeakerSim",
   "short_name": "WebSpeakerSim",
   "description": "Offline-capable synchronized Plan & Side Section venue simulator over a 3D direct-field + ground-reflection solver, point-source & cardioid/end-fire/arc subwoofer arrays, .gll/.clf/.frd importers, and Virtual Mic .frd export.",
   "start_url": "./",

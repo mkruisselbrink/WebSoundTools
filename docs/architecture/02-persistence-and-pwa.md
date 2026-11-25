@@ -49,10 +49,11 @@ All browser storage keys, IndexedDB database names, schema versions, and object 
   - Key: `'wss.workspace.v1'`
   - Stores `version: 1`, `activePresetId`, full `ProjectScene`, `ColormapConfig`, `layoutMode`, and `chartDrawerExpanded`.
 - **Tier 3 `IndexedDB` Schema (`src/model/session-storage.ts`):**
-  - Database: `IDB_DATABASE_NAME = 'web-speaker-sim-db'`, `IDB_DATABASE_VERSION = 1` (`fallbackMode: 'memory'`)
+  - Database: `IDB_DATABASE_NAME = 'web-speaker-sim-db'`, `IDB_DATABASE_VERSION = 2` (`fallbackMode: 'memory'`)
   - Object Stores (`keyPath: 'id'`):
     - `'projects'` — Named saved venue designs (`SavedProjectRecord`)
     - `'speakers'` — Custom Datasheet Spec Builder & imported `.gll` / `.clf` / `.frd` loudspeaker models (`SpeakerDefinition`)
+    - `'file-handles'` — Active `FileSystemFileHandle` reference for `Cmd/Ctrl + S` direct `.wss-project.json` in-place saving
 - **Portable File Exchange:**
   - `.wss-project.json` (`format: 'wss-project-v1'`) bundles `scene`, `colormap`, and any referenced `customSpeakers` into a single self-contained JSON file.
   - Virtual Mic **Export Predicted `.FRD`** writes standard 3-column `FreqHz\tMagDb\tPhaseDeg` files via `@foh/acoustics` for direct import into `WebSoundMeter`'s `'stored-traces'` library.
@@ -73,7 +74,7 @@ Cross-Origin-Embedder-Policy: require-corp
 1. **Dev & Preview Servers (`@foh/pwa/vite`):** `fohPwaPlugin` injects `CROSS_ORIGIN_ISOLATION_HEADERS` on Vite's `server` and `preview` responses.
 2. **Build-Time Precache Synthesis (`fohPwaPlugin`):** During `vite build` (`writeBundle`), the plugin inspects every hashed JS/CSS/worker/worklet bundle emitted into `dist/` plus static public assets (`index.html`, `manifest.webmanifest`, app icons), computes a content SHA-256 build hash, and emits a self-contained `dist/sw.js` (`wsm-precache-v2-<hash>` / `wss-precache-v1-<hash>`).
 3. **Runtime Network-First + Offline Header Synthesis (`@foh/pwa/sw`):**
-   - On `install`, the Service Worker precaches all hashed build assets and calls `skipWaiting()`.
+   - On `install`, the Service Worker precaches all hashed build assets and stages activation until the user confirms `SKIP_WAITING` (`Apply Update & Reload` in `<foh-help-modal>`) so live shows and measurements are never interrupted mid-session.
    - On `activate`, `selectObsoleteCaches()` purges stale caches matching the app's `cachePrefix` and claims clients.
    - On same-origin `GET` requests, the Service Worker attempts a network fetch (updating the cache on `200 OK`) and falls back to the precache when offline (`index.html` fallback for SPA navigation requests).
    - Every response served by the Service Worker is passed through `withCrossOriginIsolationHeaders()`, ensuring `window.crossOriginIsolated === true` even when opening the installed PWA completely offline in an arena or festival field without Wi-Fi.

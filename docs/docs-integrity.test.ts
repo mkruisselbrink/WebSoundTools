@@ -343,6 +343,9 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
       if (!titleMatch || titleMatch[1] !== manifest.name) {
         issues.push(`${app}: index.html <title> does not match manifest.webmanifest "name"`);
       }
+      if (!manifest.name || manifest.name.length > 30 || manifest.name.includes('—')) {
+        issues.push(`${app}: manifest.webmanifest "name" should be a concise app name, not a description`);
+      }
 
       const referencedPublicAssets = new Set<string>([manifestPath]);
       const checkAsset = (
