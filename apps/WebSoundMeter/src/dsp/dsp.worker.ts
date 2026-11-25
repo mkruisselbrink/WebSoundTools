@@ -4,15 +4,18 @@
 
 /**
  * Dedicated Background DSP Web Worker (`dsp.worker.ts`) running multi-slot
- * `MeasurementPipeline` instances at 25 Hz in either hardware or simulator mode.
+ * `MeasurementPipeline` instances, 32-channel `MixerInputWatchScanner`, and
+ * `resolveFeedbackEvents` culprit attribution at 25 Hz in hardware or simulator mode.
  */
 
 import { parseCalibrationFile } from '@foh/acoustics';
 import {
   INTERNAL_LOOPBACK_SLOT_INDEX,
+  MIXER_CAPTURE_TAP_SLOTS,
   MultiChannelRingBuffer,
   TOTAL_RING_BUFFER_SLOTS,
 } from '../audio/ring-buffer.js';
+import { createDefaultMixerWatchSessionConfig } from '../sources/mixer-patch-storage.js';
 import {
   DEFAULT_MEASUREMENT_CONFIG,
   MeasurementPipeline,
@@ -26,13 +29,20 @@ import type {
   LiveMeasurementSlotConfig,
   WorkerInboundMessage,
 } from './dsp-worker-protocol.js';
+import { resolveFeedbackEvents } from './feedback-culprit-resolver.js';
+import type { DetectedFeedbackTrack } from './feedback-detector.js';
+import { MixerInputWatchScanner } from './mixer-watch-scanner.js';
 import { SignalGenerator } from './signal-generator.js';
 import {
   SplHistoryCheckpoint,
   SplHistoryWindowSec,
   formatSplHistoryCsv,
 } from './spl-history.js';
-import { SIMULATOR_PRESETS, SyntheticAcousticRig } from './synthetic-rig.js';
+import {
+  SIMULATOR_PRESETS,
+  SimulatedStageMixerRig,
+  SyntheticAcousticRig,
+} from './synthetic-rig.js';
 
 export {
   REFERENCE_CHANNEL_GLOBAL,
@@ -52,11 +62,18 @@ let sampleRate = 48000;
 let inputMode: InputSourceMode = 'simulator';
 let isPaused = false;
 let channelTapMap: Record<number, number> = { 0: 0, 1: 1 };
+let mixerChannelTapMap: Record<number, number> = {};
+let useSeparateMixerRingBuffer = false;
 let globalReferenceChannel = 1;
 let currentSplWindowSec: SplHistoryWindowSec = 900;
 
 const generator = new SignalGenerator(sampleRate);
+const mixerWatchScanner = new MixerInputWatchScanner(sampleRate);
+mixerWatchScanner.updateConfig(createDefaultMixerWatchSessionConfig());
+const stageMixerSim = new SimulatedStageMixerRig(sampleRate);
+
 let ringBuffer: MultiChannelRingBuffer | null = null;
+let mixerRingBuffer: MultiChannelRingBuffer | null = null;
 
 const slots = new Map<string, LiveSlotRuntime>();
 
@@ -109,7 +126,19 @@ const hwReadChannels: Float32Array[] = Array.from(
   { length: TOTAL_RING_BUFFER_SLOTS },
   () => new Float32Array(hwReadChunkSize)
 );
+const mixerHwReadChannels: Float32Array[] = Array.from(
+  { length: MIXER_CAPTURE_TAP_SLOTS },
+  () => new Float32Array(hwReadChunkSize)
+);
 const zeroHwChannel = new Float32Array(hwReadChunkSize);
+
+function resolveMixerBusPhysicalChannel(): number {
+  const mw = mixerWatchScanner.getConfig();
+  if (mw.patch.mixBusChannel === -2) {
+    return useSeparateMixerRingBuffer ? -1 : globalReferenceChannel;
+  }
+  return mw.patch.mixBusChannel;
+}
 
 function routeHardwareSamplesToSlots(
   channels: readonly Float32Array[],
@@ -119,6 +148,11 @@ function routeHardwareSamplesToSlots(
     zeroHwChannel.length >= sampleCount
       ? zeroHwChannel.subarray(0, sampleCount)
       : new Float32Array(sampleCount);
+
+  const loopbackSlotIdx = Math.min(
+    INTERNAL_LOOPBACK_SLOT_INDEX,
+    Math.max(0, channels.length - 1)
+  );
 
   for (const rt of slots.values()) {
     const tapM = channelTapMap[rt.slot.measurementChannel];
@@ -134,8 +168,7 @@ function routeHardwareSamplesToSlots(
 
     let bufR: Float32Array;
     if (effectiveRef < 0) {
-      bufR =
-        channels[INTERNAL_LOOPBACK_SLOT_INDEX]?.subarray(0, sampleCount) ?? zeroSlice;
+      bufR = channels[loopbackSlotIdx]?.subarray(0, sampleCount) ?? zeroSlice;
     } else {
       const tapR = channelTapMap[effectiveRef];
       bufR =
@@ -144,6 +177,15 @@ function routeHardwareSamplesToSlots(
           : zeroSlice;
     }
     rt.pipeline.writeSamples(bufM, bufR, sampleCount);
+  }
+
+  if (!useSeparateMixerRingBuffer && mixerWatchScanner.getConfig().enabled) {
+    mixerWatchScanner.writeHardwareSamples(
+      channels,
+      mixerChannelTapMap,
+      sampleCount,
+      resolveMixerBusPhysicalChannel()
+    );
   }
 }
 
@@ -163,37 +205,103 @@ function tick(): void {
   try {
     if (inputMode === 'simulator') {
       generator.fillBuffer(simRefBuf, simChunkSize);
+      let anySimFeedbackPreset = false;
       for (const rt of slots.values()) {
         rt.simulatorRig.processBlock(simRefBuf, simMeasBuf, simChunkSize);
         rt.pipeline.writeSamples(simMeasBuf, simRefBuf, simChunkSize);
+        if ((rt.simulatorRig.getConfig().simulatedFeedbackRings?.length ?? 0) > 0) {
+          anySimFeedbackPreset = true;
+        }
       }
-    } else if (ringBuffer) {
-      let avail = ringBuffer.availableRead();
-      while (avail > 0) {
-        const toRead = Math.min(avail, hwReadChunkSize);
-        const readCount = ringBuffer.read(hwReadChannels, toRead);
-        if (readCount <= 0) break;
-        routeHardwareSamplesToSlots(hwReadChannels, readCount);
-        avail -= readCount;
+      const mwCfg = mixerWatchScanner.getConfig();
+      if (mwCfg.enabled) {
+        stageMixerSim.processBlock(simChunkSize, anySimFeedbackPreset);
+        const busForSim =
+          mwCfg.patch.mixBusChannel === -1 ? undefined : stageMixerSim.busOut.subarray(0, simChunkSize);
+        mixerWatchScanner.writeDirectChannelMap(
+          stageMixerSim.channelMap,
+          simChunkSize,
+          busForSim
+        );
+      }
+    } else {
+      if (ringBuffer) {
+        let avail = ringBuffer.availableRead();
+        while (avail > 0) {
+          const toRead = Math.min(avail, hwReadChunkSize);
+          const readCount = ringBuffer.read(hwReadChannels, toRead);
+          if (readCount <= 0) break;
+          routeHardwareSamplesToSlots(hwReadChannels, readCount);
+          avail -= readCount;
+        }
+      }
+      if (
+        useSeparateMixerRingBuffer &&
+        mixerRingBuffer &&
+        mixerWatchScanner.getConfig().enabled
+      ) {
+        let mAvail = mixerRingBuffer.availableRead();
+        while (mAvail > 0) {
+          const toRead = Math.min(mAvail, hwReadChunkSize);
+          const readCount = mixerRingBuffer.read(mixerHwReadChannels, toRead);
+          if (readCount <= 0) break;
+          mixerWatchScanner.writeHardwareSamples(
+            mixerHwReadChannels,
+            mixerChannelTapMap,
+            readCount,
+            resolveMixerBusPhysicalChannel()
+          );
+          mAvail -= readCount;
+        }
       }
     }
 
-    const frames = [];
+    const rawFrames = [];
+    const slotTracksMap = new Map<string, readonly DetectedFeedbackTrack[]>();
     for (const rt of slots.values()) {
       const snapshot = rt.pipeline.computeTransform(dtSeconds);
-      frames.push({
+      const frame = {
         ...snapshot,
         id: rt.slot.id,
         name: rt.slot.name,
         color: rt.slot.color,
         visible: rt.slot.visible,
-      });
+      };
+      rawFrames.push(frame);
+      slotTracksMap.set(frame.id, frame.feedbackTracks ?? []);
     }
 
-    if (frames.length > 0) {
+    const mwCfg = mixerWatchScanner.getConfig();
+    let mixerLevelsDbFs: Record<number, number> = {};
+    let mixerOnlyFeedbackTracks: DetectedFeedbackTrack[] = [];
+    let finalFrames = rawFrames;
+
+    if (mwCfg.enabled) {
+      const mixerRes = mixerWatchScanner.processTick(dtSeconds);
+      mixerLevelsDbFs = mixerRes.channelLevelsDbFs;
+      const resolved = resolveFeedbackEvents({
+        slotTracksBySlotId: slotTracksMap,
+        mixerObservations: mixerRes.observations,
+        tapMode: mwCfg.patch.tapMode,
+        hasActiveMixBus: mixerRes.hasActiveMixBus,
+        enabledWatchChannelCount: mixerRes.enabledChannelCount,
+      });
+      mixerOnlyFeedbackTracks = resolved.mixerOnlyTracks;
+      finalFrames = rawFrames.map((f) => ({
+        ...f,
+        feedbackTracks:
+          resolved.enrichedSlotTracksBySlotId.get(f.id) ?? f.feedbackTracks,
+      }));
+    }
+
+    if (finalFrames.length > 0) {
       self.postMessage({
         type: 'measurement-frames',
-        frames,
+        frames: finalFrames,
+        mixerTelemetry: {
+          channelLevelsDbFs: mixerLevelsDbFs,
+          mixerOnlyFeedbackTracks,
+        },
       });
     }
 
@@ -234,6 +342,10 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
       case 'init':
         sampleRate = msg.sampleRate || 48000;
         generator.setSampleRate(sampleRate);
+        stageMixerSim.setSampleRate(sampleRate);
+        if (!useSeparateMixerRingBuffer) {
+          mixerWatchScanner.setSampleRate(sampleRate);
+        }
         for (const rt of slots.values()) {
           rt.pipeline.updateConfig({ sampleRate });
           rt.simulatorRig.setSampleRate(sampleRate);
@@ -241,13 +353,19 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         if (msg.ringBufferStorage) {
           ringBuffer = new MultiChannelRingBuffer(msg.ringBufferStorage);
         }
+        if (msg.mixerRingBufferStorage) {
+          mixerRingBuffer = new MultiChannelRingBuffer(msg.mixerRingBufferStorage);
+        }
         break;
 
       case 'set-input-mode':
-        if (msg.mode === 'hardware' && ringBuffer) {
-          ringBuffer.clear();
+        if (msg.mode === 'hardware') {
+          ringBuffer?.clear();
+          mixerRingBuffer?.clear();
         }
         inputMode = msg.mode;
+        mixerWatchScanner.reset();
+        stageMixerSim.reset();
         for (const rt of slots.values()) {
           rt.pipeline.resetAveraging();
         }
@@ -255,6 +373,9 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
 
       case 'sync-live-slots': {
         channelTapMap = { ...msg.channelTapMap };
+        if (!useSeparateMixerRingBuffer) {
+          mixerChannelTapMap = { ...msg.channelTapMap };
+        }
         const prevGlobalRef = globalReferenceChannel;
         if (typeof msg.globalReferenceChannel === 'number') {
           globalReferenceChannel = msg.globalReferenceChannel;
@@ -305,6 +426,23 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         break;
       }
 
+      case 'sync-mixer-watch': {
+        const nextSeparate = Boolean(msg.useSeparateRingBuffer);
+        if (nextSeparate !== useSeparateMixerRingBuffer) {
+          mixerRingBuffer?.clear();
+          mixerWatchScanner.reset();
+        }
+        useSeparateMixerRingBuffer = nextSeparate;
+        mixerChannelTapMap = { ...msg.channelTapMap };
+        const targetSr =
+          inputMode === 'simulator'
+            ? sampleRate
+            : (msg.mixerSampleRate || sampleRate);
+        mixerWatchScanner.setSampleRate(targetSr);
+        mixerWatchScanner.updateConfig(msg.config);
+        break;
+      }
+
       case 'set-simulator-preset': {
         const rt = getOrCreateSlotRuntime(msg.slotId);
         rt.simulatorRig.setConfig(msg.preset);
@@ -312,6 +450,7 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           rt.slot = { ...rt.slot, simulatorPreset: msg.preset };
         }
         rt.pipeline.resetAveraging();
+        mixerWatchScanner.reset();
         self.postMessage({
           type: 'simulator-config-updated',
           slotId: rt.slot.id,
@@ -327,6 +466,10 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         ) {
           sampleRate = msg.config.sampleRate;
           generator.setSampleRate(sampleRate);
+          stageMixerSim.setSampleRate(sampleRate);
+          if (!useSeparateMixerRingBuffer) {
+            mixerWatchScanner.setSampleRate(sampleRate);
+          }
           for (const item of slots.values()) {
             item.simulatorRig.setSampleRate(sampleRate);
             item.pipeline.updateConfig({ sampleRate });
@@ -424,6 +567,7 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           for (const rt of slots.values()) {
             rt.pipeline.resetAveraging();
           }
+          mixerWatchScanner.reset();
         }
         const frames = Array.from(slots.values()).map((rt) => ({
           ...rt.pipeline.getSnapshot(),
@@ -433,7 +577,14 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
           visible: rt.slot.visible,
         }));
         if (frames.length > 0) {
-          self.postMessage({ type: 'measurement-frames', frames });
+          self.postMessage({
+            type: 'measurement-frames',
+            frames,
+            mixerTelemetry: {
+              channelLevelsDbFs: {},
+              mixerOnlyFeedbackTracks: [],
+            },
+          });
         }
         break;
       }
@@ -535,11 +686,27 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         }
         break;
 
+      case 'mixer-audio-chunk':
+        if (
+          inputMode === 'hardware' &&
+          !isPaused &&
+          useSeparateMixerRingBuffer &&
+          mixerWatchScanner.getConfig().enabled &&
+          msg.channels.length > 0
+        ) {
+          mixerWatchScanner.writeHardwareSamples(
+            msg.channels,
+            mixerChannelTapMap,
+            msg.channels[0].length,
+            resolveMixerBusPhysicalChannel()
+          );
+        }
+        break;
+
       case 'pause':
         isPaused = msg.paused;
-        if (ringBuffer) {
-          ringBuffer.clear();
-        }
+        ringBuffer?.clear();
+        mixerRingBuffer?.clear();
         break;
     }
   } catch (err) {

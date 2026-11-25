@@ -405,6 +405,11 @@ export class FeedbackDetector {
     return this.exportTracks(slotId, slotName, slotColor, profile);
   }
 
+  /** Returns true if any candidate, active, or latched narrowband peak is currently tracked. */
+  hasAnyCandidateOrActiveTrack(): boolean {
+    return this.tracks.some((t) => t.matchedInCurrentFrame);
+  }
+
   /** Returns the earliest frame sequence when an active track around `freqHz` began (for onset-lead culprit ranking). */
   getTrackOnsetSeqNear(freqHz: number, toleranceHz: number): number | undefined {
     let earliest: number | undefined;
