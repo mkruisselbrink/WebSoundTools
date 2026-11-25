@@ -49,6 +49,10 @@ export const WSM_HELP_RESOURCES: readonly HelpResourceLink[] = [
 
 export const WSM_HELP_SHORTCUTS: readonly HelpShortcutItem[] = [
   { keys: 'Space', action: 'Pause / Resume live measurement and signal generator' },
+  {
+    keys: 'Shift + Space',
+    action: 'Disconnect hardware audio & release OS microphone (keeps routing)',
+  },
   { keys: 'C', action: 'Capture current active trace to Stored Traces' },
   { keys: 'D', action: 'Find & Apply estimated propagation delay on active measurement' },
   { keys: 'M', action: 'Add a new simultaneous Live Measurement slot (+ Meas)' },

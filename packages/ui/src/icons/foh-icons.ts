@@ -73,6 +73,12 @@ export function renderPauseIconSvg(): SVGTemplateResult {
   </svg>`;
 }
 
+export function renderStopSquareIconSvg(): SVGTemplateResult {
+  return svg`<svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false">
+    <rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.2" />
+  </svg>`;
+}
+
 export function renderSlidersIconSvg(): SVGTemplateResult {
   return svg`<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
     <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />

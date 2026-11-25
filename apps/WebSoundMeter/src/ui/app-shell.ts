@@ -46,7 +46,10 @@ import {
 } from '../sources/session-storage.js';
 import { SourceData, exportSourceDataToFrd } from '../sources/source-data.js';
 import { SourceStore, isLiveSourceId } from '../sources/source-store.js';
-import { loadWorkspaceSession } from '../sources/workspace-session.js';
+import {
+  DEFAULT_AUTO_RELEASE_MINUTES,
+  loadWorkspaceSession,
+} from '../sources/workspace-session.js';
 import { appShellStyles } from './app-shell-styles.js';
 import {
   WSM_HELP_ATTRIBUTION,
@@ -99,6 +102,11 @@ export class WebSoundMeterApp extends LitElement {
     },
   });
   private hardwareStreamDeferred = false;
+  private hardwareDisconnectReason: 'launch' | 'manual' | 'auto-idle' = 'launch';
+  private pauseAutoReleaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  @state()
+  private autoReleaseMinutes = DEFAULT_AUTO_RELEASE_MINUTES;
 
   @state()
   private wcoVisible = false;
@@ -179,6 +187,9 @@ export class WebSoundMeterApp extends LitElement {
       },
       onTogglePause: () => {
         void this.handleTogglePause();
+      },
+      onDisconnectHardware: () => {
+        this.handleDisconnectHardware('manual');
       },
       onAddLiveSource: () => this.handleAddLiveSource(),
       onAddEqSource: () => {
@@ -288,8 +299,10 @@ export class WebSoundMeterApp extends LitElement {
         this.audioStatusError = '';
       } else {
         // iOS/iPadOS Home Screen WebKit requires a fresh user tap to re-open an ended mic track
+        this.clearPauseAutoReleaseTimer();
         this.isPaused = true;
         this.hardwareStreamDeferred = true;
+        this.hardwareDisconnectReason = 'launch';
         this.engine.setPaused(true);
         this.syncWakeLock();
       }
@@ -337,6 +350,8 @@ export class WebSoundMeterApp extends LitElement {
     this.selectedDeviceLabel = session.hardwareRouting.selectedDeviceLabel;
     this.globalReferenceChannel = session.hardwareRouting.globalReferenceChannel;
     this.generatorOutputChannel = session.hardwareRouting.generatorOutputChannel;
+    this.autoReleaseMinutes =
+      session.hardwareRouting.autoReleaseMinutes ?? DEFAULT_AUTO_RELEASE_MINUTES;
     this.mixerPatchLibrary = loadMixerPatchLibrary();
     this.mixerWatchConfig =
       session.mixerWatch ?? createDefaultMixerWatchSessionConfig();
@@ -371,6 +386,7 @@ export class WebSoundMeterApp extends LitElement {
     if (this.workspace.audioInputMode === 'hardware') {
       this.isPaused = true;
       this.hardwareStreamDeferred = true;
+      this.hardwareDisconnectReason = 'launch';
       this.engine.setPaused(true);
     }
 
@@ -430,6 +446,7 @@ export class WebSoundMeterApp extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this.clearPauseAutoReleaseTimer();
     window.removeEventListener('keydown', this.keydownHandler);
     window.removeEventListener('popstate', this.popstateHandler);
     window.removeEventListener('pageshow', this.foregroundAudioRecoveryHandler);
@@ -494,6 +511,7 @@ export class WebSoundMeterApp extends LitElement {
         selectedDeviceLabel: this.selectedDeviceLabel,
         globalReferenceChannel: this.globalReferenceChannel,
         generatorOutputChannel: this.generatorOutputChannel,
+        autoReleaseMinutes: this.autoReleaseMinutes,
       },
       mixerWatch: this.mixerWatchConfig,
     });
@@ -607,6 +625,7 @@ export class WebSoundMeterApp extends LitElement {
       const dev = this.audioDevices.find((d) => d.deviceId === deviceId);
       this.selectedDeviceLabel = dev ? dev.label : '';
     }
+    this.clearPauseAutoReleaseTimer();
     this.hardwareStreamDeferred = false;
     if (this.isPaused) {
       this.isPaused = false;
@@ -659,13 +678,56 @@ export class WebSoundMeterApp extends LitElement {
     });
   };
 
+  private clearPauseAutoReleaseTimer(): void {
+    if (this.pauseAutoReleaseTimer !== null) {
+      clearTimeout(this.pauseAutoReleaseTimer);
+      this.pauseAutoReleaseTimer = null;
+    }
+  }
+
+  private schedulePauseAutoReleaseTimer(): void {
+    this.clearPauseAutoReleaseTimer();
+    if (
+      this.workspace.audioInputMode === 'hardware' &&
+      this.isPaused &&
+      !this.hardwareStreamDeferred &&
+      this.autoReleaseMinutes > 0
+    ) {
+      const delayMs = this.autoReleaseMinutes * 60_000;
+      this.pauseAutoReleaseTimer = setTimeout(() => {
+        this.pauseAutoReleaseTimer = null;
+        this.handleDisconnectHardware('auto-idle');
+      }, delayMs);
+    }
+  }
+
+  private handleDisconnectHardware = (
+    reason: 'manual' | 'auto-idle' = 'manual'
+  ): void => {
+    if (this.workspace.audioInputMode !== 'hardware' || !this.engine) return;
+    this.clearPauseAutoReleaseTimer();
+    this.engine.disconnectHardwareStreams();
+    this.isPaused = true;
+    this.hardwareStreamDeferred = true;
+    this.hardwareDisconnectReason = reason;
+    this.audioStatusError = '';
+    this.syncWakeLock();
+    this.requestUpdate();
+  };
+
   private handleTogglePause = async (): Promise<void> => {
     const nextPaused = !this.isPaused;
     this.isPaused = nextPaused;
     this.engine?.setPaused(this.isPaused);
     this.syncWakeLock();
 
-    if (!nextPaused && this.workspace.audioInputMode === 'hardware' && this.engine) {
+    if (nextPaused) {
+      this.schedulePauseAutoReleaseTimer();
+      return;
+    }
+
+    this.clearPauseAutoReleaseTimer();
+    if (this.workspace.audioInputMode === 'hardware' && this.engine) {
       this.audioStatusError = '';
       if (this.hardwareStreamDeferred || !this.engine.isHardwareStreamHealthy()) {
         try {
@@ -925,6 +987,11 @@ export class WebSoundMeterApp extends LitElement {
         generatorOutputChannel: this.generatorOutputChannel,
         genConfig: this.genConfig,
         isPaused: this.isPaused,
+        isHardwareDisconnected:
+          this.workspace.audioInputMode === 'hardware' &&
+          (this.hardwareStreamDeferred ||
+            !(this.engine?.hasActiveHardwareCapture() ?? false)),
+        autoReleaseMinutes: this.autoReleaseMinutes,
         splWeighting: this.workspace.splWeighting,
         splTime: this.workspace.splTime,
         levels: activeLiveSource?.levels,
@@ -954,6 +1021,15 @@ export class WebSoundMeterApp extends LitElement {
         onGeneratorLevelChange: (levelDbFs: number) => this.updateGenerator({ levelDbFs }),
         onTogglePause: () => {
           void this.handleTogglePause();
+        },
+        onDisconnectHardware: () => {
+          this.handleDisconnectHardware('manual');
+        },
+        onAutoReleaseMinutesChange: (minutes) => {
+          this.autoReleaseMinutes = minutes;
+          this.schedulePauseAutoReleaseTimer();
+          this.persistState('none');
+          this.requestUpdate();
         },
         onSplWeightingChange: (curve) => {
           this.workspace.splWeighting = curve;
@@ -1001,8 +1077,16 @@ export class WebSoundMeterApp extends LitElement {
           ? html`
               <div class="audio-status-banner" data-testid="audio-status-banner">
                 <span>
-                  Microphone input is paused after launch — tap
-                  <strong>Resume Mic</strong> to start live capture.
+                  ${this.hardwareDisconnectReason === 'manual'
+                    ? html`Hardware audio capture is disconnected (OS mic released) — tap
+                        <strong>Resume Mic</strong> or press <strong>Space</strong> to
+                        reconnect.`
+                    : this.hardwareDisconnectReason === 'auto-idle'
+                      ? html`Hardware audio capture was auto-released after
+                          ${this.autoReleaseMinutes} min paused — tap
+                          <strong>Resume Mic</strong> to reconnect.`
+                      : html`Microphone input is paused after launch — tap
+                          <strong>Resume Mic</strong> to start live capture.`}
                 </span>
                 <div class="audio-status-actions">
                   <button

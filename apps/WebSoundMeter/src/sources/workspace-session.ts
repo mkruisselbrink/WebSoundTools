@@ -33,11 +33,15 @@ import {
 
 export const WORKSPACE_SESSION_STORAGE_KEY = 'web-sound-meter:workspace:v1';
 
+export const DEFAULT_AUTO_RELEASE_MINUTES = 5;
+
 export interface HardwareDeviceRoutingSnapshot {
   readonly selectedDeviceId: string;
   readonly selectedDeviceLabel: string;
   readonly globalReferenceChannel: number;
   readonly generatorOutputChannel: number;
+  /** Idle minutes while Paused before automatically releasing OS mic capture (0 = never) */
+  readonly autoReleaseMinutes?: number;
 }
 
 export interface SerializedLiveSlot {
@@ -133,6 +137,7 @@ export function createDefaultWorkspaceSession(): WorkspaceSessionSnapshot {
       selectedDeviceLabel: '',
       globalReferenceChannel: 1,
       generatorOutputChannel: -1,
+      autoReleaseMinutes: DEFAULT_AUTO_RELEASE_MINUTES,
     },
     mixerWatch: createDefaultMixerWatchSessionConfig(),
   };

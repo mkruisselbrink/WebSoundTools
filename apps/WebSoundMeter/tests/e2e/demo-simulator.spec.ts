@@ -266,6 +266,57 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     await wsm.selectInputSource('hardware:usb-ipad-mic');
     await expect(banner).toHaveCount(0);
     await wsm.waitForLiveSignal();
+
+    const readMockTrackState = () =>
+      page.evaluate(() => {
+        const stream = (
+          window as unknown as { __wstLastMockStream?: MediaStream }
+        ).__wstLastMockStream;
+        return stream?.getAudioTracks()[0]?.readyState ?? 'none';
+      });
+
+    // 1. Warm Pause (btn-pause) freezes DSP while keeping the OS MediaStreamTrack 'live'
+    const stopBtn = wsm.app.getByTestId('btn-stop-hardware');
+    await expect(stopBtn).toBeEnabled();
+    await wsm.app.getByTestId('btn-pause').click();
+    expect(await readMockTrackState()).toBe('live');
+    await expect(banner).toHaveCount(0);
+
+    // 2. Stop button (⏹) releases the OS MediaStreamTrack ('ended'), disables ⏹, and shows status banner
+    await stopBtn.click();
+    expect(await readMockTrackState()).toBe('ended');
+    await expect(stopBtn).toBeDisabled();
+    await expect(wsm.app.getByTestId('btn-io-popover')).toContainText(
+      'iPad USB Mic · Off'
+    );
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('OS mic released');
+    await expect(banner).toContainText('Resume Mic');
+
+    // 3. Clicking Resume (btn-pause) re-acquires a live MediaStreamTrack and clears the banner
+    await wsm.app.getByTestId('btn-pause').click();
+    await expect(banner).toHaveCount(0);
+    expect(await readMockTrackState()).toBe('live');
+    await expect(stopBtn).toBeEnabled();
+
+    // 4. Shift+Space shortcut also disconnects OS mic; IO popover can configure Auto-Release & Reconnect
+    await page.keyboard.press('Shift+Space');
+    expect(await readMockTrackState()).toBe('ended');
+    await expect(banner).toContainText('OS mic released');
+
+    await wsm.app.getByTestId('btn-io-popover').click();
+    const autoReleaseSelect = wsm.app.getByTestId('select-auto-release-minutes');
+    await expect(autoReleaseSelect).toHaveValue('5');
+    await autoReleaseSelect.selectOption('10');
+    await wsm.app.getByTestId('btn-popover-disconnect-hw').click();
+    await expect(banner).toHaveCount(0);
+    expect(await readMockTrackState()).toBe('live');
+
+    // 5. Verify 744px iPad Portrait topbar still fits all controls with the [⏸ | ⏹] Hardware split-pill
+    await page.setViewportSize({ width: 744, height: 900 });
+    const helpBox = await wsm.app.getByTestId('btn-help').boundingBox();
+    expect(helpBox).not.toBeNull();
+    expect(helpBox!.x + helpBox!.width).toBeLessThanOrEqual(744);
   });
 
   test('identifies feedback culprit mixer channels, rejects vibrato vocals on non-feedback presets, saves named patch presets, and creates per-culprit Notch EQs', async ({

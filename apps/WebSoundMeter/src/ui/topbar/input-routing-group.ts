@@ -4,15 +4,18 @@
 
 import {
   type PopoverParentRootLike,
+  closePopoverById,
   renderAudioInterfaceIconSvg,
   renderChevronDownSvg,
   renderPauseIconSvg,
   renderPlayIconSvg,
+  renderStopSquareIconSvg,
   syncAnchoredPopoverToggle,
 } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
 import { AudioDeviceOption } from '../../audio/audio-engine.js';
 import { InputSourceMode } from '../../dsp/dsp.worker.js';
+import { DEFAULT_AUTO_RELEASE_MINUTES } from '../../sources/workspace-session.js';
 
 export interface InputRoutingGroupProps {
   readonly audioInputMode: InputSourceMode;
@@ -22,10 +25,14 @@ export interface InputRoutingGroupProps {
   readonly availableChannels: number;
   readonly globalReferenceChannel: number;
   readonly isPaused: boolean;
+  readonly isHardwareDisconnected?: boolean;
+  readonly autoReleaseMinutes?: number;
   readonly popoverRoot?: PopoverParentRootLike;
   readonly onInputSourceSelect: (mode: InputSourceMode, deviceId: string) => void;
   readonly onGlobalReferenceChannelChange: (refCh: number) => void;
   readonly onTogglePause: () => void;
+  readonly onDisconnectHardware?: () => void;
+  readonly onAutoReleaseMinutesChange?: (minutes: number) => void;
 }
 
 function summarizeInputLabel(props: InputRoutingGroupProps): string {
@@ -35,6 +42,9 @@ function summarizeInputLabel(props: InputRoutingGroupProps): string {
   const matched = props.audioDevices.find((d) => d.deviceId === props.selectedDeviceId);
   const rawName = matched?.label || props.selectedDeviceLabel || 'Hardware Input';
   const cleanName = rawName.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (props.isHardwareDisconnected) {
+    return `${cleanName} · Off`;
+  }
   const refTag =
     props.globalReferenceChannel === -1
       ? 'Int Ref'
@@ -67,23 +77,71 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
   };
 
   const summaryText = summarizeInputLabel(props);
+  const autoReleaseVal = props.autoReleaseMinutes ?? DEFAULT_AUTO_RELEASE_MINUTES;
+  const pauseVariantClass = props.isPaused
+    ? props.isHardwareDisconnected
+      ? 'foh-tb-standby'
+      : 'foh-tb-paused'
+    : '';
 
   return html`
     <div class="foh-topbar-zone" role="group" aria-label="Audio Input and Reference">
-      <button
-        type="button"
-        data-testid="btn-pause"
-        aria-pressed=${String(props.isPaused)}
-        aria-label="Pause or resume live measurement"
-        class="foh-tb-pill wsm-pause-pill ${props.isPaused ? 'foh-tb-paused' : ''}"
-        title="Pause / Resume Live Measurement (Space)"
-        @click=${props.onTogglePause}
-      >
-        ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
-        <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
-          >${props.isPaused ? 'Resume' : 'Pause'}</span
-        >
-      </button>
+      ${props.audioInputMode === 'hardware'
+        ? html`
+            <div
+              class="foh-split-pill wsm-transport-split"
+              role="group"
+              aria-label="Hardware Capture Transport"
+            >
+              <button
+                type="button"
+                data-testid="btn-pause"
+                aria-pressed=${String(props.isPaused)}
+                aria-label=${props.isHardwareDisconnected
+                  ? 'Reconnect and resume live measurement'
+                  : 'Pause or resume live measurement'}
+                class="wsm-pause-pill ${pauseVariantClass}"
+                title=${props.isHardwareDisconnected
+                  ? 'Reconnect & Resume Live Capture (Space)'
+                  : 'Pause / Freeze DSP — Keeps Hardware Stream Warm (Space)'}
+                @click=${props.onTogglePause}
+              >
+                ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
+                <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
+                  >${props.isPaused ? 'Resume' : 'Pause'}</span
+                >
+              </button>
+              <button
+                type="button"
+                class="wsm-stop-btn"
+                data-testid="btn-stop-hardware"
+                ?disabled=${Boolean(props.isHardwareDisconnected)}
+                aria-label="Stop and disconnect hardware microphone"
+                title=${props.isHardwareDisconnected
+                  ? 'Hardware Audio Disconnected (OS Mic Released)'
+                  : 'Stop & Disconnect Hardware Audio — Releases OS Mic (Shift+Space)'}
+                @click=${() => props.onDisconnectHardware?.()}
+              >
+                ${renderStopSquareIconSvg()}
+              </button>
+            </div>
+          `
+        : html`
+            <button
+              type="button"
+              data-testid="btn-pause"
+              aria-pressed=${String(props.isPaused)}
+              aria-label="Pause or resume live measurement"
+              class="foh-tb-pill wsm-pause-pill ${props.isPaused ? 'foh-tb-paused' : ''}"
+              title="Pause / Resume Live Measurement (Space)"
+              @click=${props.onTogglePause}
+            >
+              ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
+              <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
+                >${props.isPaused ? 'Resume' : 'Pause'}</span
+              >
+            </button>
+          `}
 
       <button
         type="button"
@@ -165,22 +223,82 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
                         Number((e.target as HTMLSelectElement).value)
                       )}
                   >
-                    <option value="-1" ?selected=${props.globalReferenceChannel === -1}>
-                      Internal Signal Generator
-                    </option>
-                    ${inputChannelIndices.map(
-                      (ch) =>
-                        html`<option
-                          value=${String(ch)}
-                          ?selected=${ch === props.globalReferenceChannel}
-                        >
-                          In Ch ${ch + 1} (Loopback / Mix Ref)
-                        </option>`
-                    )}
-                  </select>
-                </div>
-              `
-            : nothing}
+                      <option value="-1" ?selected=${props.globalReferenceChannel === -1}>
+                        Internal Signal Generator
+                      </option>
+                      ${inputChannelIndices.map(
+                        (ch) =>
+                          html`<option
+                            value=${String(ch)}
+                            ?selected=${ch === props.globalReferenceChannel}
+                          >
+                            In Ch ${ch + 1} (Loopback / Mix Ref)
+                          </option>`
+                      )}
+                    </select>
+                  </div>
+
+                  <div class="foh-popover-row">
+                    <label
+                      for="wsm-select-auto-release"
+                      title="Automatically stop and release OS microphone capture if left Paused for this duration"
+                    >
+                      Auto-Release Mic When Paused
+                    </label>
+                    <select
+                      id="wsm-select-auto-release"
+                      name="auto-release-minutes"
+                      aria-label="Auto-Release Mic When Paused"
+                      data-testid="select-auto-release-minutes"
+                      .value=${String(autoReleaseVal)}
+                      @change=${(e: Event) =>
+                        props.onAutoReleaseMinutesChange?.(
+                          Number((e.target as HTMLSelectElement).value)
+                        )}
+                    >
+                      <option value="0" ?selected=${autoReleaseVal === 0}>
+                        Never (Keep Stream Warm)
+                      </option>
+                      <option value="2" ?selected=${autoReleaseVal === 2}>
+                        After 2 minutes
+                      </option>
+                      <option value="5" ?selected=${autoReleaseVal === 5}>
+                        After 5 minutes (Default)
+                      </option>
+                      <option value="10" ?selected=${autoReleaseVal === 10}>
+                        After 10 minutes
+                      </option>
+                      <option value="30" ?selected=${autoReleaseVal === 30}>
+                        After 30 minutes
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="foh-popover-row">
+                    <button
+                      type="button"
+                      class="foh-tb-pill wsm-popover-full-btn ${props.isHardwareDisconnected
+                        ? 'foh-tb-primary'
+                        : ''}"
+                      data-testid="btn-popover-disconnect-hw"
+                      @click=${() => {
+                        if (props.isHardwareDisconnected) {
+                          props.onTogglePause();
+                        } else {
+                          props.onDisconnectHardware?.();
+                        }
+                        closePopoverById(props.popoverRoot, 'wsm-io-popover');
+                      }}
+                    >
+                      ${props.isHardwareDisconnected
+                        ? html`${renderPlayIconSvg()}
+                            <span>Reconnect Audio Interface (Space)</span>`
+                        : html`${renderStopSquareIconSvg()}
+                            <span>Disconnect / Release OS Mic (Shift+Space)</span>`}
+                    </button>
+                  </div>
+                `
+              : nothing}
         </div>
       </div>
     </div>

@@ -140,6 +140,9 @@ export class WsmPageDriver {
 
             merger.connect(dest);
             noiseSrc.start();
+            (
+              window as unknown as { __wstLastMockStream?: MediaStream }
+            ).__wstLastMockStream = dest.stream;
             return dest.stream;
           };
         }

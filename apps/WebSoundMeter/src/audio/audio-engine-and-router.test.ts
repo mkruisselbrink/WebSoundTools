@@ -463,4 +463,67 @@ describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
 
     engine.dispose();
   });
+
+  it('disconnectHardwareStreams stops primary and secondary MediaStreamTracks while preserving hardware mode', async () => {
+    const primaryStopSpy = vi.fn();
+    const secondaryStopSpy = vi.fn();
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        mediaDevices: {
+          enumerateDevices: vi.fn(async () => [
+            { kind: 'audioinput', deviceId: 'scarlett-2i2', label: 'Scarlett 2i2' },
+            { kind: 'audioinput', deviceId: 'x-usb-32', label: 'X-USB (32ch)' },
+          ]),
+          getUserMedia: vi.fn(async (constraints?: MediaStreamConstraints) => {
+            const audioObj = constraints?.audio as MediaTrackConstraints | undefined;
+            const exactId = (audioObj?.deviceId as { exact?: string } | undefined)?.exact;
+            if (exactId === 'x-usb-32') {
+              return {
+                getAudioTracks: () => [
+                  { readyState: 'live', getSettings: () => ({ channelCount: 32 }) },
+                ],
+                getTracks: () => [{ stop: secondaryStopSpy }],
+              };
+            }
+            return {
+              getAudioTracks: () => [
+                { readyState: 'live', getSettings: () => ({ channelCount: 2 }) },
+              ],
+              getTracks: () => [{ stop: primaryStopSpy }],
+            };
+          }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const engine = new AudioEngine();
+    await engine.setInputMode('hardware', 'scarlett-2i2');
+    await engine.setMixerWatchConfig({
+      ...createDefaultMixerWatchSessionConfig(),
+      enabled: true,
+      deviceMode: 'separate-device',
+      separateDeviceId: 'x-usb-32',
+      separateDeviceLabel: 'X-USB (32ch)',
+    });
+
+    expect(engine.hasActiveHardwareCapture()).toBe(true);
+
+    engine.disconnectHardwareStreams();
+
+    expect(primaryStopSpy).toHaveBeenCalledTimes(1);
+    expect(secondaryStopSpy).toHaveBeenCalledTimes(1);
+    expect(engine.getInputMode()).toBe('hardware');
+    expect(engine.getPaused()).toBe(true);
+    expect(engine.hasActiveHardwareCapture()).toBe(false);
+
+    // Resuming hardware capture re-opens both streams cleanly
+    engine.setPaused(false);
+    await engine.setInputMode('hardware', 'scarlett-2i2');
+    expect(engine.hasActiveHardwareCapture()).toBe(true);
+
+    engine.dispose();
+  });
 });

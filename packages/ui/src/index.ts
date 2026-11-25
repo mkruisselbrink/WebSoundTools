@@ -17,6 +17,7 @@ export {
   renderSineWaveIconSvg,
   renderSlidersIconSvg,
   renderSpeakerCabinetIconSvg,
+  renderStopSquareIconSvg,
   renderUndoIconSvg,
   renderWsmAppMarkSvg,
   renderWssAppMarkSvg,

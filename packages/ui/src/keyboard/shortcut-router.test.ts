@@ -72,4 +72,41 @@ describe('shortcut-router', () => {
     ).toBe(true);
     expect(onMic).toHaveBeenCalledTimes(1);
   });
+
+  it('dispatches Shift+Space separately from Space even when a button has focus', () => {
+    const onSpace = vi.fn();
+    const onShiftSpace = vi.fn();
+    const preventDefault = vi.fn();
+    const cfg = {
+      bindings: {
+        space: onSpace,
+        'shift+space': onShiftSpace,
+      },
+    };
+
+    // Plain Space on a focused <button> lets native button click fire
+    expect(
+      dispatchKeyboardShortcut(
+        { code: 'Space', key: ' ', target: { tagName: 'BUTTON' }, preventDefault },
+        cfg
+      )
+    ).toBe(false);
+    expect(onSpace).not.toHaveBeenCalled();
+
+    // Shift+Space dispatches shift+space binding even when a <button> is focused
+    expect(
+      dispatchKeyboardShortcut(
+        {
+          code: 'Space',
+          key: ' ',
+          shiftKey: true,
+          target: { tagName: 'BUTTON' },
+          preventDefault,
+        },
+        cfg
+      )
+    ).toBe(true);
+    expect(onShiftSpace).toHaveBeenCalledTimes(1);
+    expect(onSpace).not.toHaveBeenCalled();
+  });
 });

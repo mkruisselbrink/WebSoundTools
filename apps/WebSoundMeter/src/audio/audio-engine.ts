@@ -537,6 +537,24 @@ export class AudioEngine {
     this.secondaryMixerRouter.setPaused(paused);
   }
 
+  /**
+   * Stops and releases all active `MediaStreamTrack`s at the OS/browser level (turning off
+   * OS mic recording indicators) while preserving `inputMode === 'hardware'` and routing settings.
+   */
+  disconnectHardwareStreams(): void {
+    this.isPaused = true;
+    this.sendToWorker({ type: 'pause', paused: true });
+    this.hardwareRouter.stopStream(false);
+    this.secondaryMixerRouter.stopStream(false);
+  }
+
+  hasActiveHardwareCapture(): boolean {
+    return (
+      this.hardwareRouter.hasOpenMediaStream() ||
+      this.secondaryMixerRouter.hasOpenMediaStream()
+    );
+  }
+
   setSimulatorPreset(
     presetId: SimulatorPresetId,
     slotId: string = this.slotManager.getSlot().id

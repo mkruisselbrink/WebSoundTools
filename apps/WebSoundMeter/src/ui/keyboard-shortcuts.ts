@@ -16,6 +16,7 @@ export interface AppShortcutActions {
   readonly onCaptureTrace: () => void;
   readonly onFindAndApplyDelay: () => void;
   readonly onTogglePause?: () => void;
+  readonly onDisconnectHardware?: () => void;
   readonly onAddLiveSource?: () => void;
   readonly onAddEqSource?: () => void;
   readonly onAddUnionSource?: () => void;
@@ -46,6 +47,7 @@ export function dispatchAppKeydown(
     onEscape: actions.onEscape,
     bindings: {
       space: actions.onTogglePause,
+      'shift+space': actions.onDisconnectHardware,
       c: actions.onCaptureTrace,
       d: actions.onFindAndApplyDelay,
       m: actions.onAddLiveSource,

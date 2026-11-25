@@ -39,6 +39,17 @@ export const appShellStyles = [
     padding-inline: 8px;
   }
 
+  .wsm-stop-btn {
+    padding: 0 6px;
+    min-inline-size: 26px;
+  }
+
+  .wsm-popover-full-btn {
+    inline-size: 100%;
+    justify-content: center;
+    margin-top: 2px;
+  }
+
   .audio-status-banner {
     display: flex;
     align-items: center;
@@ -95,6 +106,13 @@ export const appShellStyles = [
     .wsm-io-pill {
       max-inline-size: 102px;
     }
+    .wsm-transport-split + .wsm-io-pill {
+      max-inline-size: 84px;
+    }
+    .wsm-stop-btn {
+      padding: 0 5px;
+      min-inline-size: 24px;
+    }
     .wsm-gen-toggle-btn {
       inline-size: 52px;
     }
@@ -106,6 +124,9 @@ export const appShellStyles = [
   @container topbar (max-width: 779px) {
     .wsm-io-pill {
       max-inline-size: 88px;
+    }
+    .wsm-transport-split + .wsm-io-pill {
+      max-inline-size: 66px;
     }
   }
 

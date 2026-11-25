@@ -39,7 +39,7 @@ export function isEditableShortcutTarget(ev: ShortcutEventLike): boolean {
       if (EDITABLE_TAGS.has(tag) || el.isContentEditable) {
         return true;
       }
-      if (tag === 'BUTTON' && (ev.code === 'Space' || ev.key === ' ')) {
+      if (tag === 'BUTTON' && !ev.shiftKey && (ev.code === 'Space' || ev.key === ' ')) {
         return true;
       }
     }
@@ -91,10 +91,16 @@ export function dispatchKeyboardShortcut(
     return false;
   }
 
-  if ((ev.code === 'Space' || key === ' ') && config.bindings.space) {
-    ev.preventDefault?.();
-    config.bindings.space();
-    return true;
+  if (ev.code === 'Space' || key === ' ') {
+    const spaceHandler =
+      shift && config.bindings['shift+space']
+        ? config.bindings['shift+space']
+        : config.bindings.space;
+    if (spaceHandler) {
+      ev.preventDefault?.();
+      spaceHandler();
+      return true;
+    }
   }
 
   const handler = config.bindings[lower];

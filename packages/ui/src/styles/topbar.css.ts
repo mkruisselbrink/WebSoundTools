@@ -308,10 +308,25 @@ export const fohTopbarCss = css`
     }
   }
 
+  .foh-split-pill > button:disabled {
+    opacity: 0.36;
+    cursor: not-allowed;
+  }
+
   .foh-split-pill > button[aria-pressed='true'] {
     background: var(--_foh-accent, #0284c7);
     color: #ffffff;
     font-weight: 600;
+  }
+
+  .foh-split-pill > button.foh-tb-paused[aria-pressed='true'] {
+    background: #b91c1c;
+    color: #ffffff;
+  }
+
+  .foh-split-pill > button.foh-tb-standby[aria-pressed='true'] {
+    background: #b45309;
+    color: #ffffff;
   }
 
   .foh-split-pill > button[data-variant='gen'][aria-pressed='true'] {

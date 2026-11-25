@@ -103,6 +103,13 @@ export class HardwareAudioRouter {
     return tracks.some((t) => (t.readyState ?? 'live') !== 'ended');
   }
 
+  hasOpenMediaStream(): boolean {
+    if (!this.mediaStream) return false;
+    const tracks = this.mediaStream.getTracks?.() ?? [];
+    if (tracks.length === 0) return true;
+    return tracks.some((t) => (t.readyState ?? 'live') !== 'ended');
+  }
+
   async recoverStreamIfInterrupted(): Promise<number | null> {
     if (!this.lastStartOptions) return null;
     const tracks = this.mediaStream?.getAudioTracks?.() ?? [];
