@@ -7,19 +7,22 @@ import { ReactiveUndoStore } from '@foh/state';
 import { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import {
   applyFeedbackNotchToEqList,
-  mergeFeedbackTracksIntoRingLog,
   synthesizeRoomMatchEqBands,
 } from './auto-eq-matcher.js';
+import { DerivedSourceEvaluator } from './derived-source-evaluator.js';
 import {
   EqualizerSourceConfig,
   SourceDspPatch,
   applyPatchToEqConfig,
-  computeEqualizerSourceData,
   createDefaultEqBands,
   createDefaultEqDspConfig,
   normalizeEqSourceConfig,
   syncEqConfigWithBands,
 } from './eq-source.js';
+import {
+  LiveTelemetryFeed,
+  type SetLiveFramesOptions,
+} from './live-telemetry-feed.js';
 import {
   deleteEqSourceFromDb,
   deleteStoredTraceFromDb,
@@ -37,7 +40,10 @@ import {
   cloneSourceDataAsStored,
   importFrdAsStoredSource,
 } from './source-data.js';
-import { UnionSourceConfig, computeUnionSourceData } from './union-source.js';
+import { UnionSourceConfig } from './union-source.js';
+
+export type SourceChangeKind = 'live' | 'authored' | 'selection';
+export type SourceStoreListener = (kind: SourceChangeKind) => void;
 
 export interface SourcePersistenceAdapter {
   readonly loadAll: () => Promise<SourceData[]>;
@@ -66,8 +72,12 @@ const defaultPersistenceAdapter: SourcePersistenceAdapter = {
   removeEq: deleteEqSourceFromDb,
   loadAllUnion: loadAllUnionSourcesFromDb,
   saveUnion: saveUnionSourceToDb,
-  removeUnion: deleteUnionSourceFromDb,
+  removeUnion: deleteUnionSourceToDbFallback,
 };
+
+function deleteUnionSourceToDbFallback(id: string): Promise<void> {
+  return deleteUnionSourceFromDb(id);
+}
 
 function generateShortId(prefix: string): string {
   const uid =
@@ -95,13 +105,25 @@ function updateInList<T extends { id: string }>(
   });
 }
 
+function syncCollectionDiff<T extends { id: string }>(
+  prev: readonly T[],
+  next: readonly T[],
+  save?: (item: T) => void | Promise<void>,
+  remove?: (id: string) => void | Promise<void>
+): void {
+  const nextIds = new Set(next.map((item) => item.id));
+  for (const item of prev) {
+    if (!nextIds.has(item.id)) void remove?.(item.id);
+  }
+  const prevById = new Map(prev.map((item) => [item.id, item]));
+  for (const item of next) {
+    if (prevById.get(item.id) !== item) void save?.(item);
+  }
+}
+
 export class SourceStore {
-  private liveSources: SourceData[] = [];
-  private readonly liveVisibility = new Map<string, boolean>([
-    ['live-measurement', true],
-  ]);
-  private mixerOnlyFeedbackTracks: DetectedFeedbackTrack[] = [];
-  private feedbackRingLog: DetectedFeedbackTrack[] = [];
+  private readonly telemetry = new LiveTelemetryFeed();
+  private readonly evaluator = new DerivedSourceEvaluator();
   private selectedSourceId = 'live-measurement';
 
   private readonly authoredStore = new ReactiveUndoStore<AuthoredSourcesState>({
@@ -111,28 +133,17 @@ export class SourceStore {
   });
 
   private readonly persistence: SourcePersistenceAdapter;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<SourceStoreListener>();
   private eqDragSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingDraggedEq: EqualizerSourceConfig | null = null;
-
-  private readonly eqEvalCache = new Map<
-    string,
-    { cfg: EqualizerSourceConfig; target: SourceData | null; data: SourceData }
-  >();
-  private readonly unionEvalCache = new Map<
-    string,
-    { cfg: UnionSourceConfig; inputs: SourceData[]; data: SourceData }
-  >();
-  private lastAllSourcesRef: {
-    live: SourceData[];
-    stored: readonly SourceData[];
-    eq: readonly EqualizerSourceConfig[];
-    union: readonly UnionSourceConfig[];
-    result: SourceData[];
-  } | null = null;
+  private authoredRevision = 0;
 
   constructor(persistence: SourcePersistenceAdapter = defaultPersistenceAdapter) {
     this.persistence = persistence;
+  }
+
+  public get revision(): number {
+    return this.authoredRevision;
   }
 
   private get storedSources(): readonly SourceData[] {
@@ -164,7 +175,7 @@ export class SourceStore {
     if (!this.authoredStore.undo()) return false;
     this.syncAuthoredDiffToPersistence(prev, this.authoredStore.state);
     this.ensureValidSelectedSourceId();
-    this.notify();
+    this.notify('authored');
     return true;
   }
 
@@ -173,7 +184,7 @@ export class SourceStore {
     if (!this.authoredStore.redo()) return false;
     this.syncAuthoredDiffToPersistence(prev, this.authoredStore.state);
     this.ensureValidSelectedSourceId();
-    this.notify();
+    this.notify('authored');
     return true;
   }
 
@@ -181,42 +192,37 @@ export class SourceStore {
     prev: AuthoredSourcesState,
     next: AuthoredSourcesState
   ): void {
-    const nextStoredIds = new Set(next.storedSources.map((s) => s.id));
-    for (const s of prev.storedSources) {
-      if (!nextStoredIds.has(s.id)) void this.persistence.remove(s.id);
-    }
-    const prevStoredMap = new Map(prev.storedSources.map((s) => [s.id, s]));
-    for (const s of next.storedSources) {
-      if (prevStoredMap.get(s.id) !== s) void this.persistence.save(s);
-    }
-
-    const nextEqIds = new Set(next.eqSources.map((e) => e.id));
-    for (const e of prev.eqSources) {
-      if (!nextEqIds.has(e.id)) void this.persistence.removeEq?.(e.id);
-    }
-    const prevEqMap = new Map(prev.eqSources.map((e) => [e.id, e]));
-    for (const e of next.eqSources) {
-      if (prevEqMap.get(e.id) !== e) void this.persistence.saveEq?.(e);
-    }
-
-    const nextUnionIds = new Set(next.unionSources.map((u) => u.id));
-    for (const u of prev.unionSources) {
-      if (!nextUnionIds.has(u.id)) void this.persistence.removeUnion?.(u.id);
-    }
-    const prevUnionMap = new Map(prev.unionSources.map((u) => [u.id, u]));
-    for (const u of next.unionSources) {
-      if (prevUnionMap.get(u.id) !== u) void this.persistence.saveUnion?.(u);
-    }
+    syncCollectionDiff(
+      prev.storedSources,
+      next.storedSources,
+      this.persistence.save,
+      this.persistence.remove
+    );
+    syncCollectionDiff(
+      prev.eqSources,
+      next.eqSources,
+      this.persistence.saveEq,
+      this.persistence.removeEq
+    );
+    syncCollectionDiff(
+      prev.unionSources,
+      next.unionSources,
+      this.persistence.saveUnion,
+      this.persistence.removeUnion
+    );
   }
 
-  subscribe(listener: () => void): () => void {
+  subscribe(listener: SourceStoreListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private notify(): void {
+  private notify(kind: SourceChangeKind): void {
+    if (kind !== 'live') {
+      this.authoredRevision++;
+    }
     for (const listener of this.listeners) {
-      listener();
+      listener(kind);
     }
   }
 
@@ -248,7 +254,7 @@ export class SourceStore {
     }
 
     if (changed) {
-      this.notify();
+      this.notify('authored');
     }
   }
 
@@ -261,7 +267,8 @@ export class SourceStore {
       this.eqSources.some((s) => s.id === this.selectedSourceId) ||
       this.unionSources.some((s) => s.id === this.selectedSourceId);
     if (!exists) {
-      this.selectedSourceId = this.liveSources[0]?.id ?? 'live-measurement';
+      this.selectedSourceId =
+        this.telemetry.getLiveSources()[0]?.id ?? 'live-measurement';
       return true;
     }
     return false;
@@ -271,24 +278,19 @@ export class SourceStore {
     if (isLiveSourceId(this.selectedSourceId)) {
       return this.selectedSourceId;
     }
-    return this.liveSources[0]?.id ?? 'live-measurement';
+    return this.telemetry.getLiveSources()[0]?.id ?? 'live-measurement';
   }
 
   getLiveSources(): readonly SourceData[] {
-    return this.liveSources;
+    return this.telemetry.getLiveSources();
   }
 
   getLiveSource(id?: string): SourceData | null {
-    const targetId = id ?? this.getActiveLiveSourceId();
-    return (
-      this.liveSources.find((s) => s.id === targetId) ??
-      this.liveSources[0] ??
-      null
-    );
+    return this.telemetry.getLiveSource(id ?? this.getActiveLiveSourceId());
   }
 
   getLiveSourceVisible(id: string = 'live-measurement'): boolean {
-    return this.liveVisibility.get(id) ?? true;
+    return this.telemetry.getLiveSourceVisible(id);
   }
 
   setLiveSourceVisible(visible: boolean, id: string = 'live-measurement'): void {
@@ -296,12 +298,12 @@ export class SourceStore {
   }
 
   removeLiveSource(id: string): void {
-    this.liveSources = this.liveSources.filter((s) => s.id !== id);
-    this.liveVisibility.delete(id);
+    this.telemetry.removeLiveSource(id);
     if (this.selectedSourceId === id) {
-      this.selectedSourceId = this.liveSources[0]?.id ?? 'live-measurement';
+      this.selectedSourceId =
+        this.telemetry.getLiveSources()[0]?.id ?? 'live-measurement';
     }
-    this.notify();
+    this.notify('selection');
   }
 
   getStoredSources(): readonly SourceData[] {
@@ -323,64 +325,34 @@ export class SourceStore {
   setSelectedSourceId(id: string): void {
     if (this.selectedSourceId === id) return;
     this.selectedSourceId = id;
-    this.notify();
+    this.notify('selection');
   }
 
   setLiveFrames(
     frames: readonly SourceData[],
-    mixerOnlyTracks?: readonly DetectedFeedbackTrack[]
+    mixerOnlyTracks?: readonly DetectedFeedbackTrack[],
+    options?: SetLiveFramesOptions
   ): void {
-    const prevById = new Map<string, SourceData>();
-    for (const prev of this.liveSources) {
-      prevById.set(prev.id, prev);
-    }
+    this.telemetry.setLiveFrames(frames, mixerOnlyTracks, options);
+    this.notify('live');
+  }
 
-    this.liveSources = frames.map((frame) => {
-      const vis = this.liveVisibility.get(frame.id) ?? frame.visible ?? true;
-      this.liveVisibility.set(frame.id, vis);
-      const prev = prevById.get(frame.id);
-      const splHistory = frame.splHistory ?? prev?.splHistory;
-      if (frame.feedbackTracks && frame.feedbackTracks.length > 0) {
-        this.feedbackRingLog = mergeFeedbackTracksIntoRingLog(
-          this.feedbackRingLog,
-          frame.feedbackTracks
-        );
-      }
-      if (frame.visible === vis && frame.splHistory === splHistory) {
-        return frame;
-      }
-      return {
-        ...frame,
-        visible: vis,
-        ...(splHistory ? { splHistory } : {}),
-      };
-    });
-
-    if (mixerOnlyTracks !== undefined) {
-      this.mixerOnlyFeedbackTracks = [...mixerOnlyTracks];
-      if (mixerOnlyTracks.length > 0) {
-        this.feedbackRingLog = mergeFeedbackTracksIntoRingLog(
-          this.feedbackRingLog,
-          mixerOnlyTracks
-        );
-      }
-    }
-
-    this.notify();
+  setLiveFrame(live: SourceData): void {
+    this.setLiveFrames([live]);
   }
 
   getMixerOnlyFeedbackTracks(): readonly DetectedFeedbackTrack[] {
-    return this.mixerOnlyFeedbackTracks;
+    return this.telemetry.getMixerOnlyFeedbackTracks();
   }
 
   getFeedbackRingLog(): readonly DetectedFeedbackTrack[] {
-    return this.feedbackRingLog;
+    return this.telemetry.getFeedbackRingLog();
   }
 
   clearFeedbackRingLog(): void {
-    if (this.feedbackRingLog.length === 0) return;
-    this.feedbackRingLog = [];
-    this.notify();
+    if (this.telemetry.clearFeedbackRingLog()) {
+      this.notify('live');
+    }
   }
 
   applyFeedbackNotchToEq(track: DetectedFeedbackTrack): string {
@@ -395,17 +367,10 @@ export class SourceStore {
       );
       appliedId = eqId;
       void this.persistence.saveEq?.(updatedEq);
-      return {
-        ...s,
-        eqSources: nextEqSources,
-      };
+      return { ...s, eqSources: nextEqSources };
     });
-    this.notify();
+    this.notify('authored');
     return appliedId;
-  }
-
-  setLiveFrame(live: SourceData): void {
-    this.setLiveFrames([live]);
   }
 
   getActiveEq(): EqualizerSourceConfig | null {
@@ -417,59 +382,12 @@ export class SourceStore {
   }
 
   getAllSources(): SourceData[] {
-    if (
-      this.lastAllSourcesRef &&
-      this.lastAllSourcesRef.live === this.liveSources &&
-      this.lastAllSourcesRef.stored === this.storedSources &&
-      this.lastAllSourcesRef.eq === this.eqSources &&
-      this.lastAllSourcesRef.union === this.unionSources
-    ) {
-      return this.lastAllSourcesRef.result;
-    }
-
-    const list: SourceData[] = [...this.liveSources, ...this.storedSources];
-
-    for (const eqCfg of this.eqSources) {
-      const target = eqCfg.targetSourceId
-        ? list.find((s) => s.id === eqCfg.targetSourceId) ?? null
-        : null;
-      const cached = this.eqEvalCache.get(eqCfg.id);
-      if (cached && cached.cfg === eqCfg && cached.target === target) {
-        list.push(cached.data);
-      } else {
-        const data = computeEqualizerSourceData(eqCfg, target);
-        this.eqEvalCache.set(eqCfg.id, { cfg: eqCfg, target, data });
-        list.push(data);
-      }
-    }
-
-    for (const uCfg of this.unionSources) {
-      const inputs = uCfg.sourceIds
-        .map((id) => list.find((s) => s.id === id))
-        .filter((s): s is SourceData => Boolean(s));
-      const cached = this.unionEvalCache.get(uCfg.id);
-      const inputsMatch =
-        cached &&
-        cached.inputs.length === inputs.length &&
-        cached.inputs.every((inp, idx) => inp === inputs[idx]);
-      if (cached && cached.cfg === uCfg && inputsMatch) {
-        list.push(cached.data);
-      } else {
-        const data = computeUnionSourceData(uCfg, inputs);
-        this.unionEvalCache.set(uCfg.id, { cfg: uCfg, inputs, data });
-        list.push(data);
-      }
-    }
-
-    this.lastAllSourcesRef = {
-      live: this.liveSources,
-      stored: this.storedSources,
-      eq: this.eqSources,
-      union: this.unionSources,
-      result: list,
-    };
-
-    return list;
+    return this.evaluator.evaluateAll(
+      this.telemetry.getLiveSources(),
+      this.storedSources,
+      this.eqSources,
+      this.unionSources
+    );
   }
 
   captureCurrentTrace(): SourceData | null {
@@ -481,8 +399,7 @@ export class SourceStore {
     if (!target) return null;
 
     const hasSignal =
-      target.levels !== undefined ||
-      target.freqData.magnitude.some((v) => v !== 0);
+      target.levels !== undefined || target.freqData.magnitude.some((v) => v !== 0);
     if (!hasSignal) return null;
 
     const captureNum = this.storedSources.length + 1;
@@ -499,8 +416,7 @@ export class SourceStore {
       DEFAULT_SOURCE_PALETTE[paletteIdx]
     );
 
-    this.addStoredSource(captured);
-    return captured;
+    return this.addStoredSource(captured);
   }
 
   addStoredSource(source: SourceData): SourceData {
@@ -510,7 +426,7 @@ export class SourceStore {
     }));
     this.selectedSourceId = source.id;
     void this.persistence.save(source);
-    this.notify();
+    this.notify('authored');
     return source;
   }
 
@@ -538,7 +454,7 @@ export class SourceStore {
     if (this.selectedSourceId === id) {
       this.selectedSourceId = this.getActiveLiveSourceId();
     }
-    this.notify();
+    this.notify('authored');
   }
 
   updateStoredSource(
@@ -558,14 +474,16 @@ export class SourceStore {
       }),
       txKey
     );
-    this.notify();
+    this.notify('authored');
   }
 
   toggleVisibility(id: string, visible: boolean): void {
     if (isLiveSourceId(id)) {
-      this.liveVisibility.set(id, visible);
-      this.liveSources = updateInList(this.liveSources, id, (s) => ({ ...s, visible }));
-    } else if (id.startsWith('stored-')) {
+      this.telemetry.setStandaloneLiveVisibility(id, visible);
+      this.notify('live');
+      return;
+    }
+    if (id.startsWith('stored-')) {
       this.authoredStore.update((s) => ({
         ...s,
         storedSources: updateInList(
@@ -596,7 +514,7 @@ export class SourceStore {
         ),
       }));
     }
-    this.notify();
+    this.notify('authored');
   }
 
   addVirtualEqSource(): EqualizerSourceConfig {
@@ -618,7 +536,7 @@ export class SourceStore {
     }));
     this.selectedSourceId = id;
     void this.persistence.saveEq?.(newEq);
-    this.notify();
+    this.notify('authored');
     return newEq;
   }
 
@@ -634,12 +552,12 @@ export class SourceStore {
       ...s,
       eqSources: s.eqSources.filter((item) => item.id !== id),
     }));
-    this.eqEvalCache.delete(id);
+    this.evaluator.evictEq(id);
     void this.persistence.removeEq?.(id);
     if (this.selectedSourceId === id) {
       this.selectedSourceId = this.getActiveLiveSourceId();
     }
-    this.notify();
+    this.notify('authored');
   }
 
   autoFlattenRoomModesWithEq(eqId: string): void {
@@ -658,7 +576,7 @@ export class SourceStore {
         this.persistence.saveEq
       ),
     }));
-    this.notify();
+    this.notify('authored');
   }
 
   setEqTargetSource(eqId: string, targetSourceId: string | null): void {
@@ -671,7 +589,7 @@ export class SourceStore {
         this.persistence.saveEq
       ),
     }));
-    this.notify();
+    this.notify('authored');
   }
 
   updateEqDsp(eqId: string, patch: SourceDspPatch, txKey?: string): void {
@@ -687,7 +605,7 @@ export class SourceStore {
       }),
       txKey
     );
-    this.notify();
+    this.notify('authored');
   }
 
   updateEqBand(
@@ -712,7 +630,7 @@ export class SourceStore {
       }),
       txKey
     );
-    this.notify();
+    this.notify('authored');
   }
 
   dragActiveEqBand(
@@ -742,7 +660,7 @@ export class SourceStore {
       }),
       `drag-eq-${activeEq.id}-${bandIndex}`
     );
-    this.notify();
+    this.notify('authored');
   }
 
   endEqBandDrag(): void {
@@ -768,7 +686,7 @@ export class SourceStore {
 
   addUnionSource(): UnionSourceConfig {
     const id = generateShortId('union');
-    const liveIds = this.liveSources.map((s) => s.id);
+    const liveIds = this.telemetry.getLiveSources().map((s) => s.id);
     const allIds = [
       ...(liveIds.length > 0 ? liveIds : ['live-measurement']),
       ...this.storedSources.map((s) => s.id),
@@ -788,7 +706,7 @@ export class SourceStore {
     }));
     this.selectedSourceId = id;
     void this.persistence.saveUnion?.(newUnion);
-    this.notify();
+    this.notify('authored');
     return newUnion;
   }
 
@@ -797,12 +715,12 @@ export class SourceStore {
       ...s,
       unionSources: s.unionSources.filter((item) => item.id !== id),
     }));
-    this.unionEvalCache.delete(id);
+    this.evaluator.evictUnion(id);
     void this.persistence.removeUnion?.(id);
     if (this.selectedSourceId === id) {
       this.selectedSourceId = this.getActiveLiveSourceId();
     }
-    this.notify();
+    this.notify('authored');
   }
 
   updateUnionSource(
@@ -818,6 +736,6 @@ export class SourceStore {
         this.persistence.saveUnion
       ),
     }));
-    this.notify();
+    this.notify('authored');
   }
 }
