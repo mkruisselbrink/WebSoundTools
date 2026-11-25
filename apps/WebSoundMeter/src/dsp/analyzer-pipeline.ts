@@ -35,6 +35,7 @@ import { DeconvolutionAnalyzer, DelayEstimate } from './deconvolution.js';
 import {
   DetectedFeedbackTrack,
   FeedbackDetector,
+  FeedbackReferenceMode,
   FeedbackSensitivityMode,
 } from './feedback-detector.js';
 import {
@@ -75,6 +76,8 @@ export interface MeasurementPipelineConfig {
   calibrationEnabled: boolean;
   /** Per-slot acoustic feedback detector sensitivity profile */
   feedbackMode?: FeedbackSensitivityMode;
+  /** How Reference (R) interacts with single-slot Feedback Watch (default: 'closed-loop-mix') */
+  feedbackRefMode?: FeedbackReferenceMode;
 }
 
 export const DEFAULT_MEASUREMENT_CONFIG: MeasurementPipelineConfig = {
@@ -97,6 +100,7 @@ export const DEFAULT_MEASUREMENT_CONFIG: MeasurementPipelineConfig = {
   splOffsetDb: 100.0,
   calibrationEnabled: false,
   feedbackMode: 'foh-normal',
+  feedbackRefMode: 'closed-loop-mix',
 };
 
 /** Sentinel value on `LiveMeasurementSlotConfig.referenceChannel` meaning "follow the Topbar Global Reference Channel". */
@@ -150,6 +154,8 @@ export class MeasurementPipeline {
   private readonly circM: Float32Array;
   private readonly circR: Float32Array;
   private writePtr: number = 0;
+  private totalSamplesWritten: number = 0;
+  private lastTransformSamplesWritten: number = 0;
 
   private fft: Radix2FFT;
   private tf: TransferFunctionAnalyzer;
@@ -205,7 +211,10 @@ export class MeasurementPipeline {
     this.preFilterR = new BiquadCascade();
     this.meters = new BroadbandMeterBank(this.config.sampleRate, this.config.splOffsetDb);
     this.splHistory = new SplHistoryTracker(this.config.sampleRate, this.config.splOffsetDb);
-    this.feedbackDetector = new FeedbackDetector(this.config.feedbackMode ?? 'foh-normal');
+    this.feedbackDetector = new FeedbackDetector(
+      this.config.feedbackMode ?? 'foh-normal',
+      this.config.feedbackRefMode ?? 'closed-loop-mix'
+    );
 
     const N = this.config.fftSize;
     const B = (N >>> 1) + 1;
@@ -310,6 +319,9 @@ export class MeasurementPipeline {
     if (partial.feedbackMode !== undefined) {
       this.feedbackDetector.setMode(partial.feedbackMode);
     }
+    if (partial.feedbackRefMode !== undefined) {
+      this.feedbackDetector.setRefMode(partial.feedbackRefMode);
+    }
     if (partial.delayMs !== undefined && partial.delayMs !== prev.delayMs) {
       this.tf.reset();
       this.deconv.reset();
@@ -359,6 +371,8 @@ export class MeasurementPipeline {
   resetAveraging(): void {
     this.circM.fill(0);
     this.circR.fill(0);
+    this.totalSamplesWritten = 0;
+    this.lastTransformSamplesWritten = 0;
     this.tf.reset();
     this.deconv.reset();
     this.meters.reset();
@@ -491,6 +505,7 @@ export class MeasurementPipeline {
       this.writePtr = (this.writePtr + 1) & mask;
     }
 
+    this.totalSamplesWritten += length;
     this.splHistory.advanceSamples(length, this.meters);
   }
 
@@ -605,6 +620,12 @@ export class MeasurementPipeline {
       };
     }
 
+    const hopSamples = Math.max(
+      0,
+      this.totalSamplesWritten - this.lastTransformSamplesWritten
+    );
+    this.lastTransformSamplesWritten = this.totalSamplesWritten;
+
     const levelsSnapshot = this.meters.getSnapshot(this.splHistory.getRollingLeq());
     const feedbackTracks: DetectedFeedbackTrack[] = this.feedbackDetector.processFrame({
       slotId: this.config.id,
@@ -614,9 +635,15 @@ export class MeasurementPipeline {
       fftSize: N,
       splOffsetDb: this.config.splOffsetDb,
       dtMs: Math.round(dtSeconds * 1000),
+      specMRe: this.specMRe,
+      specMIm: this.specMIm,
+      specRRe: this.specRRe,
+      specRIm: this.specRIm,
+      hopSamples,
       module: this.tf.module,
       refModule: this.tf.refModule,
       referenceRmsDb: levelsSnapshot.referenceRmsDb,
+      refMode: this.config.feedbackRefMode ?? 'closed-loop-mix',
     });
 
     const curEpochSeq = this.splHistory.getEpochSeq();

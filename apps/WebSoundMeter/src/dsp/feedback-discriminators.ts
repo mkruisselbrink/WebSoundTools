@@ -4,10 +4,10 @@
 
 /**
  * Pure spectral discriminators and sensitivity profiles for acoustic feedback detection:
- *  - Guard-excluded 1/3-octave local prominence
+ *  - Sparse-safe guard-excluded local prominence with broadband program floor
  *  - 3-point parabolic peak interpolation & window-aware -3 dB Q estimation
- *  - Harmonic overtone (2f0/3f0) & subharmonic (f0/2) veto
- *  - Dual-channel M/R reference rejection
+ *  - Full harmonic comb sieve (subharmonics f0/2..f0/6 and overtones 2f0..4f0)
+ *  - Closed-loop Reference (M/R) loop-location tagging & optional Playback Stem Veto
  */
 
 import { smoothMagnitudeOctave } from '@foh/dsp';
@@ -23,7 +23,18 @@ export type FeedbackSensitivityMode =
   | 'monitor-sensitive'
   | 'custom';
 
+export type FeedbackReferenceMode = 'closed-loop-mix' | 'playback-veto' | 'ignore';
+
+export type FeedbackLoopLocation = 'in-mix' | 'stage-only';
+
 export type FeedbackTrackState = 'ringing' | 'feedback' | 'latched';
+
+export interface FeedbackCulpritAttribution {
+  readonly channelIndex: number;
+  readonly channelName: string;
+  readonly confidencePct: number;
+  readonly runnerUpLabel?: string;
+}
 
 export interface FeedbackThresholdProfile {
   readonly ringingProminenceDb: number;
@@ -31,6 +42,8 @@ export interface FeedbackThresholdProfile {
   readonly minQ: number;
   readonly onsetFrames: number;
   readonly maxCrestFactorDb: number;
+  readonly maxPitchStdCents: number;
+  readonly minPhaseCoherence: number;
   readonly noiseGateDbFs: number;
   readonly refRejectionEnabled: boolean;
   readonly harmonicVetoEnabled: boolean;
@@ -42,13 +55,15 @@ export const FEEDBACK_PROFILES: Record<
   FeedbackThresholdProfile
 > = {
   'foh-normal': {
-    ringingProminenceDb: 11.0,
+    ringingProminenceDb: 11.5,
     feedbackProminenceDb: 14.5,
     minQ: 12.0,
-    onsetFrames: 4,
-    maxCrestFactorDb: 4.5,
+    onsetFrames: 5,
+    maxCrestFactorDb: 4.3,
+    maxPitchStdCents: 4.2,
+    minPhaseCoherence: 0.72,
     noiseGateDbFs: -55.0,
-    refRejectionEnabled: true,
+    refRejectionEnabled: false,
     harmonicVetoEnabled: true,
     latchDurationMs: DEFAULT_LATCH_DURATION_MS,
   },
@@ -56,21 +71,25 @@ export const FEEDBACK_PROFILES: Record<
     ringingProminenceDb: 8.5,
     feedbackProminenceDb: 12.0,
     minQ: 8.0,
-    onsetFrames: 2,
-    maxCrestFactorDb: 5.5,
+    onsetFrames: 3,
+    maxCrestFactorDb: 5.2,
+    maxPitchStdCents: 6.5,
+    minPhaseCoherence: 0.62,
     noiseGateDbFs: -60.0,
-    refRejectionEnabled: true,
+    refRejectionEnabled: false,
     harmonicVetoEnabled: true,
     latchDurationMs: DEFAULT_LATCH_DURATION_MS,
   },
   custom: {
-    ringingProminenceDb: 10.0,
+    ringingProminenceDb: 10.5,
     feedbackProminenceDb: 13.5,
     minQ: 10.0,
-    onsetFrames: 3,
-    maxCrestFactorDb: 5.0,
+    onsetFrames: 4,
+    maxCrestFactorDb: 4.8,
+    maxPitchStdCents: 5.0,
+    minPhaseCoherence: 0.68,
     noiseGateDbFs: -55.0,
-    refRejectionEnabled: true,
+    refRejectionEnabled: false,
     harmonicVetoEnabled: true,
     latchDurationMs: DEFAULT_LATCH_DURATION_MS,
   },
@@ -92,19 +111,31 @@ export interface DetectedFeedbackTrack {
   readonly durationMs: number;
   readonly firstDetectedAt: string;
   readonly latchRemainingRatio: number;
+  /** Whether the ring is also present in the Reference mix bus ('in-mix') or only on stage/room ('stage-only') */
+  readonly loopLocation?: FeedbackLoopLocation;
+  /** Pinpointed mixer input channel driving the feedback loop when Mixer Input Watch is active */
+  readonly culprit?: FeedbackCulpritAttribution;
+  /** Optional Virtual EQ routing key (e.g. 'mixer-ch-13' for per-culprit channel strip cheat-sheets) */
+  readonly notchTargetKey?: string;
+  readonly notchTargetLabel?: string;
 }
 
 export interface CandidatePeak {
   readonly binIndex: number;
+  readonly parabolicDelta: number;
   readonly frequencyHz: number;
   readonly prominenceDb: number;
   readonly peakLevelDbFs: number;
+  readonly bgLevelDbFs: number;
   readonly estimatedQ: number;
   readonly powerLinear: number;
   readonly hasHarmonicStructure: boolean;
+  readonly loopLocation?: FeedbackLoopLocation;
 }
 
 export interface FeedbackScratchBuffers {
+  instModule: Float32Array;
+  instRefModule: Float32Array;
   bgModule: Float32Array;
   bgRef: Float32Array;
   prefixPowerM: Float64Array;
@@ -113,8 +144,8 @@ export interface FeedbackScratchBuffers {
 }
 
 export function computeTrackMatchToleranceHz(freqHz: number, binWidthHz: number): number {
-  const oneTwentyFourthOctave = freqHz * (Math.pow(2, 1 / 24) - 1);
-  return Math.max(1.5 * binWidthHz, Math.min(oneTwentyFourthOctave, 120.0));
+  const oneThirtySixthOctave = freqHz * (Math.pow(2, 1 / 36) - 1);
+  return Math.max(1.35 * binWidthHz, Math.min(oneThirtySixthOctave, 90.0));
 }
 
 export function computeWindowAwareMinQ(
@@ -129,30 +160,55 @@ export function computeWindowAwareMinQ(
   return Math.min(targetMinQ, Math.max(4.0, 0.55 * windowMaxResolvableQ));
 }
 
+/**
+ * Computes a sparse-safe local background amplitude around bin `k`, excluding the peak's own
+ * main lobe/skirts (`gL..gR`) and flooring against guard-excluded broadband program activity
+ * (`80 Hz – 8 kHz`) so quiet inter-harmonic gaps in speech/solo instruments never inflate prominence.
+ */
 export function computeGuardExcludedBackground(
   k: number,
   octaveBgVal: number,
   prefixPower: Float64Array,
-  binCount: number
+  binCount: number,
+  broadbandStartBin: number = 0,
+  broadbandEndBin: number = 0
 ): number {
-  const octLow = Math.floor(k * 0.890898718);
-  const octHigh = Math.ceil(k * 1.122462048);
+  const octLow = Math.floor(k * 0.840896415); // -1/4 octave
+  const octHigh = Math.ceil(k * 1.189207115); // +1/4 octave
   const L = Math.max(1, Math.min(k - 8, octLow));
   const R = Math.min(binCount - 2, Math.max(k + 8, octHigh));
-  const gL = Math.max(L, k - 2);
-  const gR = Math.min(R, k + 2);
+  const guardRadius = Math.max(2, Math.min(8, Math.ceil(k * 0.012)));
+  const gL = Math.max(L, k - guardRadius);
+  const gR = Math.min(R, k + guardRadius);
 
   const totalBins = R - L + 1;
   const guardBins = gR >= gL ? gR - gL + 1 : 0;
   const bgBins = totalBins - guardBins;
-  if (bgBins <= 0) {
-    return octaveBgVal;
+
+  const guardPower = gR >= gL ? prefixPower[gR + 1] - prefixPower[gL] : 0;
+  let localBgRms = octaveBgVal;
+  if (bgBins > 0) {
+    const totalPower = prefixPower[R + 1] - prefixPower[L];
+    const rawGuardRms = Math.sqrt(Math.max(0, (totalPower - guardPower) / bgBins));
+    localBgRms = octaveBgVal > 0 ? Math.min(octaveBgVal, rawGuardRms) : rawGuardRms;
   }
 
-  const totalPower = prefixPower[R + 1] - prefixPower[L];
-  const guardPower = gR >= gL ? prefixPower[gR + 1] - prefixPower[gL] : 0;
-  const bgRms = Math.sqrt(Math.max(0, (totalPower - guardPower) / bgBins));
-  return octaveBgVal > 0 ? Math.min(octaveBgVal, bgRms) : bgRms;
+  // Floor against guard-excluded broadband program energy so sparse tonal speech/music gaps don't collapse to 0
+  if (broadbandEndBin > broadbandStartBin + 16) {
+    const bbTotalPow = prefixPower[broadbandEndBin + 1] - prefixPower[broadbandStartBin];
+    const overlapL = Math.max(broadbandStartBin, gL);
+    const overlapR = Math.min(broadbandEndBin, gR);
+    const bbGuardPow =
+      overlapR >= overlapL ? prefixPower[overlapR + 1] - prefixPower[overlapL] : 0;
+    const bbBins = Math.max(
+      1,
+      broadbandEndBin - broadbandStartBin + 1 - Math.max(0, overlapR - overlapL + 1)
+    );
+    const otherProgramRms = Math.sqrt(Math.max(0, (bbTotalPow - bbGuardPow) / bbBins));
+    return Math.max(localBgRms, 0.42 * otherProgramRms);
+  }
+
+  return localBgRms;
 }
 
 export function findHalfPowerCrossingHz(
@@ -192,7 +248,13 @@ export function findHalfPowerCrossingHz(
   return prevBin * df;
 }
 
+/**
+ * Full Harmonic Comb Sieve testing whether a candidate at `f0` (`binIndex`) belongs to a
+ * musical harmonic series—either as the fundamental (with overtones `2f0..4f0`) or as the
+ * `n`-th overtone (`n = 2..6`, catching vocal formants on 3rd–6th harmonics).
+ */
 export function detectHarmonicStructure(
+  module: Float32Array,
   promDbScratch: Float32Array,
   binIndex: number,
   f0: number,
@@ -200,33 +262,75 @@ export function detectHarmonicStructure(
   promDb: number,
   binCount: number
 ): boolean {
-  const maxPromAround = (centerBin: number): number => {
-    let best = 0;
-    for (let b = Math.max(1, centerBin - 1); b <= Math.min(binCount - 2, centerBin + 1); b++) {
-      if (promDbScratch[b] > best) {
-        best = promDbScratch[b];
+  const candAmp = module[binIndex];
+  if (candAmp <= 1e-12) return false;
+
+  const peakAroundHz = (targetHz: number): { prom: number; amp: number } => {
+    const center = Math.round(targetHz / df);
+    const radius = Math.max(1, Math.min(4, Math.ceil((targetHz * 0.018) / df)));
+    let bestProm = 0;
+    let bestAmp = 0;
+    const lo = Math.max(1, center - radius);
+    const hi = Math.min(binCount - 2, center + radius);
+    for (let b = lo; b <= hi; b++) {
+      if (promDbScratch[b] > bestProm) {
+        bestProm = promDbScratch[b];
+      }
+      if (module[b] > bestAmp) {
+        bestAmp = module[b];
       }
     }
-    return best;
+    return { prom: bestProm, amp: bestAmp };
   };
 
-  const bin2 = Math.round((2.0 * f0) / df);
-  const bin3 = Math.round((3.0 * f0) / df);
-  const hasOvertones =
-    bin2 < binCount - 2 &&
-    bin3 < binCount - 2 &&
-    maxPromAround(bin2) >= 6.0 &&
-    maxPromAround(bin3) >= 6.0;
-
-  if (hasOvertones) {
+  // 1. Overtone check (is f0 the fundamental of a musical tone with 2f0, 3f0, 4f0?)
+  // Require companion harmonics to be within -16 dB of candAmp so mild clipping (-24 dB) on true feedback isn't vetoed
+  const minCompanionAmp = candAmp * 0.158; // -16 dB relative to candidate
+  let activeOvertones = 0;
+  for (let mult = 2; mult <= 4; mult++) {
+    const targetHz = mult * f0;
+    if (targetHz >= (binCount - 3) * df) break;
+    const h = peakAroundHz(targetHz);
+    if (h.prom >= 5.5 && h.amp >= minCompanionAmp) {
+      activeOvertones++;
+      // Strong 2nd harmonic alone (flute, whistle, synth, vowel) is sufficient
+      if (mult === 2 && h.prom >= 7.5 && h.amp >= candAmp * 0.22) {
+        return true;
+      }
+    }
+  }
+  if (activeOvertones >= 2) {
     return true;
   }
 
-  const binHalf = Math.round((0.5 * f0) / df);
-  if (binHalf >= 2 && binHalf < binIndex - 1) {
-    const subProm = maxPromAround(binHalf);
-    if (subProm >= promDb - 3.0 && subProm >= 8.0) {
-      return true;
+  // 2. Subharmonic / Harmonic-Grid check (is f0 = n * f_fund the 2nd..6th harmonic of a note?)
+  for (let n = 2; n <= 6; n++) {
+    const fundHz = f0 / n;
+    if (fundHz < 55.0) break;
+    const fund = peakAroundHz(fundHz);
+    if (n === 2) {
+      if (fund.prom >= Math.max(6.5, promDb - 7.0) && fund.amp >= candAmp * 0.2) {
+        return true;
+      }
+      continue;
+    }
+
+    // For n = 3..6 (vocal formants, brass, guitar harmonics), confirm fundamental + at least 1 other partial on grid
+    if (fund.prom < 5.0 || fund.amp < candAmp * 0.1) {
+      continue;
+    }
+    let gridSiblings = 1; // fundamental matched
+    for (let m = 2; m <= n + 1; m++) {
+      if (m === n) continue;
+      const sibHz = m * fundHz;
+      if (sibHz >= (binCount - 3) * df) break;
+      const sib = peakAroundHz(sibHz);
+      if (sib.prom >= 5.0 && sib.amp >= candAmp * 0.1) {
+        gridSiblings++;
+        if (gridSiblings >= 2) {
+          return true;
+        }
+      }
     }
   }
 
@@ -239,9 +343,12 @@ export function scanSpectrumForCandidates(params: {
   readonly referenceRmsDb: number | undefined;
   readonly df: number;
   readonly profile: FeedbackThresholdProfile;
+  readonly refMode?: FeedbackReferenceMode;
   readonly scratch: FeedbackScratchBuffers;
 }): { readonly candidates: CandidatePeak[]; readonly refEnergyActive: boolean } {
   const { module, refModule, referenceRmsDb, df, profile, scratch } = params;
+  const refMode: FeedbackReferenceMode =
+    params.refMode ?? (profile.refRejectionEnabled ? 'playback-veto' : 'closed-loop-mix');
   const binCount = module.length;
 
   smoothMagnitudeOctave(module, scratch.bgModule, 3);
@@ -251,7 +358,11 @@ export function scanSpectrumForCandidates(params: {
     scratch.prefixPowerM[k + 1] = scratch.prefixPowerM[k] + v * v;
   }
 
+  const bbStart = Math.max(1, Math.ceil(80.0 / df));
+  const bbEnd = Math.min(binCount - 2, Math.floor(8000.0 / df));
+
   const hasActiveRef =
+    refMode !== 'ignore' &&
     refModule !== undefined &&
     refModule.length === binCount &&
     (referenceRmsDb === undefined || referenceRmsDb > -55.0);
@@ -284,7 +395,9 @@ export function scanSpectrumForCandidates(params: {
       k,
       scratch.bgModule[k],
       scratch.prefixPowerM,
-      binCount
+      binCount,
+      bbStart,
+      bbEnd
     );
     if (mVal > EPS && bgVal > EPS) {
       scratch.promDbScratch[k] = 20.0 * Math.log10(mVal / bgVal);
@@ -312,17 +425,26 @@ export function scanSpectrumForCandidates(params: {
       continue;
     }
 
-    if (profile.refRejectionEnabled && refEnergyActive && refModule) {
+    let loopLocation: FeedbackLoopLocation | undefined;
+    if (refEnergyActive && refModule) {
       const rVal = refModule[k];
       const rBg = computeGuardExcludedBackground(
         k,
         scratch.bgRef[k],
         scratch.prefixPowerR,
-        binCount
+        binCount,
+        bbStart,
+        bbEnd
       );
       const promRefDb = rVal > EPS && rBg > EPS ? 20.0 * Math.log10(rVal / rBg) : 0.0;
-      if (promRefDb >= promDb - 5.0 || promDb - promRefDb < 8.0) {
-        continue;
+
+      if (refMode === 'playback-veto') {
+        if (promRefDb >= promDb - 5.0 || promDb - promRefDb < 8.0) {
+          continue;
+        }
+        loopLocation = 'stage-only';
+      } else if (refMode === 'closed-loop-mix') {
+        loopLocation = promRefDb >= 7.5 ? 'in-mix' : 'stage-only';
       }
     }
 
@@ -349,6 +471,7 @@ export function scanSpectrumForCandidates(params: {
     }
 
     const hasHarmonicStructure = detectHarmonicStructure(
+      module,
       scratch.promDbScratch,
       k,
       f0,
@@ -357,18 +480,21 @@ export function scanSpectrumForCandidates(params: {
       binCount
     );
 
-    if (!refEnergyActive && profile.harmonicVetoEnabled && hasHarmonicStructure && promDb < 20.0) {
+    if (profile.harmonicVetoEnabled && hasHarmonicStructure && promDb < 28.0) {
       continue;
     }
 
     candidates.push({
       binIndex: k,
+      parabolicDelta: delta,
       frequencyHz: f0,
       prominenceDb: promDb,
       peakLevelDbFs: levelDbFs,
+      bgLevelDbFs: levelDbFs - promDb,
       estimatedQ,
       powerLinear: peakAmp * peakAmp,
       hasHarmonicStructure,
+      loopLocation,
     });
   }
 
