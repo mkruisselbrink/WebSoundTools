@@ -3,12 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * AudioEngine & Multi-Slot / Dual-Device DSP Worker Controller.
+ * AudioEngine & Multi-Slot DSP Worker Controller.
  *
  * Manages background `dsp.worker.ts` lifecycle, multi-slot Live Measurement configurations
- * via `LiveSlotManager`, primary hardware routing via `HardwareAudioRouter`, and an optional
- * independent secondary USB console capture stream (`secondaryMixerRouter`) for 32-channel
- * Mixer Input Watch feedback attribution.
+ * via `LiveSlotManager`, and single/dual-device capture routing via `DualDeviceCaptureCoordinator`.
  */
 
 import {
@@ -32,30 +30,20 @@ import {
   SplHistoryCheckpoint,
   SplHistoryWindowSec,
 } from '../dsp/spl-history.js';
-import {
-  SIMULATOR_PRESETS,
-  SimulatorPresetId,
-  SimulatorRigConfig,
-} from '../dsp/synthetic-rig.js';
+import type { SimulatorPresetId } from '../dsp/synthetic-rig.js';
 import {
   MixerWatchSessionConfig,
   collectEnabledMixerPhysicalChannels,
   createDefaultMixerWatchSessionConfig,
 } from '../sources/mixer-patch-storage.js';
 import { SourceData } from '../sources/source-data.js';
-import { AudioDeviceOption, HardwareAudioRouter } from './hardware-audio-router.js';
+import { DualDeviceCaptureCoordinator } from './dual-device-capture.js';
+import type { AudioDeviceOption } from './hardware-audio-router.js';
 import {
   LiveSlotManager,
   createDefaultLiveSlot,
   createSkeletonLiveFrame,
 } from './live-slot-manager.js';
-import {
-  MAX_CAPTURE_TAP_SLOTS,
-  MIXER_CAPTURE_TAP_SLOTS,
-  RingBufferStorage,
-  TOTAL_RING_BUFFER_SLOTS,
-  createRingBufferStorage,
-} from './ring-buffer.js';
 
 export {
   REFERENCE_CHANNEL_GLOBAL,
@@ -87,18 +75,11 @@ export type SplCsvExportCallback = (csv: string) => void;
 
 export class AudioEngine {
   private readonly worker: Worker;
-  private readonly hardwareRouter = new HardwareAudioRouter(MAX_CAPTURE_TAP_SLOTS, false);
-  private readonly secondaryMixerRouter = new HardwareAudioRouter(
-    MIXER_CAPTURE_TAP_SLOTS,
-    true
-  );
-  private readonly slotManager = new LiveSlotManager();
-  private ringBufferStorage: RingBufferStorage | null = null;
-  private mixerRingBufferStorage: RingBufferStorage | null = null;
+  private readonly capture: DualDeviceCaptureCoordinator;
+  public readonly slots = new LiveSlotManager();
 
   private inputMode: InputSourceMode = 'simulator';
   private inputModeSwitchSeq = 0;
-  private mixerDeviceSwitchSeq = 0;
   private readonly latestFramesById = new Map<string, SourceData>();
   private latestMixerTelemetry: MixerWatchTelemetry = {
     channelLevelsDbFs: {},
@@ -107,7 +88,6 @@ export class AudioEngine {
   private generatorConfig: SignalGeneratorConfig = { ...DEFAULT_GENERATOR_CONFIG };
   private mixerWatchConfig: MixerWatchSessionConfig =
     createDefaultMixerWatchSessionConfig();
-  private mixerWatchStatusNotice = '';
 
   private selectedDeviceId = '';
   private isPaused = false;
@@ -122,41 +102,21 @@ export class AudioEngine {
       type: 'module',
     });
 
-    const allowSharedMemory =
-      typeof SharedArrayBuffer !== 'undefined' &&
-      ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated ?? true);
-
-    try {
-      this.ringBufferStorage = createRingBufferStorage(
-        32768,
-        allowSharedMemory,
-        TOTAL_RING_BUFFER_SLOTS
-      );
-      this.mixerRingBufferStorage = createRingBufferStorage(
-        32768,
-        allowSharedMemory,
-        MIXER_CAPTURE_TAP_SLOTS
-      );
-    } catch {
-      this.ringBufferStorage = createRingBufferStorage(
-        32768,
-        false,
-        TOTAL_RING_BUFFER_SLOTS
-      );
-      this.mixerRingBufferStorage = createRingBufferStorage(
-        32768,
-        false,
-        MIXER_CAPTURE_TAP_SLOTS
-      );
-    }
+    this.capture = new DualDeviceCaptureCoordinator({
+      onPrimaryFallbackChunk: (channels) => {
+        this.sendToWorker({ type: 'audio-chunk', channels });
+      },
+      onMixerFallbackChunk: (channels) => {
+        this.sendToWorker({ type: 'mixer-audio-chunk', channels });
+      },
+    });
 
     this.worker.onmessage = (event: MessageEvent) => {
       const msg = event.data;
       if (!msg) return;
 
       if (msg.type === 'measurement-frames' && Array.isArray(msg.frames)) {
-        const frames = msg.frames as SourceData[];
-        for (const f of frames) {
+        for (const f of msg.frames as SourceData[]) {
           const prev = this.latestFramesById.get(f.id);
           const merged: SourceData =
             f.splHistory === undefined && prev?.splHistory !== undefined
@@ -187,51 +147,31 @@ export class AudioEngine {
           listener(msg.csv);
         }
       } else if (msg.type === 'measurement-config-updated' && msg.config) {
-        const slotId = (msg.slotId as string) || this.slotManager.getSlot().id;
+        const slotId = (msg.slotId as string) || this.slots.getSlot().id;
         const updatedConfig = msg.config as MeasurementPipelineConfig;
-        this.slotManager.replaceSlotConfig(slotId, updatedConfig);
+        this.slots.replaceSlotConfig(slotId, updatedConfig);
         for (const listener of this.configListeners) {
           listener(slotId, updatedConfig);
         }
       } else if (msg.type === 'calibration-loaded' && msg.slotId) {
-        this.slotManager.setCalibrationLabel(
+        this.slots.setCalibrationLabel(
           msg.slotId as string,
           `${msg.name} (${msg.pointCount} pts)`
         );
       }
     };
 
-    const canShareRingBuffer =
-      allowSharedMemory &&
-      this.ringBufferStorage !== null &&
-      typeof SharedArrayBuffer !== 'undefined' &&
-      this.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer;
-
     try {
+      const share = this.capture.canShareRingBuffer();
       this.sendToWorker({
         type: 'init',
         sampleRate: 48000,
-        ringBufferStorage: canShareRingBuffer ? this.ringBufferStorage! : undefined,
-        mixerRingBufferStorage:
-          canShareRingBuffer && this.mixerRingBufferStorage
-            ? this.mixerRingBufferStorage
-            : undefined,
+        ringBufferStorage: share ? this.capture.ringBufferStorage : undefined,
+        mixerRingBufferStorage: share ? this.capture.mixerRingBufferStorage : undefined,
       });
     } catch {
-      this.ringBufferStorage = createRingBufferStorage(
-        32768,
-        false,
-        TOTAL_RING_BUFFER_SLOTS
-      );
-      this.mixerRingBufferStorage = createRingBufferStorage(
-        32768,
-        false,
-        MIXER_CAPTURE_TAP_SLOTS
-      );
-      this.sendToWorker({
-        type: 'init',
-        sampleRate: 48000,
-      });
+      this.capture.downgradeToLocalRingBuffers();
+      this.sendToWorker({ type: 'init', sampleRate: 48000 });
     }
     this.syncSlotsToRouterAndWorker();
   }
@@ -241,7 +181,7 @@ export class AudioEngine {
   }
 
   collectActivePhysicalChannels(): number[] {
-    const slotChs = this.slotManager.collectActivePhysicalChannels();
+    const slotChs = this.slots.collectActivePhysicalChannels();
     if (
       !this.mixerWatchConfig.enabled ||
       this.mixerWatchConfig.deviceMode !== 'follow-main'
@@ -250,13 +190,13 @@ export class AudioEngine {
     }
     const mixerChs = collectEnabledMixerPhysicalChannels(
       this.mixerWatchConfig,
-      this.slotManager.getGlobalReferenceChannel()
+      this.slots.getGlobalReferenceChannel()
     );
     return [...slotChs, ...mixerChs];
   }
 
   private emitCurrentFrames(): void {
-    const frames = this.slotManager.getSlots().map((slot) => {
+    const frames = this.slots.getSlots().map((slot) => {
       const existing = this.latestFramesById.get(slot.id);
       if (existing) {
         return {
@@ -277,35 +217,34 @@ export class AudioEngine {
   }
 
   private syncSlotsToRouterAndWorker(): void {
-    const tapMap = this.hardwareRouter.setActivePhysicalChannels(
+    const tapMap = this.capture.primaryRouter.setActivePhysicalChannels(
       this.collectActivePhysicalChannels()
     );
     this.sendToWorker({
       type: 'sync-live-slots',
-      slots: this.slotManager.getSlots(),
+      slots: this.slots.getSlots(),
       channelTapMap: tapMap,
-      globalReferenceChannel: this.slotManager.getGlobalReferenceChannel(),
+      globalReferenceChannel: this.slots.getGlobalReferenceChannel(),
     });
     this.syncMixerWatchToWorker(tapMap);
     this.emitCurrentFrames();
   }
 
   private syncMixerWatchToWorker(primaryTapMap?: Record<number, number>): void {
-    const useSeparate =
-      this.inputMode === 'hardware' &&
-      this.mixerWatchConfig.enabled &&
-      this.mixerWatchConfig.deviceMode === 'separate-device' &&
-      this.mixerWatchConfig.separateDeviceId.length > 0 &&
-      this.mixerWatchConfig.separateDeviceId !== this.selectedDeviceId;
+    const useSeparate = this.capture.isSeparateMixerActive(
+      this.inputMode === 'hardware',
+      this.selectedDeviceId,
+      this.mixerWatchConfig
+    );
 
     const tapMap = useSeparate
-      ? this.secondaryMixerRouter.setActivePhysicalChannels(
+      ? this.capture.secondaryMixerRouter.setActivePhysicalChannels(
           collectEnabledMixerPhysicalChannels(this.mixerWatchConfig, -1)
         )
-      : (primaryTapMap ?? this.hardwareRouter.getChannelTapMap());
+      : (primaryTapMap ?? this.capture.primaryRouter.getChannelTapMap());
 
     const mixerSr = useSeparate
-      ? this.secondaryMixerRouter.getSampleRate()
+      ? this.capture.secondaryMixerRouter.getSampleRate()
       : this.getMeasurementConfig().sampleRate;
 
     this.sendToWorker({
@@ -347,33 +286,33 @@ export class AudioEngine {
   }
 
   getMixerWatchAvailableChannels(): number {
-    if (this.inputMode === 'simulator') {
-      return 16;
-    }
+    if (this.inputMode === 'simulator') return 16;
     if (
-      this.mixerWatchConfig.deviceMode === 'separate-device' &&
-      this.mixerWatchConfig.separateDeviceId &&
-      this.mixerWatchConfig.separateDeviceId !== this.selectedDeviceId &&
-      this.secondaryMixerRouter.isStreamHealthy()
+      this.capture.isSeparateMixerActive(
+        true,
+        this.selectedDeviceId,
+        this.mixerWatchConfig
+      ) &&
+      this.capture.secondaryMixerRouter.isStreamHealthy()
     ) {
-      return this.secondaryMixerRouter.getAvailableChannels();
+      return this.capture.secondaryMixerRouter.getAvailableChannels();
     }
-    return this.hardwareRouter.getAvailableChannels();
+    return this.capture.primaryRouter.getAvailableChannels();
   }
 
   getMixerWatchSampleRate(): number {
     if (
       this.inputMode === 'hardware' &&
       this.mixerWatchConfig.deviceMode === 'separate-device' &&
-      this.secondaryMixerRouter.isStreamHealthy()
+      this.capture.secondaryMixerRouter.isStreamHealthy()
     ) {
-      return this.secondaryMixerRouter.getSampleRate();
+      return this.capture.secondaryMixerRouter.getSampleRate();
     }
     return this.getMeasurementConfig().sampleRate;
   }
 
   getMixerWatchStatusNotice(): string {
-    return this.mixerWatchStatusNotice;
+    return this.capture.getStatusNotice();
   }
 
   getLatestMixerTelemetry(): MixerWatchTelemetry {
@@ -383,18 +322,18 @@ export class AudioEngine {
   async setMixerWatchConfig(nextConfig: MixerWatchSessionConfig): Promise<void> {
     const prev = this.mixerWatchConfig;
     this.mixerWatchConfig = nextConfig;
-    this.mixerWatchStatusNotice = '';
+    this.capture.clearStatusNotice();
 
     const needsSeparateStream =
-      this.inputMode === 'hardware' &&
       !this.isPaused &&
-      nextConfig.enabled &&
-      nextConfig.deviceMode === 'separate-device' &&
-      nextConfig.separateDeviceId.length > 0 &&
-      nextConfig.separateDeviceId !== this.selectedDeviceId;
+      this.capture.isSeparateMixerActive(
+        this.inputMode === 'hardware',
+        this.selectedDeviceId,
+        nextConfig
+      );
 
     if (!needsSeparateStream) {
-      this.secondaryMixerRouter.stopStream();
+      this.capture.secondaryMixerRouter.stopStream();
       this.syncSlotsToRouterAndWorker();
       return;
     }
@@ -402,116 +341,60 @@ export class AudioEngine {
     const deviceChanged =
       prev.deviceMode !== 'separate-device' ||
       prev.separateDeviceId !== nextConfig.separateDeviceId ||
-      !this.secondaryMixerRouter.isStreamHealthy();
+      !this.capture.secondaryMixerRouter.isStreamHealthy();
 
     if (!deviceChanged) {
       this.syncSlotsToRouterAndWorker();
       return;
     }
 
-    await this.startSecondaryMixerStream();
-  }
-
-  private async startSecondaryMixerStream(): Promise<void> {
-    const seq = ++this.mixerDeviceSwitchSeq;
-    const cfg = this.mixerWatchConfig;
-    if (
-      this.inputMode !== 'hardware' ||
-      !cfg.enabled ||
-      cfg.deviceMode !== 'separate-device' ||
-      !cfg.separateDeviceId ||
-      cfg.separateDeviceId === this.selectedDeviceId
-    ) {
-      this.secondaryMixerRouter.stopStream();
-      this.syncSlotsToRouterAndWorker();
-      return;
-    }
-
-    try {
-      await this.secondaryMixerRouter.startStream({
-        deviceId: cfg.separateDeviceId,
-        activePhysicalChannels: collectEnabledMixerPhysicalChannels(cfg, -1),
-        generatorOutputChannel: -2,
-        generatorConfig: { ...DEFAULT_GENERATOR_CONFIG, enabled: false },
-        isPaused: this.isPaused,
-        ringBufferStorage: this.mixerRingBufferStorage,
-        onFallbackChunk: (channels) => {
-          this.sendToWorker({ type: 'mixer-audio-chunk', channels });
-        },
-      });
-
-      if (seq !== this.mixerDeviceSwitchSeq) return;
-
-      // Single-route mobile OS guard: if opening a second USB input preempted the primary mic, recover primary immediately
-      if (this.hardwareRouter && !this.hardwareRouter.isStreamHealthy()) {
-        this.secondaryMixerRouter.stopStream();
-        await this.hardwareRouter.recoverStreamIfInterrupted();
-        this.mixerWatchConfig = {
-          ...this.mixerWatchConfig,
-          deviceMode: 'follow-main',
-        };
-        this.mixerWatchStatusNotice =
-          'This OS only allows one active audio interface — switched Mixer Watch to Follow Main Input.';
-      }
-    } catch (err) {
-      if (seq === this.mixerDeviceSwitchSeq) {
-        this.secondaryMixerRouter.stopStream();
-        const reason =
-          err instanceof Error && err.message
-            ? err.message
-            : 'Device unavailable.';
-        this.mixerWatchStatusNotice = `Could not open separate mixer device (${reason})`;
-      }
-    }
-
+    this.mixerWatchConfig = await this.capture.startSecondaryMixerStream({
+      isHardwareMode: this.inputMode === 'hardware',
+      selectedDeviceId: this.selectedDeviceId,
+      isPaused: this.isPaused,
+      config: this.mixerWatchConfig,
+    });
     this.syncSlotsToRouterAndWorker();
   }
 
   getGlobalReferenceChannel(): number {
-    return this.slotManager.getGlobalReferenceChannel();
+    return this.slots.getGlobalReferenceChannel();
   }
 
   setGlobalReferenceChannel(refChannel: number): void {
-    this.slotManager.setGlobalReferenceChannel(refChannel);
+    this.slots.setGlobalReferenceChannel(refChannel);
     this.syncSlotsToRouterAndWorker();
   }
 
   getLiveSlots(): readonly LiveMeasurementSlotConfig[] {
-    return this.slotManager.getSlots();
+    return this.slots.getSlots();
   }
 
   getLiveSlot(slotId: string = 'live-measurement'): LiveMeasurementSlotConfig {
-    return this.slotManager.getSlot(slotId);
+    return this.slots.getSlot(slotId);
   }
 
   setLiveSlots(slots: readonly LiveMeasurementSlotConfig[]): void {
-    this.slotManager.setSlots(slots);
+    this.slots.setSlots(slots);
     this.syncSlotsToRouterAndWorker();
   }
 
   addLiveSlot(partial?: Partial<LiveMeasurementSlotConfig>): LiveMeasurementSlotConfig {
-    const created = this.slotManager.addSlot(partial);
+    const created = this.slots.addSlot(partial);
     this.syncSlotsToRouterAndWorker();
     return created;
   }
 
   removeLiveSlot(slotId: string): void {
-    if (this.slotManager.removeSlot(slotId)) {
+    if (this.slots.removeSlot(slotId)) {
+      this.latestFramesById.delete(slotId);
       this.syncSlotsToRouterAndWorker();
     }
   }
 
   updateLiveSlot(slotId: string, partial: Partial<LiveMeasurementSlotConfig>): void {
-    this.slotManager.updateSlot(slotId, partial);
+    this.slots.updateSlot(slotId, partial);
     this.syncSlotsToRouterAndWorker();
-  }
-
-  getSimulatorPreset(slotId?: string): SimulatorPresetId {
-    return this.getLiveSlot(slotId).simulatorPreset;
-  }
-
-  getSimulatorConfig(slotId?: string): SimulatorRigConfig {
-    return SIMULATOR_PRESETS[this.getSimulatorPreset(slotId)];
   }
 
   getMeasurementConfig(slotId?: string): MeasurementPipelineConfig {
@@ -522,10 +405,6 @@ export class AudioEngine {
     return this.generatorConfig;
   }
 
-  getCalibrationName(slotId: string = 'live-measurement'): string | null {
-    return this.slotManager.getCalibrationLabel(slotId);
-  }
-
   getPaused(): boolean {
     return this.isPaused;
   }
@@ -533,8 +412,7 @@ export class AudioEngine {
   setPaused(paused: boolean): void {
     this.isPaused = paused;
     this.sendToWorker({ type: 'pause', paused });
-    this.hardwareRouter.setPaused(paused);
-    this.secondaryMixerRouter.setPaused(paused);
+    this.capture.setPaused(paused);
   }
 
   /**
@@ -544,37 +422,26 @@ export class AudioEngine {
   disconnectHardwareStreams(): void {
     this.isPaused = true;
     this.sendToWorker({ type: 'pause', paused: true });
-    this.hardwareRouter.stopStream(false);
-    this.secondaryMixerRouter.stopStream(false);
+    this.capture.stopAllStreams(false);
   }
 
   hasActiveHardwareCapture(): boolean {
-    return (
-      this.hardwareRouter.hasOpenMediaStream() ||
-      this.secondaryMixerRouter.hasOpenMediaStream()
-    );
+    return this.capture.hasActiveCapture();
   }
 
   setSimulatorPreset(
     presetId: SimulatorPresetId,
-    slotId: string = this.slotManager.getSlot().id
+    slotId: string = this.slots.getSlot().id
   ): void {
-    this.slotManager.updateSlot(slotId, { simulatorPreset: presetId });
+    this.slots.updateSlot(slotId, { simulatorPreset: presetId });
     this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: presetId });
-  }
-
-  setCustomSimulatorConfig(
-    config: SimulatorRigConfig,
-    slotId: string = this.slotManager.getSlot().id
-  ): void {
-    this.sendToWorker({ type: 'set-simulator-preset', slotId, preset: config });
   }
 
   updateMeasurementConfig(
     partial: Partial<MeasurementPipelineConfig>,
-    slotId: string = this.slotManager.getSlot().id
+    slotId: string = this.slots.getSlot().id
   ): void {
-    this.slotManager.applyMeasurementConfigPartial(partial, slotId);
+    this.slots.applyMeasurementConfigPartial(partial, slotId);
     this.sendToWorker({
       type: 'update-measurement-config',
       slotId,
@@ -585,23 +452,23 @@ export class AudioEngine {
   updateGeneratorConfig(partial: Partial<SignalGeneratorConfig>): void {
     this.generatorConfig = { ...this.generatorConfig, ...partial };
     this.sendToWorker({ type: 'update-generator-config', config: partial });
-    this.hardwareRouter.updateGeneratorConfig(this.generatorConfig);
+    this.capture.primaryRouter.updateGeneratorConfig(this.generatorConfig);
   }
 
   loadCalibrationFile(
     text: string,
     name: string,
-    slotId: string = this.slotManager.getSlot().id
+    slotId: string = this.slots.getSlot().id
   ): void {
     this.sendToWorker({ type: 'load-calibration', slotId, text, name });
   }
 
-  clearCalibration(slotId: string = this.slotManager.getSlot().id): void {
-    this.slotManager.clearCalibrationLabel(slotId);
+  clearCalibration(slotId: string = this.slots.getSlot().id): void {
+    this.slots.clearCalibrationLabel(slotId);
     this.sendToWorker({ type: 'clear-calibration', slotId });
   }
 
-  findAndApplyDelay(slotId: string = this.slotManager.getSlot().id): void {
+  findAndApplyDelay(slotId: string = this.slots.getSlot().id): void {
     this.sendToWorker({ type: 'apply-estimated-delay', slotId });
   }
 
@@ -638,44 +505,19 @@ export class AudioEngine {
   }
 
   listInputDevices(): Promise<AudioDeviceOption[]> {
-    return this.hardwareRouter.listInputDevices();
+    return this.capture.listInputDevices();
   }
 
   getAvailableChannels(): number {
-    return this.hardwareRouter.getAvailableChannels();
+    return this.capture.primaryRouter.getAvailableChannels();
   }
 
   getAvailableOutputChannels(): number {
-    return this.hardwareRouter.getAvailableOutputChannels();
-  }
-
-  getChannelRouting(slotId?: string): {
-    measurementChannel: number;
-    referenceChannel: number;
-    generatorOutputChannel: number;
-  } {
-    const slot = this.getLiveSlot(slotId);
-    return {
-      measurementChannel: slot.measurementChannel,
-      referenceChannel: slot.referenceChannel,
-      generatorOutputChannel: this.hardwareRouter.getGeneratorOutputChannel(),
-    };
-  }
-
-  setChannelRouting(
-    measurementChannel: number,
-    referenceChannel: number,
-    generatorOutputChannel?: number,
-    slotId: string = this.slotManager.getSlot().id
-  ): void {
-    if (generatorOutputChannel !== undefined) {
-      this.hardwareRouter.setGeneratorOutputChannel(generatorOutputChannel);
-    }
-    this.updateLiveSlot(slotId, { measurementChannel, referenceChannel });
+    return this.capture.primaryRouter.getAvailableOutputChannels();
   }
 
   setGeneratorOutputChannel(outputChannel: number): void {
-    this.hardwareRouter.setGeneratorOutputChannel(outputChannel);
+    this.capture.primaryRouter.setGeneratorOutputChannel(outputChannel);
   }
 
   async setInputMode(
@@ -683,7 +525,7 @@ export class AudioEngine {
     deviceId?: string,
     measChannel?: number,
     refChannel?: number,
-    slotId: string = this.slotManager.getSlot().id
+    slotId: string = this.slots.getSlot().id
   ): Promise<void> {
     const switchSeq = ++this.inputModeSwitchSeq;
     this.inputMode = mode;
@@ -696,8 +538,7 @@ export class AudioEngine {
     }
 
     if (mode === 'simulator') {
-      this.hardwareRouter.stopStream();
-      this.secondaryMixerRouter.stopStream();
+      this.capture.stopAllStreams();
       this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
       this.syncMixerWatchToWorker();
       return;
@@ -708,49 +549,44 @@ export class AudioEngine {
     }
 
     try {
-      const hwSampleRate = await this.hardwareRouter.startStream({
+      const hwSampleRate = await this.capture.startPrimaryStream({
         deviceId: this.selectedDeviceId,
         activePhysicalChannels: this.collectActivePhysicalChannels(),
-        generatorOutputChannel: this.hardwareRouter.getGeneratorOutputChannel(),
         generatorConfig: this.generatorConfig,
         isPaused: this.isPaused,
-        ringBufferStorage: this.ringBufferStorage,
-        onFallbackChunk: (channels) => {
-          this.sendToWorker({ type: 'audio-chunk', channels });
-        },
       });
 
       if (switchSeq !== this.inputModeSwitchSeq) {
         if (this.inputMode === 'simulator') {
-          this.hardwareRouter.stopStream();
-          this.secondaryMixerRouter.stopStream();
+          this.capture.stopAllStreams();
         }
         return;
       }
 
-      const primarySlot = this.slotManager.getSlot();
+      const primarySlot = this.slots.getSlot();
       if (hwSampleRate !== primarySlot.config.sampleRate) {
         this.updateMeasurementConfig({ sampleRate: hwSampleRate }, primarySlot.id);
       }
 
       if (
         !this.isPaused &&
-        this.mixerWatchConfig.enabled &&
-        this.mixerWatchConfig.deviceMode === 'separate-device' &&
-        this.mixerWatchConfig.separateDeviceId &&
-        this.mixerWatchConfig.separateDeviceId !== this.selectedDeviceId
+        this.capture.isSeparateMixerActive(true, this.selectedDeviceId, this.mixerWatchConfig)
       ) {
-        await this.startSecondaryMixerStream();
+        this.mixerWatchConfig = await this.capture.startSecondaryMixerStream({
+          isHardwareMode: true,
+          selectedDeviceId: this.selectedDeviceId,
+          isPaused: this.isPaused,
+          config: this.mixerWatchConfig,
+        });
       } else {
-        this.secondaryMixerRouter.stopStream();
-        this.syncSlotsToRouterAndWorker();
+        this.capture.secondaryMixerRouter.stopStream();
       }
-
+      this.syncSlotsToRouterAndWorker();
       this.sendToWorker({ type: 'set-input-mode', mode: 'hardware' });
     } catch (err) {
       if (switchSeq === this.inputModeSwitchSeq) {
         this.inputMode = 'simulator';
-        this.secondaryMixerRouter.stopStream();
+        this.capture.secondaryMixerRouter.stopStream();
         this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
       }
       throw err;
@@ -758,49 +594,54 @@ export class AudioEngine {
   }
 
   isHardwareStreamHealthy(): boolean {
-    return this.hardwareRouter.isStreamHealthy();
+    return this.capture.primaryRouter.isStreamHealthy();
   }
 
   async recoverHardwareStreamIfInterrupted(): Promise<boolean> {
     if (this.inputMode !== 'hardware' || this.isPaused) return true;
-    if (this.hardwareRouter.isStreamHealthy()) {
+    if (this.capture.primaryRouter.isStreamHealthy()) {
       if (
-        this.mixerWatchConfig.enabled &&
-        this.mixerWatchConfig.deviceMode === 'separate-device' &&
-        this.mixerWatchConfig.separateDeviceId &&
-        this.mixerWatchConfig.separateDeviceId !== this.selectedDeviceId &&
-        !this.secondaryMixerRouter.isStreamHealthy()
+        this.capture.isSeparateMixerActive(true, this.selectedDeviceId, this.mixerWatchConfig) &&
+        !this.capture.secondaryMixerRouter.isStreamHealthy()
       ) {
-        await this.startSecondaryMixerStream();
+        this.mixerWatchConfig = await this.capture.startSecondaryMixerStream({
+          isHardwareMode: true,
+          selectedDeviceId: this.selectedDeviceId,
+          isPaused: this.isPaused,
+          config: this.mixerWatchConfig,
+        });
+        this.syncSlotsToRouterAndWorker();
       }
       return true;
     }
     try {
-      const sr = await this.hardwareRouter.recoverStreamIfInterrupted();
+      const sr = await this.capture.primaryRouter.recoverStreamIfInterrupted();
       if (sr !== null) {
-        const primarySlot = this.slotManager.getSlot();
+        const primarySlot = this.slots.getSlot();
         if (sr !== primarySlot.config.sampleRate) {
           this.updateMeasurementConfig({ sampleRate: sr }, primarySlot.id);
         }
       }
       if (
-        this.hardwareRouter.isStreamHealthy() &&
-        this.mixerWatchConfig.enabled &&
-        this.mixerWatchConfig.deviceMode === 'separate-device' &&
-        this.mixerWatchConfig.separateDeviceId &&
-        this.mixerWatchConfig.separateDeviceId !== this.selectedDeviceId
+        this.capture.primaryRouter.isStreamHealthy() &&
+        this.capture.isSeparateMixerActive(true, this.selectedDeviceId, this.mixerWatchConfig)
       ) {
-        await this.startSecondaryMixerStream();
+        this.mixerWatchConfig = await this.capture.startSecondaryMixerStream({
+          isHardwareMode: true,
+          selectedDeviceId: this.selectedDeviceId,
+          isPaused: this.isPaused,
+          config: this.mixerWatchConfig,
+        });
+        this.syncSlotsToRouterAndWorker();
       }
-      return this.hardwareRouter.isStreamHealthy();
+      return this.capture.primaryRouter.isStreamHealthy();
     } catch {
       return false;
     }
   }
 
   dispose(): void {
-    this.hardwareRouter.dispose();
-    this.secondaryMixerRouter.dispose();
+    this.capture.dispose();
     this.worker.terminate();
     this.liveFramesListeners.clear();
     this.configListeners.clear();
