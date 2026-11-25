@@ -43,6 +43,36 @@ export async function createRetinaPage(browser: Browser): Promise<RetinaSession>
   return { context, page };
 }
 
+export async function createTouchRetinaPage(
+  browser: Browser,
+  width: number,
+  height: number
+): Promise<RetinaSession> {
+  const context = await browser.newContext({
+    viewport: { width, height },
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    isMobile: width < 680,
+    acceptDownloads: true,
+  });
+  context.setDefaultTimeout(4500);
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: async () => ({
+          released: false,
+          release: async () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }),
+      },
+    });
+  });
+  return { context, page };
+}
+
 function startPreviewServer(
   appFolder: 'WebSoundMeter' | 'WebSpeakerSim',
   port: number

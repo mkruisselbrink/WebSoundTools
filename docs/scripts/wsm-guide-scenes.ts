@@ -11,7 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Browser } from '@playwright/test';
 import { WsmPageDriver } from '../../apps/WebSoundMeter/tests/e2e/wsm-page-driver.ts';
-import { createRetinaPage, sleep } from './generate-screenshots.ts';
+import {
+  createRetinaPage,
+  createTouchRetinaPage,
+  sleep,
+} from './generate-screenshots.ts';
 
 export interface CaptureWsmGuideParams {
   readonly browser: Browser;
@@ -109,6 +113,60 @@ export async function captureWsmGuideScenes({
     await wsm.setShowSplThresholds(95, 98);
     await sleep(2200);
     await page.screenshot({ path: path.join(wsmOutDir, '05-live-show-spl-and-feedback.png') });
+
+    await context.close();
+  }
+
+  // 07 — Handheld Phone Live Show Deck (390×844 @ 2x DPR, Coarse Touch + Wake Lock + Ring Banner + RTA)
+  {
+    const { context, page } = await createTouchRetinaPage(browser, 390, 844);
+    const wsm = new WsmPageDriver(page);
+    await wsm.installMockUsbHardwareInterface('usb-4ch-interface', 'Focusrite Scarlett 4i4 USB (4ch)', {
+      withFeedbackRings: true,
+    });
+    await wsm.installSeededShowSplHistory({
+      slotIds: ['live-measurement'],
+      baseSplDbA: 94.8,
+    });
+    await wsm.goto(wsmUrl);
+    await wsm.waitForLiveSignal();
+
+    await wsm.selectInputSource('hardware:usb-4ch-interface');
+    await sleep(450);
+    await wsm.setMode('show');
+    await wsm.app.getByTestId('mobile-tab-mics').click();
+    await wsm.setShowSplThresholds(95, 98);
+    await wsm.app.getByTestId('mobile-tab-rta').click();
+    await sleep(2200);
+    await page.screenshot({
+      path: path.join(wsmOutDir, '07-mobile-show-handheld-deck.png'),
+    });
+
+    await context.close();
+  }
+
+  // 08 — Tablet Portrait Live Show Split-Deck (820×1180 @ 2x DPR, Full-Width Charts Over 2-Col Deck)
+  {
+    const { context, page } = await createTouchRetinaPage(browser, 820, 1180);
+    const wsm = new WsmPageDriver(page);
+    await wsm.installMockUsbHardwareInterface('usb-4ch-interface', 'Focusrite Scarlett 4i4 USB (4ch)', {
+      withFeedbackRings: true,
+    });
+    await wsm.installSeededShowSplHistory({
+      slotIds: ['live-measurement'],
+      baseSplDbA: 94.8,
+    });
+    await wsm.goto(wsmUrl);
+    await wsm.waitForLiveSignal();
+
+    await wsm.selectInputSource('hardware:usb-4ch-interface');
+    await sleep(450);
+    await wsm.setMode('show');
+    await wsm.setShowSplThresholds(95, 98);
+    await sleep(2200);
+    await page.screenshot({
+      path: path.join(wsmOutDir, '08-tablet-portrait-show-split-deck.png'),
+    });
 
     await context.close();
   }

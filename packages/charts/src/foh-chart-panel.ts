@@ -88,7 +88,13 @@ export const fohChartPanelStyles = css`
     font-size: 11.5px;
     color: var(--foh-text-primary, #e2e8f0);
     flex-wrap: nowrap;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .chart-header::-webkit-scrollbar {
+    display: none;
   }
 
   .header-left,

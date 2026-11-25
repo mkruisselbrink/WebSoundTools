@@ -58,4 +58,20 @@ Municipal ordinances and festival sound limits typically enforce **time-integrat
 
 ---
 
+## 5. Walking the Venue: Handheld Phone & Tablet Show Mode
+
+When walking the balcony, checking property-line SPL with a USB-C measurement mic, or propping a tablet beside the console, **WebSoundMeter** adapts its **`🎚 Show`** layout automatically and holds a **Screen Wake Lock (`☀ Awake`)** so the display never dims mid-set:
+
+| Handheld Phone `SPL Trend` & Ring Alert | Handheld `Mics & Cal` Bottom-Sheet Calibrator |
+| :---: | :---: |
+| ![Handheld Phone Show Mode SPL Trend with Pinned Scoreboard and Active Ring Banner](./images/t05-03-handheld-phone-spl-trend.png) | ![Handheld Phone Show Mode Mics and Cal Tab with 94 dB Pistonphone Sheet](./images/t05-04-handheld-phone-mics-calibration.png) |
+
+1. **Phone Handheld Deck (`< 680 px`):**
+   - **Pinned Hero SPL Scoreboard:** Keeps primary `dBA / dBC / dBZ`, **`● OK` / `▲ WARN` / `◆ LIMIT`**, `LAeq,15m`, `LC − LA`, and `Peak` readable at arm's length while switching views on the 4-tab thumb bar (**`Spectrum`**, **`SPL Trend`**, **`Rings`**, **`Mics & Cal`**).
+   - **1-Tap Ring Banner & Calibration:** Active feedback rings surface in a top alert banner with direct **`Notch EQ`**, while **`Mics & Cal` → `Cal…`** opens a bottom sheet for 1-tap **`94 dB Cal`** / **`114 dB Cal`** pistonphone matching.
+2. **Tablet Landscape & Portrait (`680–959 px`):**
+   - Scales all buttons, channel selectors, and EQ handles for coarse touch pointers, lets you **drag your finger across any chart** to scrub and pin the cursor HUD, and stacks full-width Show charts above a 2-column control deck in **Tablet Portrait**.
+
+---
+
 *Return to the [FOH Tutorial Index](./README.md).*

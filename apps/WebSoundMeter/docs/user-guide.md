@@ -161,6 +161,11 @@ Transform and smoothing settings are synchronized across all live slots so multi
 - **`CSV ⬇` Export:** Downloads `websoundmeter-spl-log-<UTC-ISO-timestamp>.csv` in chronological long format (one row per active slot per second: `timestamp_iso, slot_id, laf_db, lcf_db, laeq_1m_db, lceq_1m_db, laeq_5m_db, laeq_15m_db, laeq_60m_db, lpeak_db`).
 
 ### Tablet & Handheld Phone Show Layouts
+
+| Phone Handheld Show Deck (`< 680 px`) | Tablet Portrait Split-Deck (`680–959 px`) |
+| :---: | :---: |
+| ![Handheld Phone Live Show Deck with Hero SPL Scoreboard, Ring Banner and 4-Tab Bar](./images/07-mobile-show-handheld-deck.png) | ![Tablet Portrait Live Show Split-Deck with Full-Width Charts Over 2-Column Controls](./images/08-tablet-portrait-show-split-deck.png) |
+
 - **Screen Wake Lock (`☀ Awake`):** Entering **Show** mode while running automatically requests a browser Screen Wake Lock (`navigator.wakeLock`) so propped tablets and handheld phones do not dim or lock mid-set, re-acquiring automatically when returning to the tab.
 - **Touch Chart Scrubbing:** Tapping or dragging across any chart on a touchscreen scrubs the floating frequency/time cursor HUD and pins the readout on finger lift; tap outside the plot frame (on the axis margin) to clear the pinned readout.
 - **Tablet Landscape & Portrait (`680–959 px`):** Touch devices automatically enlarge topbar, chart header, **`Cal…`**, and **`Notch EQ`** controls (`36–44 px` targets, `16 px` zoom-safe form inputs). In **Tablet Portrait**, Show mode stacks full-width charts on top over a 2-column bottom control deck (`Live Mics & SPL Watch` beside `Feedback Ring Log` and `Show Limits & Log`).

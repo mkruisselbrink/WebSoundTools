@@ -321,8 +321,10 @@ describe('Documentation, Relative Links, Heading Anchors & Screenshot Integrity'
       }
       for (const shot of screenshots) {
         checkAsset(shot, 'screenshot');
-        if (shot.form_factor !== 'wide') {
-          issues.push(`${app}: screenshot "${shot.src}" missing form_factor="wide"`);
+        if (shot.form_factor !== 'wide' && shot.form_factor !== 'narrow') {
+          issues.push(
+            `${app}: screenshot "${shot.src}" missing form_factor="wide"|"narrow"`
+          );
         }
         if (!shot.label || shot.label.trim().length < 10) {
           issues.push(`${app}: screenshot "${shot.src}" missing descriptive label`);

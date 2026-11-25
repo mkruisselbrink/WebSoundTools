@@ -13,6 +13,8 @@ import type { Browser } from '@playwright/test';
 export interface ManifestScreenshotSource {
   readonly sourceRelPath: string;
   readonly destFileName: string;
+  readonly width?: number;
+  readonly height?: number;
 }
 
 export const WSM_MANIFEST_SCREENSHOTS: readonly ManifestScreenshotSource[] = [
@@ -27,6 +29,12 @@ export const WSM_MANIFEST_SCREENSHOTS: readonly ManifestScreenshotSource[] = [
   {
     sourceRelPath: 'apps/WebSoundMeter/docs/images/05-live-show-spl-and-feedback.png',
     destFileName: '03-live-show-spl-and-feedback.png',
+  },
+  {
+    sourceRelPath: 'apps/WebSoundMeter/docs/images/07-mobile-show-handheld-deck.png',
+    destFileName: '04-mobile-live-show-deck.png',
+    width: 390,
+    height: 844,
   },
 ];
 
@@ -72,6 +80,8 @@ async function writeDownscaledGroup(
     for (const entry of entries) {
       const srcPath = path.join(repoRoot, entry.sourceRelPath);
       const b64 = fs.readFileSync(srcPath).toString('base64');
+      const targetW = entry.width ?? TARGET_WIDTH;
+      const targetH = entry.height ?? TARGET_HEIGHT;
       const outB64 = await page.evaluate(
         async ({ dataUrl, w, h }) => {
           const img = new Image();
@@ -92,8 +102,8 @@ async function writeDownscaledGroup(
         },
         {
           dataUrl: 'data:image/png;base64,' + b64,
-          w: TARGET_WIDTH,
-          h: TARGET_HEIGHT,
+          w: targetW,
+          h: targetH,
         }
       );
       fs.writeFileSync(path.join(outDir, entry.destFileName), Buffer.from(outB64, 'base64'));

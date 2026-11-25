@@ -11,7 +11,11 @@ import path from 'node:path';
 import type { Browser } from '@playwright/test';
 import { WsmPageDriver } from '../../apps/WebSoundMeter/tests/e2e/wsm-page-driver.ts';
 import { WssPageDriver } from '../../apps/WebSpeakerSim/tests/e2e/wss-page-driver.ts';
-import { createRetinaPage, sleep } from './generate-screenshots.ts';
+import {
+  createRetinaPage,
+  createTouchRetinaPage,
+  sleep,
+} from './generate-screenshots.ts';
 
 export interface CaptureTutorialParams {
   readonly browser: Browser;
@@ -254,6 +258,47 @@ export async function captureTutorialScenes({
     await page.screenshot({
       path: path.join(outDir, 't05-02-show-limit-and-ring-log.png'),
       clip: { x: 0, y: 0, width: 1440, height: 525 },
+    });
+
+    await context.close();
+  }
+
+  // 5b. Tutorial 05 Handheld Phone Walkthrough — SPL Trend Tab & Bottom-Sheet 94 dB Calibration
+  {
+    const { context, page } = await createTouchRetinaPage(browser, 390, 844);
+    const wsm = new WsmPageDriver(page);
+    await wsm.installMockUsbHardwareInterface(
+      'usb-4ch-interface',
+      'Focusrite Scarlett 4i4 USB (4ch)',
+      { withFeedbackRings: true }
+    );
+    await wsm.installSeededShowSplHistory({
+      slotIds: ['live-measurement'],
+      baseSplDbA: 94.8,
+    });
+    await wsm.goto(wsmUrl);
+    await wsm.waitForLiveSignal();
+
+    await wsm.selectInputSource('hardware:usb-4ch-interface');
+    await sleep(450);
+    await wsm.setMode('show');
+    await wsm.app.getByTestId('mobile-tab-mics').click();
+    await wsm.setShowSplThresholds(94, 98);
+
+    // t05-03: Handheld Phone SPL Trend (15m compliance curve + Hero Scoreboard + Active Ring Banner)
+    await wsm.app.getByTestId('mobile-tab-history').click();
+    await sleep(2200);
+    await page.screenshot({
+      path: path.join(outDir, 't05-03-handheld-phone-spl-trend.png'),
+    });
+
+    // t05-04: Handheld Phone Mics & Cal Tab with Bottom-Sheet SPL Calibrator Open
+    await wsm.app.getByTestId('mobile-tab-mics').click();
+    await sleep(250);
+    await wsm.app.getByTestId('btn-show-cal-live-measurement').click();
+    await sleep(300);
+    await page.screenshot({
+      path: path.join(outDir, 't05-04-handheld-phone-mics-calibration.png'),
     });
 
     await context.close();

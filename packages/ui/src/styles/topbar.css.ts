@@ -655,4 +655,17 @@ export const fohTopbarCss = css`
       padding: 0 6px;
     }
   }
+
+  @container topbar (max-width: 479px) {
+    .foh-brand {
+      display: none;
+    }
+    .foh-topbar-spacer {
+      flex: 1 1 4px;
+      min-inline-size: 4px;
+    }
+    .foh-popover-row select {
+      padding-inline-end: 28px;
+    }
+  }
 `;

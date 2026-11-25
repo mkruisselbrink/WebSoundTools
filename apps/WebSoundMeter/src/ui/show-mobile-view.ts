@@ -287,6 +287,7 @@ export function renderMobileShowWorkspace(
               <chart-panel
                 data-testid="chart-panel-0"
                 .plotType=${activeChartPlotType}
+                .hidePlotTypeSelector=${true}
                 .sources=${props.chartSources}
                 .eqBands=${props.eqBands}
                 .splAlertThresholds=${props.splAlertThresholds}

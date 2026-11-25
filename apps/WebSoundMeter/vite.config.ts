@@ -19,6 +19,7 @@ export default defineConfig({
         '/screenshots/01-pa-tuning-and-transfer-function.png',
         '/screenshots/02-virtual-eq-and-spatial-average.png',
         '/screenshots/03-live-show-spl-and-feedback.png',
+        '/screenshots/04-mobile-live-show-deck.png',
       ],
     }),
   ],

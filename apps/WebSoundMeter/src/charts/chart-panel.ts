@@ -50,6 +50,9 @@ export class ChartPanelElement extends FohChartPanelBase {
   @property({ type: String })
   plotType: PlotType = 'magnitude';
 
+  @property({ type: Boolean })
+  hidePlotTypeSelector = false;
+
   @property({ attribute: false })
   sources: SourceData[] = [];
 
@@ -181,6 +184,7 @@ export class ChartPanelElement extends FohChartPanelBase {
   protected renderHeader(): TemplateResult {
     return renderWsmChartHeader({
       plotType: this.plotType,
+      hidePlotTypeSelector: this.hidePlotTypeSelector,
       rtaMode: this.rtaMode,
       showPeakHold: this.showPeakHold,
       coherenceMode: this.coherenceMode,

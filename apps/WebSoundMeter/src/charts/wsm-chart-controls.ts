@@ -14,6 +14,7 @@ export const COHERENCE_THRESHOLD_PRESETS: readonly number[] = [
 
 export interface WsmChartHeaderProps {
   readonly plotType: PlotType;
+  readonly hidePlotTypeSelector?: boolean;
   readonly rtaMode: RtaDisplayMode;
   readonly showPeakHold: boolean;
   readonly coherenceMode: CoherenceBlankingMode;
@@ -41,19 +42,23 @@ export function renderWsmChartHeader(props: WsmChartHeaderProps): TemplateResult
   return html`
     <div class="chart-header">
       <div class="header-left">
-        <select
-          name="chart-plot-type"
-          aria-label="Plot Type"
-          .value=${props.plotType}
-          @change=${props.onPlotTypeChange}
-        >
-          ${Object.values(PLOT_METADATA).map(
-            (m) =>
-              html`<option value=${m.type} ?selected=${m.type === props.plotType}>
-                ${m.label}
-              </option>`
-          )}
-        </select>
+        ${props.hidePlotTypeSelector
+          ? nothing
+          : html`
+              <select
+                name="chart-plot-type"
+                aria-label="Plot Type"
+                .value=${props.plotType}
+                @change=${props.onPlotTypeChange}
+              >
+                ${Object.values(PLOT_METADATA).map(
+                  (m) =>
+                    html`<option value=${m.type} ?selected=${m.type === props.plotType}>
+                      ${m.label}
+                    </option>`
+                )}
+              </select>
+            `}
 
         ${props.plotType === 'rta'
           ? html`

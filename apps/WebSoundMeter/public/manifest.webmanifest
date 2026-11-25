@@ -52,6 +52,13 @@
       "type": "image/png",
       "form_factor": "wide",
       "label": "Live Show Monitoring: Rolling LAeq15m Compliance & Narrowband Feedback Watch"
+    },
+    {
+      "src": "./screenshots/04-mobile-live-show-deck.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Handheld Phone Live Show Deck: Hero SPL Scoreboard, Ring Watch & 4-Tab Thumb Bar"
     }
   ]
 }

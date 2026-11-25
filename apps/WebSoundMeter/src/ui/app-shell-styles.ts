@@ -62,6 +62,12 @@ export const appShellStyles = [
     }
   }
 
+  @container topbar (max-width: 479px) {
+    .wsm-io-pill {
+      max-inline-size: 104px;
+    }
+  }
+
   .delay-readout {
     display: inline-flex;
     align-items: center;
@@ -752,6 +758,11 @@ export const appShellStyles = [
     .mobile-show-shell :is(button, select, input[type='number'], input[type='text']) {
       min-block-size: 38px;
       padding: 6px 10px;
+    }
+
+    .sidebar select,
+    .mobile-show-shell select {
+      padding-inline-end: 28px;
     }
 
     .show-mic-row {
