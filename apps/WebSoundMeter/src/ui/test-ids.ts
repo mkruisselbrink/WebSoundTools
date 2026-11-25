@@ -10,6 +10,7 @@
 export const WSM_TEST_IDS = {
   // Topbar & Mode / Routing / Generator / SPL
   appTopbar: 'app-topbar',
+  audioStatusBanner: 'audio-status-banner',
   modeTuningBtn: 'btn-mode-tuning',
   modeShowBtn: 'btn-mode-show',
   undoBtn: 'btn-undo',

@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     fohPwaPlugin({
       cachePrefix: 'wsm-precache-',
-      cacheVersion: 'v2',
+      cacheVersion: 'v3',
       staticPaths: [
         '/index.html',
         '/manifest.webmanifest',

@@ -11,6 +11,7 @@
 export const ISOLATION_HEADERS: Readonly<Record<string, string>> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Resource-Policy': 'same-origin',
 };
 
 export function buildCacheName(prefix: string, versionHash: string): string {
@@ -34,7 +35,13 @@ export function withCrossOriginIsolationHeaders(response: Response): Response {
 
   const coop = response.headers.get('Cross-Origin-Opener-Policy');
   const coep = response.headers.get('Cross-Origin-Embedder-Policy');
-  if (coop === 'same-origin' && coep === 'require-corp') {
+  const corp = response.headers.get('Cross-Origin-Resource-Policy');
+  if (
+    coop === 'same-origin' &&
+    coep === 'require-corp' &&
+    corp === 'same-origin' &&
+    !response.redirected
+  ) {
     return response;
   }
 

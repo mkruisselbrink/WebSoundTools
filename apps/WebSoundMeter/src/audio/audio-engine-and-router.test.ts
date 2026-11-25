@@ -274,4 +274,105 @@ describe('HardwareAudioRouter and Multi-Slot AudioEngine', () => {
 
     engine.dispose();
   });
+
+  it('recovers from rotated iPadOS deviceId UUIDs, WebKit interrupted AudioContext, and ended MediaStreamTracks', async () => {
+    let contextState = 'interrupted';
+    let trackState: MediaStreamTrackState = 'live';
+    const resumeSpy = vi.fn(async () => {
+      contextState = 'running';
+    });
+
+    class InterruptedWebKitAudioContext {
+      sampleRate = 48000;
+      get state() {
+        return contextState;
+      }
+      destination = {
+        maxChannelCount: 2,
+        channelCount: 2,
+        channelCountMode: 'max',
+        channelInterpretation: 'speakers',
+      };
+      audioWorklet = { addModule: vi.fn(async () => {}) };
+      resume = resumeSpy;
+      close = vi.fn(async () => {
+        contextState = 'closed';
+      });
+      createMediaStreamSource = vi.fn(() => ({
+        channelCount: 2,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      }));
+      createChannelSplitter = vi.fn(() => ({
+        connect: mockSplitterConnect,
+        disconnect: vi.fn(),
+      }));
+      createChannelMerger = vi.fn(() => ({
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      }));
+    }
+
+    Object.defineProperty(globalThis, 'AudioContext', {
+      value: InterruptedWebKitAudioContext,
+      configurable: true,
+      writable: true,
+    });
+
+    const gumSpy = vi
+      .fn()
+      // 1st call fails because yesterday's saved iPadOS deviceId rotated
+      .mockRejectedValueOnce(Object.assign(new Error('Stale device'), { name: 'OverconstrainedError' }))
+      // 2nd call succeeds with raw default input
+      .mockImplementation(async () => ({
+        getAudioTracks: () => [
+          {
+            get readyState() {
+              return trackState;
+            },
+            getSettings: () => ({ channelCount: 2 }),
+          },
+        ],
+        getTracks: () => [{ stop: vi.fn() }],
+      }));
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        mediaDevices: {
+          enumerateDevices: vi.fn(async () => []),
+          getUserMedia: gumSpy,
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const engine = new AudioEngine();
+    await engine.setInputMode('hardware', 'stale-ipad-uuid-from-yesterday');
+    expect(gumSpy).toHaveBeenCalledTimes(2);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    expect(engine.isHardwareStreamHealthy()).toBe(true);
+
+    // Simulate iPadOS Home Screen backgrounding putting AudioContext into 'interrupted'
+    contextState = 'interrupted';
+    expect(engine.isHardwareStreamHealthy()).toBe(false);
+    await expect(engine.recoverHardwareStreamIfInterrupted()).resolves.toBe(true);
+    expect(resumeSpy).toHaveBeenCalledTimes(2);
+    expect(engine.isHardwareStreamHealthy()).toBe(true);
+
+    // Simulate iPadOS ending the MediaStreamTrack while backgrounded -> re-acquires stream
+    trackState = 'ended';
+    expect(engine.isHardwareStreamHealthy()).toBe(false);
+    gumSpy.mockImplementationOnce(async () => {
+      trackState = 'live';
+      return {
+        getAudioTracks: () => [{ readyState: 'live', getSettings: () => ({ channelCount: 2 }) }],
+        getTracks: () => [{ stop: vi.fn() }],
+      };
+    });
+    await expect(engine.recoverHardwareStreamIfInterrupted()).resolves.toBe(true);
+    expect(engine.isHardwareStreamHealthy()).toBe(true);
+
+    engine.dispose();
+  });
 });

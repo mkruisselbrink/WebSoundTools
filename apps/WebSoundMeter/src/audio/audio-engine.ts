@@ -87,8 +87,12 @@ export class AudioEngine {
       type: 'module',
     });
 
+    const allowSharedMemory =
+      typeof SharedArrayBuffer !== 'undefined' &&
+      ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated ?? true);
+
     try {
-      this.ringBufferStorage = createRingBufferStorage(65536, true);
+      this.ringBufferStorage = createRingBufferStorage(65536, allowSharedMemory);
     } catch {
       this.ringBufferStorage = createRingBufferStorage(65536, false);
     }
@@ -142,14 +146,24 @@ export class AudioEngine {
     };
 
     const canShareRingBuffer =
+      allowSharedMemory &&
       this.ringBufferStorage !== null &&
+      typeof SharedArrayBuffer !== 'undefined' &&
       this.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer;
 
-    this.sendToWorker({
-      type: 'init',
-      sampleRate: 48000,
-      ringBufferStorage: canShareRingBuffer ? this.ringBufferStorage! : undefined,
-    });
+    try {
+      this.sendToWorker({
+        type: 'init',
+        sampleRate: 48000,
+        ringBufferStorage: canShareRingBuffer ? this.ringBufferStorage! : undefined,
+      });
+    } catch {
+      this.ringBufferStorage = createRingBufferStorage(65536, false);
+      this.sendToWorker({
+        type: 'init',
+        sampleRate: 48000,
+      });
+    }
     this.syncSlotsToRouterAndWorker();
   }
 
@@ -471,6 +485,27 @@ export class AudioEngine {
         this.sendToWorker({ type: 'set-input-mode', mode: 'simulator' });
       }
       throw err;
+    }
+  }
+
+  isHardwareStreamHealthy(): boolean {
+    return this.hardwareRouter.isStreamHealthy();
+  }
+
+  async recoverHardwareStreamIfInterrupted(): Promise<boolean> {
+    if (this.inputMode !== 'hardware' || this.isPaused) return true;
+    if (this.hardwareRouter.isStreamHealthy()) return true;
+    try {
+      const sr = await this.hardwareRouter.recoverStreamIfInterrupted();
+      if (sr !== null) {
+        const primarySlot = this.slotManager.getSlot();
+        if (sr !== primarySlot.config.sampleRate) {
+          this.updateMeasurementConfig({ sampleRate: sr }, primarySlot.id);
+        }
+      }
+      return this.hardwareRouter.isStreamHealthy();
+    } catch {
+      return false;
     }
   }
 

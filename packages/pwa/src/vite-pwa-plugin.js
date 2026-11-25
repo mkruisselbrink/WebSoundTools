@@ -4,6 +4,7 @@
 export const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Resource-Policy': 'same-origin',
 };
 
 export function computeShortHash(items) {
@@ -32,12 +33,19 @@ function withCrossOriginIsolationHeaders(response) {
   }
   const coop = response.headers.get('Cross-Origin-Opener-Policy');
   const coep = response.headers.get('Cross-Origin-Embedder-Policy');
-  if (coop === 'same-origin' && coep === 'require-corp') {
+  const corp = response.headers.get('Cross-Origin-Resource-Policy');
+  if (
+    coop === 'same-origin' &&
+    coep === 'require-corp' &&
+    corp === 'same-origin' &&
+    !response.redirected
+  ) {
     return response;
   }
   const headers = new Headers(response.headers);
   headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  headers.set('Cross-Origin-Resource-Policy', 'same-origin');
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

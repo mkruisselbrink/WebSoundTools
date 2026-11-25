@@ -33,6 +33,38 @@ export const appShellStyles = [
     inline-size: 66px;
   }
 
+  .wsm-pause-pill[aria-pressed='true'] {
+    inline-size: auto;
+    min-inline-size: 74px;
+    padding-inline: 8px;
+  }
+
+  .audio-status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 12px;
+    background: rgba(245, 158, 11, 0.14);
+    border-bottom: 1px solid #f59e0b;
+    font-size: 12px;
+    color: #fef3c7;
+    flex-shrink: 0;
+  }
+
+  .audio-status-banner.error {
+    background: rgba(239, 68, 68, 0.16);
+    border-bottom-color: #ef4444;
+    color: #fee2e2;
+  }
+
+  .audio-status-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .wsm-io-pill {
     max-inline-size: 196px;
   }
@@ -54,7 +86,7 @@ export const appShellStyles = [
   }
 
   @container topbar (max-width: 819px) {
-    .wsm-pause-pill {
+    .wsm-pause-pill:not([aria-pressed='true']) {
       inline-size: 28px;
     }
     .wsm-io-pill {
@@ -749,7 +781,7 @@ export const appShellStyles = [
     }
 
     @container topbar (max-width: 819px) {
-      .wsm-pause-pill {
+      .wsm-pause-pill:not([aria-pressed='true']) {
         inline-size: 36px;
       }
     }

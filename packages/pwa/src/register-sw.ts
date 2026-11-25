@@ -29,7 +29,10 @@ export async function registerOfflineServiceWorker(
     return false;
   }
   try {
-    await swContainer.register(scriptUrl, { scope });
+    const reg = (await swContainer.register(scriptUrl, { scope })) as
+      | { update?: () => Promise<unknown> }
+      | undefined;
+    void reg?.update?.().catch(() => {});
     return true;
   } catch {
     return false;

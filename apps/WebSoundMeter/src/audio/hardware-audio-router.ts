@@ -11,6 +11,10 @@
  *  - Dynamic multi-channel input routing: connects up to 8 actively used physical device channels
  *    from a 2..64+ channel interface into the worklet's 8 capture tap inputs
  *  - Multi-channel hardware output routing for the real-time Signal Generator
+ *  - iOS / iPadOS standalone PWA lifecycle resilience: calls `getUserMedia` directly inside the
+ *    user gesture before async module fetches, tolerates rotated `deviceId` UUIDs, resumes
+ *    `'interrupted'` / `'suspended'` `AudioContext` states after `PlayAndRecord` negotiation,
+ *    and detects OS-terminated `MediaStreamTrack`s on foreground return.
  */
 
 import { SignalGeneratorConfig } from '../dsp/signal-generator.js';
@@ -40,6 +44,7 @@ export class HardwareAudioRouter {
   private splitterNode: ChannelSplitterNode | null = null;
   private captureWorkletNode: AudioWorkletNode | null = null;
   private outputMergerNode: ChannelMergerNode | null = null;
+  private lastStartOptions: HardwareStreamStartOptions | null = null;
 
   private activePhysicalChannels: number[] = [0, 1];
   private generatorOutputChannel = -1;
@@ -77,6 +82,39 @@ export class HardwareAudioRouter {
 
   getActivePhysicalChannels(): readonly number[] {
     return this.activePhysicalChannels;
+  }
+
+  /**
+   * Returns true when an active hardware capture stream has at least one live audio track
+   * and its `AudioContext` is actively running (not `'suspended'` or WebKit `'interrupted'`).
+   */
+  isStreamHealthy(): boolean {
+    if (!this.audioContext || !this.mediaStream) return false;
+    if ((this.audioContext.state as string) !== 'running') return false;
+    const tracks = this.mediaStream.getAudioTracks?.() ?? [];
+    if (tracks.length === 0) return false;
+    return tracks.some((t) => (t.readyState ?? 'live') !== 'ended');
+  }
+
+  /**
+   * Recovers from iOS/iPadOS standalone Home Screen interruptions:
+   * - Resumes `'suspended'` or `'interrupted'` `AudioContext` when tracks are still live.
+   * - Re-acquires the hardware stream if the OS ended the `MediaStreamTrack` while backgrounded.
+   */
+  async recoverStreamIfInterrupted(): Promise<number | null> {
+    if (!this.lastStartOptions) return null;
+    const tracks = this.mediaStream?.getAudioTracks?.() ?? [];
+    const hasLiveTrack =
+      tracks.length > 0 && tracks.some((t) => (t.readyState ?? 'live') !== 'ended');
+
+    if (hasLiveTrack && this.audioContext) {
+      if ((this.audioContext.state as string) !== 'running') {
+        await this.audioContext.resume();
+      }
+      return this.audioContext.sampleRate;
+    }
+
+    return this.startStream(this.lastStartOptions);
   }
 
   /**
@@ -122,26 +160,80 @@ export class HardwareAudioRouter {
   }
 
   setPaused(paused: boolean): void {
+    if (this.lastStartOptions) {
+      this.lastStartOptions = { ...this.lastStartOptions, isPaused: paused };
+    }
     if (this.captureWorkletNode) {
       this.captureWorkletNode.port.postMessage({ type: 'pause', paused });
+    }
+    if (!paused && this.audioContext && (this.audioContext.state as string) !== 'running') {
+      void this.audioContext.resume().catch(() => {});
+    }
+  }
+
+  private async acquireMediaStream(deviceId: string): Promise<MediaStream> {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Microphone access is unavailable in this browser context.');
+    }
+
+    const baseProcessingOff: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: { ideal: 64 },
+    };
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: deviceId
+          ? { ...baseProcessingOff, deviceId: { exact: deviceId } }
+          : baseProcessingOff,
+      });
+    } catch (err) {
+      const errName = (err as { name?: string })?.name;
+      // On iOS/iPadOS Home Screen apps, saved deviceId UUIDs rotate across launches:
+      // fall back to the default input with raw un-processed audio constraints.
+      if (
+        deviceId &&
+        (errName === 'OverconstrainedError' || errName === 'NotFoundError')
+      ) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            audio: baseProcessingOff,
+          });
+        } catch (innerErr) {
+          const innerName = (innerErr as { name?: string })?.name;
+          if (innerName === 'OverconstrainedError') {
+            return navigator.mediaDevices.getUserMedia({ audio: true });
+          }
+          throw innerErr;
+        }
+      }
+      if (errName === 'OverconstrainedError') {
+        return navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      throw err;
     }
   }
 
   async startStream(options: HardwareStreamStartOptions): Promise<number> {
-    this.stopStream();
+    this.stopStream(true);
+    this.lastStartOptions = options;
     this.generatorOutputChannel = options.generatorOutputChannel;
     this.setActivePhysicalChannels(options.activePhysicalChannels);
 
-    if (!this.audioContext) {
+    // Request getUserMedia FIRST inside the user gesture before awaiting AudioWorklet module
+    // loading so WebKit standalone PWAs preserve transient user activation and switch
+    // AVAudioSession to PlayAndRecord before AudioContext resumes.
+    this.mediaStream = await this.acquireMediaStream(options.deviceId);
+
+    if (!this.audioContext || (this.audioContext.state as string) === 'closed') {
       this.audioContext = new AudioContext({ latencyHint: 'interactive' });
       this.workletModuleLoaded = false;
     }
     if (!this.workletModuleLoaded) {
       await this.audioContext.audioWorklet.addModule(CaptureWorkletUrl);
       this.workletModuleLoaded = true;
-    }
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
     }
 
     const maxOut = Math.min(64, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
@@ -152,37 +244,6 @@ export class HardwareAudioRouter {
       this.audioContext.destination.channelInterpretation = 'discrete';
     } catch {
       // Fallback to default stereo destination if browser disallows explicit channelCount
-    }
-
-    try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: options.deviceId ? { exact: options.deviceId } : undefined,
-          echoCancellation: { exact: false },
-          noiseSuppression: { exact: false },
-          autoGainControl: { exact: false },
-          channelCount: { ideal: 64 },
-          sampleRate: { ideal: this.audioContext.sampleRate },
-        },
-      });
-    } catch (err) {
-      // If a saved deviceId was unplugged or the driver rejected `{ exact: false }`,
-      // retry with ideal boolean constraints before failing.
-      const errName = (err as { name?: string })?.name;
-      if (errName === 'OverconstrainedError' || errName === 'NotFoundError') {
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: options.deviceId ? { ideal: options.deviceId } : undefined,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: { ideal: 64 },
-            sampleRate: { ideal: this.audioContext.sampleRate },
-          },
-        });
-      } else {
-        throw err;
-      }
     }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -216,14 +277,25 @@ export class HardwareAudioRouter {
       });
     }
 
-    if (
-      options.ringBufferStorage &&
-      options.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer
-    ) {
-      this.captureWorkletNode.port.postMessage({
-        type: 'init-ring-buffer',
-        storage: options.ringBufferStorage,
-      });
+    const canShareRingBuffer =
+      options.ringBufferStorage !== null &&
+      typeof SharedArrayBuffer !== 'undefined' &&
+      options.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer &&
+      ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated ?? true);
+
+    if (canShareRingBuffer) {
+      try {
+        this.captureWorkletNode.port.postMessage({
+          type: 'init-ring-buffer',
+          storage: options.ringBufferStorage,
+        });
+      } catch {
+        this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
+          if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
+            options.onFallbackChunk(e.data.channels as Float32Array[]);
+          }
+        };
+      }
     } else {
       this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
         if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
@@ -234,6 +306,12 @@ export class HardwareAudioRouter {
 
     this.sourceNode.connect(this.splitterNode);
     this.reconnectChannels();
+
+    // Always resume AudioContext AFTER getUserMedia & graph connection so WebKit
+    // recovers from 'suspended' or 'interrupted' PlayAndRecord session transitions.
+    if ((this.audioContext.state as string) !== 'running') {
+      await this.audioContext.resume();
+    }
 
     return this.audioContext.sampleRate;
   }
@@ -265,7 +343,10 @@ export class HardwareAudioRouter {
     }
   }
 
-  stopStream(): void {
+  stopStream(preserveRestartConfig: boolean = false): void {
+    if (!preserveRestartConfig) {
+      this.lastStartOptions = null;
+    }
     if (this.sourceNode) {
       this.sourceNode.disconnect();
       this.sourceNode = null;
@@ -291,7 +372,7 @@ export class HardwareAudioRouter {
   }
 
   dispose(): void {
-    this.stopStream();
+    this.stopStream(false);
     if (this.audioContext) {
       void this.audioContext.close();
       this.audioContext = null;

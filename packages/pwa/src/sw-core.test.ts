@@ -81,6 +81,7 @@ describe('sw-core', () => {
     const isolated = withCrossOriginIsolationHeaders(raw);
     expect(isolated.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
     expect(isolated.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
+    expect(isolated.headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin');
     expect(await isolated.text()).toBe('hello');
     expect(withCrossOriginIsolationHeaders(isolated)).toBe(isolated);
   });

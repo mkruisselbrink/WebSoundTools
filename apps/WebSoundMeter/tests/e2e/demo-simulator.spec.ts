@@ -215,4 +215,27 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     expect(chartsBox!.y + chartsBox!.height).toBeLessThanOrEqual(sidebarBox!.y + 2);
     expect(micsCardBox!.x + micsCardBox!.width).toBeLessThanOrEqual(ringsCardBox!.x + 2);
   });
+
+  test('recovers cleanly on standalone PWA relaunch when Hardware mode was saved in localStorage', async ({
+    page,
+  }) => {
+    const wsm = new WsmPageDriver(page);
+    await wsm.installMockUsbHardwareInterface('usb-ipad-mic', 'iPad USB Mic');
+
+    // First launch: select Hardware input -> saves audioInputMode='hardware' to localStorage
+    await wsm.goto('/');
+    await wsm.selectInputSource('hardware:usb-ipad-mic');
+    await wsm.waitForLiveSignal();
+
+    // Simulate Home Screen PWA relaunch / reload -> starts deferred-paused with visible Resume Mic banner
+    await page.reload();
+    const banner = wsm.app.getByTestId('audio-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Resume Mic');
+
+    // Selecting an input source directly while deferred-paused unpauses and resumes live sound data
+    await wsm.selectInputSource('hardware:usb-ipad-mic');
+    await expect(banner).toHaveCount(0);
+    await wsm.waitForLiveSignal();
+  });
 });

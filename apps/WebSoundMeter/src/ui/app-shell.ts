@@ -130,6 +130,9 @@ export class WebSoundMeterApp extends LitElement {
   private isPaused = false;
 
   @state()
+  private audioStatusError = '';
+
+  @state()
   private helpModalOpen = false;
 
   private keydownHandler = (e: KeyboardEvent) => {
@@ -209,6 +212,57 @@ export class WebSoundMeterApp extends LitElement {
   private readonly phoneMediaChangeHandler = (e: MediaQueryListEvent): void => {
     this.isPhoneViewport = e.matches;
   };
+
+  private recoveringHardwareAudio = false;
+
+  private readonly foregroundAudioRecoveryHandler = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return;
+    }
+    void this.recoverHardwareAudioIfNeeded();
+  };
+
+  private readonly gestureAudioRecoveryHandler = (): void => {
+    if (
+      this.workspace.audioInputMode === 'hardware' &&
+      !this.isPaused &&
+      !this.hardwareStreamDeferred &&
+      this.engine &&
+      !this.engine.isHardwareStreamHealthy()
+    ) {
+      void this.recoverHardwareAudioIfNeeded();
+    }
+  };
+
+  private async recoverHardwareAudioIfNeeded(): Promise<void> {
+    if (
+      this.recoveringHardwareAudio ||
+      !this.engine ||
+      this.workspace.audioInputMode !== 'hardware' ||
+      this.isPaused ||
+      this.hardwareStreamDeferred
+    ) {
+      return;
+    }
+    if (this.engine.isHardwareStreamHealthy()) {
+      return;
+    }
+    this.recoveringHardwareAudio = true;
+    try {
+      const ok = await this.engine.recoverHardwareStreamIfInterrupted();
+      if (ok) {
+        this.audioStatusError = '';
+      } else {
+        // iOS/iPadOS Home Screen WebKit requires a fresh user tap to re-open an ended mic track
+        this.isPaused = true;
+        this.hardwareStreamDeferred = true;
+        this.engine.setPaused(true);
+        this.syncWakeLock();
+      }
+    } finally {
+      this.recoveringHardwareAudio = false;
+    }
+  }
 
   private syncWakeLock(): void {
     void this.wakeLock.setDesired(
@@ -323,12 +377,27 @@ export class WebSoundMeterApp extends LitElement {
 
     window.addEventListener('keydown', this.keydownHandler);
     window.addEventListener('popstate', this.popstateHandler);
+    window.addEventListener('pageshow', this.foregroundAudioRecoveryHandler);
+    window.addEventListener('pointerdown', this.gestureAudioRecoveryHandler, {
+      passive: true,
+    });
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.foregroundAudioRecoveryHandler);
+    }
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
     window.removeEventListener('popstate', this.popstateHandler);
+    window.removeEventListener('pageshow', this.foregroundAudioRecoveryHandler);
+    window.removeEventListener('pointerdown', this.gestureAudioRecoveryHandler);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener(
+        'visibilitychange',
+        this.foregroundAudioRecoveryHandler
+      );
+    }
     this.phoneMediaQuery?.removeEventListener('change', this.phoneMediaChangeHandler);
     this.phoneMediaQuery = null;
     this.wakeLock.dispose();
@@ -431,6 +500,7 @@ export class WebSoundMeterApp extends LitElement {
     if (!this.engine) return;
     const modeChanged = this.workspace.audioInputMode !== mode;
     this.workspace.audioInputMode = mode;
+    this.audioStatusError = '';
     if (mode === 'hardware') {
       if ((modeChanged || this.workspace.workspaceMode === 'show') && this.genConfig.enabled) {
         this.updateGenerator({ enabled: false });
@@ -440,6 +510,11 @@ export class WebSoundMeterApp extends LitElement {
       this.selectedDeviceLabel = dev ? dev.label : '';
     }
     this.hardwareStreamDeferred = false;
+    if (this.isPaused) {
+      this.isPaused = false;
+      this.engine.setPaused(false);
+      this.syncWakeLock();
+    }
     try {
       await this.engine.setInputMode(mode, this.selectedDeviceId);
       if (mode === 'hardware') {
@@ -453,8 +528,11 @@ export class WebSoundMeterApp extends LitElement {
           this.selectedDeviceLabel = activeDev.label;
         }
       }
-    } catch {
+    } catch (err) {
       this.workspace.audioInputMode = this.engine.getInputMode();
+      const reason =
+        err instanceof Error && err.message ? err.message : 'Microphone permission denied or unavailable.';
+      this.audioStatusError = `Could not open audio input (${reason})`;
     }
     this.persistState(modeChanged ? 'push' : 'none');
     this.requestUpdate();
@@ -479,26 +557,30 @@ export class WebSoundMeterApp extends LitElement {
 
   private handleTogglePause = async (): Promise<void> => {
     const nextPaused = !this.isPaused;
-    if (
-      !nextPaused &&
-      this.workspace.audioInputMode === 'hardware' &&
-      this.hardwareStreamDeferred &&
-      this.engine
-    ) {
-      try {
-        await this.engine.setInputMode('hardware', this.selectedDeviceId);
-        this.hardwareStreamDeferred = false;
-        this.audioDevices = await this.engine.listInputDevices();
-        this.availableChannels = this.engine.getAvailableChannels();
-        this.availableOutputChannels = this.engine.getAvailableOutputChannels();
-      } catch {
-        this.workspace.audioInputMode = this.engine.getInputMode();
-        this.persistState('replace');
-      }
-    }
     this.isPaused = nextPaused;
     this.engine?.setPaused(this.isPaused);
     this.syncWakeLock();
+
+    if (!nextPaused && this.workspace.audioInputMode === 'hardware' && this.engine) {
+      this.audioStatusError = '';
+      if (this.hardwareStreamDeferred || !this.engine.isHardwareStreamHealthy()) {
+        try {
+          await this.engine.setInputMode('hardware', this.selectedDeviceId);
+          this.hardwareStreamDeferred = false;
+          this.audioDevices = await this.engine.listInputDevices();
+          this.availableChannels = this.engine.getAvailableChannels();
+          this.availableOutputChannels = this.engine.getAvailableOutputChannels();
+        } catch (err) {
+          this.workspace.audioInputMode = this.engine.getInputMode();
+          const reason =
+            err instanceof Error && err.message
+              ? err.message
+              : 'Microphone permission denied or unavailable.';
+          this.audioStatusError = `Could not open microphone (${reason})`;
+          this.persistState('replace');
+        }
+      }
+    }
   };
 
   private renderSelectedSourceInspector(allSources: SourceData[]) {
@@ -766,6 +848,63 @@ export class WebSoundMeterApp extends LitElement {
           this.helpModalOpen = true;
         },
       })}
+
+      ${this.audioStatusError
+        ? html`
+            <div class="audio-status-banner error" data-testid="audio-status-banner">
+              <span>${this.audioStatusError}</span>
+              <div class="audio-status-actions">
+                <button
+                  type="button"
+                  class="btn-primary"
+                  @click=${() => {
+                    void this.handleInputSourceSelect('hardware', this.selectedDeviceId);
+                  }}
+                >
+                  Retry Mic
+                </button>
+                <button
+                  type="button"
+                  @click=${() => {
+                    this.audioStatusError = '';
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          `
+        : this.hardwareStreamDeferred &&
+            this.isPaused &&
+            this.workspace.audioInputMode === 'hardware'
+          ? html`
+              <div class="audio-status-banner" data-testid="audio-status-banner">
+                <span>
+                  Microphone input is paused after launch — tap
+                  <strong>Resume Mic</strong> to start live capture.
+                </span>
+                <div class="audio-status-actions">
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    @click=${() => {
+                      void this.handleTogglePause();
+                    }}
+                  >
+                    ▶ Resume Mic
+                  </button>
+                  <button
+                    type="button"
+                    @click=${() => {
+                      void this.handleInputSourceSelect('simulator', '');
+                    }}
+                  >
+                    Demo Simulator
+                  </button>
+                </div>
+              </div>
+            `
+          : ''}
 
       ${isMobileShow
         ? renderMobileShowWorkspace({
