@@ -47,10 +47,10 @@ export function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): Tem
 
   return html`
     <div data-testid="inspector-dsp-group">
-      <div class="insp-header">
-        <span class="insp-title">DSP Processor Group</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">DSP Processor Group</span>
         <button
-          class="btn btn-xs btn-danger"
+          class="foh-btn foh-btn-xs foh-btn-danger"
           ?disabled=${!canDelete}
           @click=${() => store.removeDspGroup(grp.id)}
         >
@@ -58,8 +58,8 @@ export function renderDspGroupInspector(store: ProjectStore, grp: DspGroup): Tem
         </button>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Group Identity</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Group Identity</div>
         <div class="field-row">
           <label class="field-label" for="dsp-group-name-input">Group Name</label>
           <input

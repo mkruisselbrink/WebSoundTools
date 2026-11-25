@@ -25,12 +25,12 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
 
   return html`
     <div data-testid="inspector-environment">
-      <div class="insp-header">
-        <span class="insp-title">Atmosphere, Colormap & Venue Bounds</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">Atmosphere, Colormap & Venue Bounds</span>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Project & Drive Level</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Project & Drive Level</div>
         <div class="field-row">
           <label class="field-label" for="env-project-name">Project Name</label>
           <input
@@ -61,13 +61,13 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">
           <span>ISO 9613-1 Atmosphere</span>
           <span>c = ${speedOfSound.toFixed(1)} m/s</span>
         </div>
-        <div class="xyz-grid">
-          <label class="mini-field">
+        <div class="foh-xyz-grid">
+          <label class="foh-mini-field">
             <span>Temp (°C)</span>
             <input
               type="number"
@@ -84,7 +84,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Humidity (%)</span>
             <input
               type="number"
@@ -106,7 +106,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Pressure (kPa)</span>
             <input
               type="number"
@@ -123,8 +123,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Ground-Plane Reflection (Z = 0)</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Ground-Plane Reflection (Z = 0)</div>
         <div class="field-row">
           <label class="field-label" for="env-ground-reflect">ReflectFactor</label>
           <input
@@ -145,8 +145,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">SPL Colormap & Contours</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">SPL Colormap & Contours</div>
         <div class="field-row">
           <label class="field-label" for="env-cmap-range">Range Mode</label>
           <select
@@ -215,8 +215,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             <option value="0" ?selected=${cmap.isolineStepDb === 0}>Off</option>
           </select>
         </div>
-        <div class="xy-grid" style="margin-top:6px">
-          <label class="mini-field">
+        <div class="foh-xy-grid" style="margin-top:6px">
+          <label class="foh-mini-field">
             <span>Manual Min (dB)</span>
             <input
               type="number"
@@ -226,7 +226,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
               @input=${(ev: Event) => store.setColormap({ minSplDb: numVal(ev, cmap.minSplDb) })}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Manual Max (dB)</span>
             <input
               type="number"
@@ -237,8 +237,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             />
           </label>
         </div>
-        <div class="check-row">
-          <label class="check-label">
+        <div class="foh-check-row">
+          <label class="foh-check-label">
             <input
               type="checkbox"
               name="env-cmap-stepped"
@@ -251,8 +251,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             Stepped Isobar Color Bands
           </label>
         </div>
-        <div class="check-row">
-          <label class="check-label">
+        <div class="foh-check-row">
+          <label class="foh-check-label">
             <input
               type="checkbox"
               name="env-cmap-outside"
@@ -267,10 +267,10 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Venue Grid Bounds & Section Slice (m)</div>
-        <div class="xy-grid">
-          <label class="mini-field">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Venue Grid Bounds & Section Slice (m)</div>
+        <div class="foh-xy-grid">
+          <label class="foh-mini-field">
             <span>X Min (m)</span>
             <input
               type="number"
@@ -285,7 +285,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>X Max (m)</span>
             <input
               type="number"
@@ -300,7 +300,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Y Min (m)</span>
             <input
               type="number"
@@ -315,7 +315,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Y Max (m)</span>
             <input
               type="number"
@@ -331,8 +331,8 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
             />
           </label>
         </div>
-        <div class="xy-grid" style="margin-top:6px">
-          <label class="mini-field">
+        <div class="foh-xy-grid" style="margin-top:6px">
+          <label class="foh-mini-field">
             <span>Ceiling Z Max (m)</span>
             <input
               type="number"
@@ -348,7 +348,7 @@ export function renderEnvironmentInspector(store: ProjectStore): TemplateResult 
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Slice Y (m)</span>
             <input
               type="number"

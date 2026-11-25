@@ -32,10 +32,10 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
 
   return html`
     <div data-testid="inspector-sub-array">
-      <div class="insp-header">
-        <span class="insp-title">Subwoofer Array Designer</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">Subwoofer Array Designer</span>
         <button
-          class="btn btn-xs btn-danger"
+          class="foh-btn foh-btn-xs foh-btn-danger"
           data-testid="btn-delete-entity"
           @click=${() => store.removeSubArray(sa.id)}
         >
@@ -43,8 +43,8 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </button>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Topology & Model</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Topology & Model</div>
         <div class="field-row">
           <label class="field-label" for="sa-name-input">Name</label>
           <input
@@ -115,8 +115,8 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
           </select>
         </div>
 
-        <div class="xy-grid" style="margin-top:6px">
-          <label class="mini-field">
+        <div class="foh-xy-grid" style="margin-top:6px">
+          <label class="foh-mini-field">
             <span>Enclosures (1–24)</span>
             <input
               type="number"
@@ -134,7 +134,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Tune Freq (Hz)</span>
             <input
               type="number"
@@ -155,11 +155,11 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">
           <span>Geometry & Spacing</span>
           <button
-            class="btn btn-xs"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-sa-quarter-wave"
             title="Set spacing to quarter-wavelength at Tune Freq (${quarterWaveM.toFixed(2)} m)"
             @click=${() =>
@@ -175,8 +175,8 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
           </button>
         </div>
 
-        <div class="xyz-grid" style="margin-bottom:6px">
-          <label class="mini-field">
+        <div class="foh-xyz-grid" style="margin-bottom:6px">
+          <label class="foh-mini-field">
             <span>Origin X (m)</span>
             <input
               type="number"
@@ -191,7 +191,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Origin Y (m)</span>
             <input
               type="number"
@@ -206,7 +206,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Origin Z (m)</span>
             <input
               type="number"
@@ -223,8 +223,8 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
           </label>
         </div>
 
-        <div class="xyz-grid">
-          <label class="mini-field">
+        <div class="foh-xyz-grid">
+          <label class="foh-mini-field">
             <span>Spacing (m)</span>
             <input
               type="number"
@@ -240,7 +240,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Azimuth (°)</span>
             <input
               type="number"
@@ -257,7 +257,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
           </label>
           ${sa.mode === 'cardioid-csa'
             ? html`
-                <label class="mini-field">
+                <label class="foh-mini-field">
                   <span>CSA Depth (m)</span>
                   <input
                     type="number"
@@ -281,7 +281,7 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
               `
             : sa.mode === 'delay-arc'
               ? html`
-                  <label class="mini-field">
+                  <label class="foh-mini-field">
                     <span>Arc Angle (°)</span>
                     <input
                       type="number"
@@ -303,8 +303,8 @@ export function renderSubArrayInspector(store: ProjectStore, sa: SubArrayInstanc
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Generated Enclosure Schedule (${expanded.length})</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Generated Enclosure Schedule (${expanded.length})</div>
         <table class="cabinet-table">
           <thead>
             <tr>

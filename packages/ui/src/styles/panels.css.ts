@@ -27,7 +27,12 @@ export const fohPanelsCss = css`
     font-size: 10.5px;
     color: var(--_foh-text-muted, #94a3b8);
     margin-top: 4px;
+    margin-bottom: 6px;
     line-height: 1.35;
+  }
+
+  .foh-insp-subtitle:last-child {
+    margin-bottom: 0;
   }
 
   .foh-field-row {

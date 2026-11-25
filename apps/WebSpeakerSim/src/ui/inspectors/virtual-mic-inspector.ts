@@ -6,7 +6,7 @@
  * and interactive inter-group Auto Time-Alignment.
  */
 
-import { numVal } from '@foh/ui';
+import { downloadTextFile, numVal, slugifyFilename } from '@foh/ui';
 import { html, type TemplateResult } from 'lit';
 import type { ProjectStore } from '../../model/project-store.js';
 import type { VirtualMicInstance } from '../../model/project-types.js';
@@ -70,10 +70,10 @@ export function renderVirtualMicInspector(
 
   return html`
     <div data-testid="inspector-virtual-mic">
-      <div class="insp-header">
-        <span class="insp-title">Virtual Measurement Mic</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">Virtual Measurement Mic</span>
         <button
-          class="btn btn-xs btn-danger"
+          class="foh-btn foh-btn-xs foh-btn-danger"
           data-testid="btn-delete-entity"
           @click=${() => store.removeVirtualMic(mic.id)}
         >
@@ -81,8 +81,8 @@ export function renderVirtualMicInspector(
         </button>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Microphone Coordinates</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Microphone Coordinates</div>
         <div class="field-row">
           <label class="field-label" for="mic-name-input">Name</label>
           <input
@@ -95,8 +95,8 @@ export function renderVirtualMicInspector(
           />
         </div>
 
-        <div class="xyz-grid" style="margin-top:6px">
-          <label class="mini-field">
+        <div class="foh-xyz-grid" style="margin-top:6px">
+          <label class="foh-mini-field">
             <span>X (m)</span>
             <input
               type="number"
@@ -112,7 +112,7 @@ export function renderVirtualMicInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Y (m)</span>
             <input
               type="number"
@@ -128,7 +128,7 @@ export function renderVirtualMicInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Z Ear (m)</span>
             <input
               type="number"
@@ -149,32 +149,26 @@ export function renderVirtualMicInspector(
 
       ${micRes
         ? html`
-            <div class="form-section" data-testid="mic-predicted-readout">
-              <div class="form-section-title">Predicted Level & Arrival</div>
-              <div class="xyz-grid" style="font-family:var(--font-mono);font-size:11px">
+            <div class="foh-form-section" data-testid="mic-predicted-readout">
+              <div class="foh-form-section-title">Predicted Level & Arrival</div>
+              <div class="foh-xyz-grid" style="font-family:var(--font-mono);font-size:11px">
                 <div><strong>${micRes.broadbandSplADb.toFixed(1)}</strong> dBA</div>
                 <div><strong>${micRes.broadbandSplCDb.toFixed(1)}</strong> dBC</div>
                 <div><strong>${micRes.referenceDelayMs.toFixed(2)}</strong> ms</div>
               </div>
               <button
-                class="btn btn-xs"
+                class="foh-btn foh-btn-xs"
                 style="width:100%;margin-top:8px"
                 data-testid="btn-export-mic-frd"
                 title="Export predicted Magnitude + Phase curve as .frd for WebSoundMeter comparison"
                 @click=${() => {
                   const frdText = exportVirtualMicToFrd(micRes);
-                  const blob = new Blob([frdText], { type: 'text/plain;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  const slug =
-                    mic.name
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, '-')
-                      .replace(/^-+|-+$/g, '') || 'virtual-mic';
-                  a.href = url;
-                  a.download = `${slug}-predicted.frd`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  const slug = slugifyFilename(mic.name, 'virtual-mic');
+                  downloadTextFile(
+                    `${slug}-predicted.frd`,
+                    frdText,
+                    'text/plain;charset=utf-8'
+                  );
                   alignUi.onNotify(`Exported "${mic.name}" predicted response (.frd)`);
                 }}
               >
@@ -184,8 +178,8 @@ export function renderVirtualMicInspector(
           `
         : ''}
 
-      <div class="form-section" data-testid="auto-time-align-panel">
-        <div class="form-section-title">Auto Time-Alignment @ ${mic.name}</div>
+      <div class="foh-form-section" data-testid="auto-time-align-panel">
+        <div class="foh-form-section-title">Auto Time-Alignment @ ${mic.name}</div>
         <div class="field-row">
           <label class="field-label" for="align-ref-select">Reference</label>
           <select
@@ -252,7 +246,7 @@ export function renderVirtualMicInspector(
                 <strong>${rec.recommendedInvertPolarity ? 'Invert (Ø)' : 'Normal (+)'}</strong>
               </div>
               <button
-                class="btn btn-primary"
+                class="foh-btn foh-btn-primary"
                 style="width:100%"
                 data-testid="btn-apply-alignment"
                 @click=${applyAutoAlignment}
@@ -261,7 +255,7 @@ export function renderVirtualMicInspector(
               </button>
             `
           : html`
-              <div class="insp-subtitle" style="margin-top:4px">
+              <div class="foh-insp-subtitle">
                 Select two distinct active DSP groups to compute time & phase alignment.
               </div>
             `}

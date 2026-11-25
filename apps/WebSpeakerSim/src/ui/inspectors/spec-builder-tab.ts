@@ -166,7 +166,8 @@ export function renderSpecBuilderTab(params: {
 
     <div style="margin-top:14px;display:flex;justify-content:flex-end">
       <button
-        class="btn btn-primary"
+        type="button"
+        class="foh-btn foh-btn-primary"
         data-testid="btn-create-spec-speaker"
         @click=${onCreate}
       >

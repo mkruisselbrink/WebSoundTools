@@ -20,10 +20,10 @@ export function renderPointSourceInspector(
 
   return html`
     <div data-testid="inspector-point-source">
-      <div class="insp-header">
-        <span class="insp-title">Point Source</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">Point Source</span>
         <button
-          class="btn btn-xs btn-danger"
+          class="foh-btn foh-btn-xs foh-btn-danger"
           data-testid="btn-delete-entity"
           @click=${() => store.removePointSource(ps.id)}
         >
@@ -31,8 +31,8 @@ export function renderPointSourceInspector(
         </button>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Enclosure & Routing</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Enclosure & Routing</div>
         <div class="field-row">
           <label class="field-label" for="ps-name-input">Name</label>
           <input
@@ -71,7 +71,7 @@ export function renderPointSourceInspector(
 
         ${activeSpk
           ? html`
-              <div class="insp-subtitle">
+              <div class="foh-insp-subtitle">
                 Max SPL @ 1m: ${activeSpk.maxContinuousSpl1mDb} dB · Passband:
                 ${activeSpk.passbandHz.low3dB}–${activeSpk.passbandHz.high3dB} Hz
               </div>
@@ -98,8 +98,8 @@ export function renderPointSourceInspector(
           </select>
         </div>
 
-        <div class="check-row">
-          <label class="check-label">
+        <div class="foh-check-row">
+          <label class="foh-check-label">
             <input
               type="checkbox"
               name="ps-mirror-lr"
@@ -112,7 +112,7 @@ export function renderPointSourceInspector(
             />
             Symmetric L/R Pair
           </label>
-          <label class="check-label">
+          <label class="foh-check-label">
             <input
               type="checkbox"
               name="ps-muted"
@@ -127,10 +127,10 @@ export function renderPointSourceInspector(
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">3D Position & Aiming</div>
-        <div class="xyz-grid" style="margin-bottom:6px">
-          <label class="mini-field">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">3D Position & Aiming</div>
+        <div class="foh-xyz-grid" style="margin-bottom:6px">
+          <label class="foh-mini-field">
             <span>X Throw (m)</span>
             <input
               type="number"
@@ -146,7 +146,7 @@ export function renderPointSourceInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Y Lateral (m)</span>
             <input
               type="number"
@@ -162,7 +162,7 @@ export function renderPointSourceInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Z Height (m)</span>
             <input
               type="number"
@@ -180,8 +180,8 @@ export function renderPointSourceInspector(
           </label>
         </div>
 
-        <div class="xyz-grid">
-          <label class="mini-field">
+        <div class="foh-xyz-grid">
+          <label class="foh-mini-field">
             <span>Azimuth (°)</span>
             <input
               type="number"
@@ -202,7 +202,7 @@ export function renderPointSourceInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Tilt (°)</span>
             <input
               type="number"
@@ -223,7 +223,7 @@ export function renderPointSourceInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Roll (°)</span>
             <input
               type="number"
@@ -246,10 +246,10 @@ export function renderPointSourceInspector(
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Cabinet Trim</div>
-        <div class="xy-grid">
-          <label class="mini-field">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Cabinet Trim</div>
+        <div class="foh-xy-grid">
+          <label class="foh-mini-field">
             <span>Trim Gain (dB)</span>
             <input
               type="number"
@@ -264,7 +264,7 @@ export function renderPointSourceInspector(
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Trim Delay (ms)</span>
             <input
               type="number"
@@ -281,8 +281,8 @@ export function renderPointSourceInspector(
             />
           </label>
         </div>
-        <div class="check-row">
-          <label class="check-label">
+        <div class="foh-check-row">
+          <label class="foh-check-label">
             <input
               type="checkbox"
               name="ps-invert-polarity"

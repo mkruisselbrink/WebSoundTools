@@ -2,22 +2,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Root application shell `<web-speaker-sim-app>` (`src/ui/app-shell.ts`).
+ * Root application shell `<web-speaker-sim-app>` (`src/ui/app-shell.ts`),
+ * composing `ProjectStore`, `SimulationController`, `<wss-topbar>`,
+ * `<wss-viewport-panel>`, `<wss-chart-panel>`, `<wss-projects-modal>`,
+ * and `<wss-speaker-library-modal>`.
  */
 
 import { observeWindowControlsOverlay } from '@foh/pwa/client';
 import '@foh/ui';
-import { hasOpenPopover, toggleAnchoredPopover } from '@foh/ui';
+import { ShellWindowController, hasOpenPopover } from '@foh/ui';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import '../charts/chart-panel.js';
 import { DEMO_VENUE_PRESETS, getDemoPresetById } from '../library/demo-presets.js';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
+import {
+  exportProjectBundleToFile,
+  importProjectBundleFile,
+  saveSceneSnapshotToDb,
+} from '../model/project-io.js';
 import { ProjectStore } from '../model/project-store.js';
 import {
   SessionStorageRepository,
-  deserializeProjectBundle,
-  serializeProjectBundle,
   type SavedProjectRecord,
 } from '../model/session-storage.js';
 import {
@@ -46,8 +52,10 @@ import {
 import { renderEntityInspector } from './inspectors/index.js';
 import './inspectors/speaker-library-modal.js';
 import { dispatchAppShortcut } from './keyboard-shortcuts.js';
+import './modals/wss-projects-modal.js';
 import { renderSceneSidebar } from './sidebar/sidebar-view.js';
-import { renderTopbar } from './topbar/topbar-view.js';
+import './topbar/wss-topbar.js';
+import type { WssTopbar } from './topbar/wss-topbar.js';
 
 @customElement('web-speaker-sim-app')
 export class WebSpeakerSimApp extends LitElement {
@@ -66,60 +74,26 @@ export class WebSpeakerSimApp extends LitElement {
   @state() private helpModalOpen = false;
   @state() private savedProjects: SavedProjectRecord[] = [];
   @state() private toastMessage = '';
-  @state() private wcoVisible = false;
 
   // Alignment UI state for Virtual Mic inspector
   @state() private alignRefGroupId = '';
   @state() private alignTargetGroupId = '';
   @state() private alignFreqHz = 80;
 
-  // Counter incremented on store notifications to trigger Lit re-render
+  // Counter incremented on store notifications to trigger Lit re-render & viewport sync
   @state() private storeRevision = 0;
 
   private isSceneModified = false;
   private isLoadingPreset = false;
   private unsubStore: (() => void) | null = null;
   private unsubSim: (() => void) | null = null;
-  private unsubWco: (() => void) | null = null;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private readonly onKeyDownBound = (ev: KeyboardEvent) => {
-    dispatchAppShortcut(ev, {
-      undo: () => this.store.undo(),
-      redo: () => this.store.redo(),
-      addPointSource: () => this.store.addPointSource(),
-      addSubArray: () => this.store.addSubArray(),
-      addVirtualMic: () => this.store.addVirtualMic(),
-      toggleGroundReflection: () => {
-        const g = this.store.scene.reflectors.find(
-          (r) => r.id === DEFAULT_GROUND_REFLECTOR.id
-        );
-        this.store.setGroundReflection(!(g?.enabled ?? false));
-      },
-      setLayoutMode: (m) => this.setLayoutMode(m),
-      openSpeakerLibrary: () => {
-        this.speakerLibraryOpen = true;
-      },
-      openHelp: () => {
-        this.helpModalOpen = !this.helpModalOpen;
-      },
-      onEscape: () => {
-        if (hasOpenPopover(this.renderRoot)) {
-          return;
-        }
-        if (this.helpModalOpen) {
-          this.helpModalOpen = false;
-        } else if (this.speakerLibraryOpen) {
-          this.speakerLibraryOpen = false;
-        } else if (this.projectsModalOpen) {
-          this.projectsModalOpen = false;
-        } else {
-          this.store.setSelection(null);
-        }
-      },
-    });
-  };
+  private readonly shellWindow = new ShellWindowController(this, {
+    observeWco: (cb) => observeWindowControlsOverlay((snap) => cb(snap.visible)),
+    onKeyDown: (ev) => this.handleKeyDown(ev),
+  });
 
   constructor() {
     super();
@@ -180,29 +154,53 @@ export class WebSpeakerSimApp extends LitElement {
       this.snapshot = snap;
     });
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.onKeyDownBound);
-    }
-
-    this.unsubWco = observeWindowControlsOverlay((snap) => {
-      this.wcoVisible = snap.visible;
-    });
-
     void this.hydrateIndexedDb();
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
-    this.unsubWco?.();
-    this.unsubWco = null;
     this.unsubStore?.();
     this.unsubSim?.();
     if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.onKeyDownBound);
-    }
     this.simController.dispose();
+  }
+
+  private handleKeyDown(ev: KeyboardEvent): void {
+    dispatchAppShortcut(ev, {
+      undo: () => this.store.undo(),
+      redo: () => this.store.redo(),
+      addPointSource: () => this.store.addPointSource(),
+      addSubArray: () => this.store.addSubArray(),
+      addVirtualMic: () => this.store.addVirtualMic(),
+      toggleGroundReflection: () => {
+        const g = this.store.scene.reflectors.find(
+          (r) => r.id === DEFAULT_GROUND_REFLECTOR.id
+        );
+        this.store.setGroundReflection(!(g?.enabled ?? false));
+      },
+      setLayoutMode: (m) => this.setLayoutMode(m),
+      openSpeakerLibrary: () => {
+        this.speakerLibraryOpen = true;
+      },
+      openHelp: () => {
+        this.helpModalOpen = !this.helpModalOpen;
+      },
+      onEscape: () => {
+        if (hasOpenPopover(this.renderRoot)) {
+          return;
+        }
+        if (this.helpModalOpen) {
+          this.helpModalOpen = false;
+        } else if (this.speakerLibraryOpen) {
+          this.speakerLibraryOpen = false;
+        } else if (this.projectsModalOpen) {
+          this.projectsModalOpen = false;
+        } else {
+          this.store.setSelection(null);
+        }
+      },
+    });
   }
 
   private async hydrateIndexedDb(): Promise<void> {
@@ -269,39 +267,16 @@ export class WebSpeakerSimApp extends LitElement {
   }
 
   private exportProjectBundle(): void {
-    const json = serializeProjectBundle(
-      this.store.scene,
-      this.store.colormap,
-      this.store.getCustomSpeakers()
-    );
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const safeSlug =
-      this.store.scene.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'project';
-    a.download = `${safeSlug}.wss-project.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportProjectBundleToFile(this.store);
     this.showToast('Exported .wss-project.json bundle.');
   }
 
   private async importProjectFile(file: File | undefined): Promise<void> {
     if (!file) return;
     try {
-      const text = await file.text();
-      const bundle = deserializeProjectBundle(text);
-      for (const spk of bundle.customSpeakers) {
-        this.store.upsertCustomSpeaker(spk);
-        await this.repository.saveSpeaker(spk);
-      }
-      this.store.setColormap(bundle.colormap);
-      this.store.replaceProject(bundle.scene, true);
+      const importedScene = await importProjectBundleFile(file, this.store, this.repository);
       this.scheduleAutosave();
-      this.showToast(`Imported project "${bundle.scene.name}".`);
+      this.showToast(`Imported project "${importedScene.name}".`);
     } catch (err) {
       this.showToast(
         `Project import failed: ${err instanceof Error ? err.message : String(err)}`
@@ -310,64 +285,49 @@ export class WebSpeakerSimApp extends LitElement {
   }
 
   private async saveCurrentProjectToDb(): Promise<void> {
-    const scene = this.store.scene;
-    const record: SavedProjectRecord = {
-      id: scene.id.startsWith('proj-') ? scene.id : `proj-${Date.now().toString(36)}`,
-      name: scene.name,
-      updatedAtIso: new Date().toISOString(),
-      scene: {
-        ...scene,
-        id: scene.id.startsWith('proj-') ? scene.id : `proj-${Date.now().toString(36)}`,
-      },
-      colormap: this.store.colormap,
-    };
-    await this.repository.saveProject(record);
-    this.savedProjects = await this.repository.listProjects();
+    const { record, projects } = await saveSceneSnapshotToDb(this.store, this.repository);
+    this.savedProjects = projects;
     this.showToast(`Saved "${record.name}" to browser library.`);
   }
 
   protected render() {
-    // Reference `storeRevision` so Lit tracks store mutations
     void this.storeRevision;
 
     return html`
-      ${renderTopbar(
-        this.store,
-        this.snapshot,
-        this.activePresetId,
-        this.layoutMode,
-        this.chartDrawerExpanded,
-        {
-          wcoVisible: this.wcoVisible,
-          isSceneModified: this.isSceneModified,
-          popoverRoot: this.renderRoot,
-          onSelectPreset: (id) => this.handleSelectPreset(id),
-          onOpenProjectsModal: () => {
-            this.projectsModalOpen = true;
-          },
-          onSaveSnapshot: () => {
-            void this.saveCurrentProjectToDb();
-          },
-          onExportProjectJson: () => this.exportProjectBundle(),
-          onTriggerImportProjectJson: () => {
-            const inp = this.renderRoot.querySelector(
-              '#project-file-input'
-            ) as HTMLInputElement | null;
-            inp?.click();
-          },
-          onOpenSpeakerLibrary: () => {
-            this.speakerLibraryOpen = true;
-          },
-          onSetLayoutMode: (m) => this.setLayoutMode(m),
-          onToggleChartDrawer: () => {
-            this.chartDrawerExpanded = !this.chartDrawerExpanded;
-            this.scheduleAutosave();
-          },
-          onOpenHelp: () => {
-            this.helpModalOpen = true;
-          },
-        }
-      )}
+      <wss-topbar
+        .store=${this.store}
+        .snapshot=${this.snapshot}
+        .activePresetId=${this.activePresetId}
+        .layoutMode=${this.layoutMode}
+        .chartDrawerExpanded=${this.chartDrawerExpanded}
+        .wcoVisible=${this.shellWindow.wcoVisible}
+        .isSceneModified=${this.isSceneModified}
+        .onSelectPreset=${(id: string) => this.handleSelectPreset(id)}
+        .onOpenProjectsModal=${() => {
+          this.projectsModalOpen = true;
+        }}
+        .onSaveSnapshot=${() => {
+          void this.saveCurrentProjectToDb();
+        }}
+        .onExportProjectJson=${() => this.exportProjectBundle()}
+        .onTriggerImportProjectJson=${() => {
+          const inp = this.renderRoot.querySelector(
+            '#project-file-input'
+          ) as HTMLInputElement | null;
+          inp?.click();
+        }}
+        .onOpenSpeakerLibrary=${() => {
+          this.speakerLibraryOpen = true;
+        }}
+        .onSetLayoutMode=${(m: ViewportLayoutMode) => this.setLayoutMode(m)}
+        .onToggleChartDrawer=${() => {
+          this.chartDrawerExpanded = !this.chartDrawerExpanded;
+          this.scheduleAutosave();
+        }}
+        .onOpenHelp=${() => {
+          this.helpModalOpen = true;
+        }}
+      ></wss-topbar>
 
       <input
         id="project-file-input"
@@ -376,7 +336,8 @@ export class WebSpeakerSimApp extends LitElement {
         data-testid="project-file-input"
         type="file"
         accept=".json"
-        style="display:none"
+        class="foh-sr-only"
+        tabindex="-1"
         @change=${(ev: Event) => {
           const input = ev.target as HTMLInputElement;
           void this.importProjectFile(input.files?.[0]);
@@ -390,17 +351,7 @@ export class WebSpeakerSimApp extends LitElement {
             class="viewports-grid"
             data-layout=${this.layoutMode}
             @open-heatmap-popover=${() => {
-              const trigger = this.renderRoot.querySelector(
-                '#wss-heatmap-popover'
-              )
-                ? (this.renderRoot.querySelector(
-                    '[data-popover-trigger="wss-heatmap-popover"]'
-                  ) as HTMLElement | null)
-                : null;
-              const pop = this.renderRoot.querySelector(
-                '#wss-heatmap-popover'
-              ) as HTMLElement | null;
-              toggleAnchoredPopover(trigger, pop, true);
+              (this.renderRoot.querySelector('wss-topbar') as WssTopbar | null)?.openHeatmapPopover();
             }}
           >
             ${this.layoutMode !== 'section'
@@ -473,7 +424,33 @@ export class WebSpeakerSimApp extends LitElement {
         }}
       ></wss-speaker-library-modal>
 
-      ${this.projectsModalOpen ? this.renderProjectsModal() : ''}
+      <wss-projects-modal
+        .open=${this.projectsModalOpen}
+        .sceneName=${this.store.scene.name}
+        .savedProjects=${this.savedProjects}
+        .onSaveCurrent=${() => {
+          void this.saveCurrentProjectToDb();
+        }}
+        .onResetAutosave=${() => {
+          clearWorkspaceSession();
+          this.handleSelectPreset('club-cardioid-pa');
+          this.projectsModalOpen = false;
+        }}
+        .onLoadProject=${(proj: SavedProjectRecord) => {
+          this.store.setColormap(proj.colormap);
+          this.store.replaceProject(proj.scene, true);
+          this.projectsModalOpen = false;
+          this.showToast(`Loaded "${proj.name}".`);
+        }}
+        .onDeleteProject=${async (projectId: string) => {
+          await this.repository.deleteProject(projectId);
+          this.savedProjects = await this.repository.listProjects();
+        }}
+        @close-modal=${() => {
+          this.projectsModalOpen = false;
+        }}
+      ></wss-projects-modal>
+
       <foh-help-modal
         .open=${this.helpModalOpen}
         appName="WebSpeakerSim"
@@ -486,6 +463,7 @@ export class WebSpeakerSimApp extends LitElement {
           this.helpModalOpen = false;
         }}
       ></foh-help-modal>
+
       ${this.toastMessage &&
       !this.speakerLibraryOpen &&
       !this.projectsModalOpen &&
@@ -502,90 +480,6 @@ export class WebSpeakerSimApp extends LitElement {
             }}
           ></foh-toast>`
         : ''}
-    `;
-  }
-
-  private renderProjectsModal() {
-    return html`
-      <foh-modal
-        .open=${this.projectsModalOpen}
-        modalTitle="Saved Browser Projects (IndexedDB)"
-        maxWidth="560px"
-        dialogTestId="projects-modal"
-        @close-modal=${() => {
-          this.projectsModalOpen = false;
-        }}
-      >
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-          <button
-            type="button"
-            class="btn btn-primary"
-            data-testid="btn-save-project-db"
-            @click=${() => void this.saveCurrentProjectToDb()}
-          >
-            Save Current Scene ("${this.store.scene.name}")
-          </button>
-          <button
-            type="button"
-            class="btn btn-danger"
-            @click=${() => {
-              clearWorkspaceSession();
-              this.handleSelectPreset('club-cardioid-pa');
-              this.projectsModalOpen = false;
-            }}
-          >
-            Reset Local Autosave
-          </button>
-        </div>
-
-        ${this.savedProjects.length === 0
-          ? html`<div style="color:var(--text-muted)">
-              No projects saved in IndexedDB yet.
-            </div>`
-          : html`
-              <div style="display:flex;flex-direction:column;gap:6px">
-                ${this.savedProjects.map(
-                  (proj) => html`
-                    <div
-                      style="display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:#080d19;border:1px solid var(--border-subtle);border-radius:5px"
-                    >
-                      <div>
-                        <strong>${proj.name}</strong>
-                        <div style="font-size:10.5px;color:var(--text-muted)">
-                          Updated: ${proj.updatedAtIso.slice(0, 19).replace('T', ' ')}
-                        </div>
-                      </div>
-                      <div style="display:flex;gap:6px">
-                        <button
-                          type="button"
-                          class="btn btn-primary"
-                          data-testid="btn-load-proj-${proj.id}"
-                          @click=${() => {
-                            this.store.setColormap(proj.colormap);
-                            this.store.replaceProject(proj.scene, true);
-                            this.projectsModalOpen = false;
-                            this.showToast(`Loaded "${proj.name}".`);
-                          }}
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn-danger"
-                          @click=${async () => {
-                            await this.repository.deleteProject(proj.id);
-                            this.savedProjects = await this.repository.listProjects();
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  `
-                )}
-              </div>
-            `}
-      </foh-modal>
     `;
   }
 }

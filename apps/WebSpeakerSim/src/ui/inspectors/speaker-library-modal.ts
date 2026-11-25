@@ -6,7 +6,7 @@
  * and client-side `.gll` / `.clf` / `.frd` / `.csv` / `.json` Loudspeaker File Importer.
  */
 
-import { fohControlsCss, fohTokensCss } from '@foh/ui';
+import { downloadTextFile, fohControlsCss, fohTokensCss } from '@foh/ui';
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import {
@@ -156,29 +156,6 @@ export class WssSpeakerLibraryModal extends LitElement {
       background: rgba(2, 132, 199, 0.08);
     }
 
-    .btn {
-      background: #162033;
-      color: #e2e8f0;
-      border: 1px solid #334155;
-      border-radius: 4px;
-      padding: 5px 10px;
-      font-size: 11.5px;
-      cursor: pointer;
-    }
-
-    .btn-primary {
-      background: #0284c7;
-      border-color: #38bdf8;
-      color: #ffffff;
-      font-weight: 600;
-    }
-
-    .btn-danger {
-      background: rgba(239, 68, 68, 0.16);
-      border-color: rgba(239, 68, 68, 0.5);
-      color: #fca5a5;
-    }
-
     .status {
       margin-top: 10px;
       padding: 7px 10px;
@@ -286,14 +263,11 @@ export class WssSpeakerLibraryModal extends LitElement {
   }
 
   private exportSpeakerJson(spk: SpeakerDefinition): void {
-    const json = serializeSpeakerToJson(spk);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${spk.id}.wss-speaker.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadTextFile(
+      `${spk.id}.wss-speaker.json`,
+      serializeSpeakerToJson(spk),
+      'application/json'
+    );
   }
 
   protected render() {

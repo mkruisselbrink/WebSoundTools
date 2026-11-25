@@ -13,10 +13,10 @@ import type { AudienceSurface } from '../../model/project-types.js';
 export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurface): TemplateResult {
   return html`
     <div data-testid="inspector-surface">
-      <div class="insp-header">
-        <span class="insp-title">Audience / Stage Surface</span>
+      <div class="foh-insp-header">
+        <span class="foh-insp-title">Audience / Stage Surface</span>
         <button
-          class="btn btn-xs btn-danger"
+          class="foh-btn foh-btn-xs foh-btn-danger"
           data-testid="btn-delete-entity"
           @click=${() => store.removeSurface(surf.id)}
         >
@@ -24,8 +24,8 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
         </button>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Classification</div>
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Classification</div>
         <div class="field-row">
           <label class="field-label" for="surf-name-input">Name</label>
           <input
@@ -58,10 +58,10 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="form-section-title">Plan & Section Geometry (m)</div>
-        <div class="xy-grid" style="margin-bottom:6px">
-          <label class="mini-field">
+      <div class="foh-form-section">
+        <div class="foh-form-section-title">Plan & Section Geometry (m)</div>
+        <div class="foh-xy-grid" style="margin-bottom:6px">
+          <label class="foh-mini-field">
             <span>X Start (m)</span>
             <input
               type="number"
@@ -76,7 +76,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>X End (m)</span>
             <input
               type="number"
@@ -93,8 +93,8 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
           </label>
         </div>
 
-        <div class="xyz-grid" style="margin-bottom:6px">
-          <label class="mini-field">
+        <div class="foh-xyz-grid" style="margin-bottom:6px">
+          <label class="foh-mini-field">
             <span>Y Center</span>
             <input
               type="number"
@@ -109,7 +109,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Width Start</span>
             <input
               type="number"
@@ -125,7 +125,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Width End</span>
             <input
               type="number"
@@ -143,8 +143,8 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
           </label>
         </div>
 
-        <div class="xyz-grid">
-          <label class="mini-field">
+        <div class="foh-xyz-grid">
+          <label class="foh-mini-field">
             <span>Deck Z Start</span>
             <input
               type="number"
@@ -157,9 +157,9 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                   { zStart: numVal(ev, surf.zStart) },
                   `sf-z-${surf.id}`
                 )}
-          />
+            />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Deck Z End</span>
             <input
               type="number"
@@ -174,7 +174,7 @@ export function renderSurfaceInspector(store: ProjectStore, surf: AudienceSurfac
                 )}
             />
           </label>
-          <label class="mini-field">
+          <label class="foh-mini-field">
             <span>Ear Height</span>
             <input
               type="number"

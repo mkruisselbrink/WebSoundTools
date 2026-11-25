@@ -33,11 +33,14 @@ export function renderCatalogTab(params: {
               </div>
             </div>
             <div style="display:flex;gap:6px">
-              <button class="btn" @click=${() => onExportJson(spk)}>JSON</button>
+              <button type="button" class="foh-btn" @click=${() => onExportJson(spk)}>
+                JSON
+              </button>
               ${spk.origin !== 'builtin'
                 ? html`
                     <button
-                      class="btn btn-danger"
+                      type="button"
+                      class="foh-btn foh-btn-danger"
                       data-testid="btn-delete-speaker-${spk.id}"
                       @click=${() => onDeleteCustom(spk.id)}
                     >
