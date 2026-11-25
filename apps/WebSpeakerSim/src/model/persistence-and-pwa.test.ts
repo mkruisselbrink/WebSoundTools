@@ -8,6 +8,7 @@ import { DEFAULT_COLORMAP_CONFIG } from './project-store.js';
 import {
   IDB_DATABASE_NAME,
   IDB_DATABASE_VERSION,
+  IDB_STORE_FILE_HANDLES,
   IDB_STORE_PROJECTS,
   IDB_STORE_SPEAKERS,
   SessionStorageRepository,
@@ -146,8 +147,12 @@ describe('3-Tier Persistence & Offline PWA Core', () => {
 
   it('enforces exact browser storage keys and PWA cache pruning in sw-core', () => {
     expect(IDB_DATABASE_NAME).toBe('web-speaker-sim-db');
-    expect(IDB_DATABASE_VERSION).toBe(1);
-    expect([IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS]).toEqual(['projects', 'speakers']);
+    expect(IDB_DATABASE_VERSION).toBe(2);
+    expect([IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS, IDB_STORE_FILE_HANDLES]).toEqual([
+      'projects',
+      'speakers',
+      'file-handles',
+    ]);
     expect(WORKSPACE_STORAGE_KEY).toBe('wss.workspace.v1');
 
     const active = buildCacheName('web-speaker-sim-', 'abc12345');

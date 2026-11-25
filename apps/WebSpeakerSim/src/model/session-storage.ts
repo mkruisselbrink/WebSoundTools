@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /**
- * Tier-3 `IndexedDB` persistence (`web-speaker-sim-db` v1) backed by `@foh/state`
+ * Tier-3 `IndexedDB` persistence (`web-speaker-sim-db` v2) backed by `@foh/state`
  * + portable `.wss-project.json` project bundle I/O (`src/model/session-storage.ts`).
  */
 
@@ -16,9 +16,25 @@ import { DEFAULT_COLORMAP_CONFIG, type ColormapConfig } from './project-store.js
 import type { ProjectScene } from './project-types.js';
 
 export const IDB_DATABASE_NAME = 'web-speaker-sim-db';
-export const IDB_DATABASE_VERSION = 1;
+export const IDB_DATABASE_VERSION = 2;
 export const IDB_STORE_PROJECTS = 'projects';
 export const IDB_STORE_SPEAKERS = 'speakers';
+export const IDB_STORE_FILE_HANDLES = 'file-handles';
+
+const ACTIVE_FILE_HANDLE_RECORD_ID = 'active-project-handle';
+
+export interface ProjectFileWritableLike {
+  write(data: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface ProjectFileHandleLike {
+  readonly name: string;
+  getFile(): Promise<File>;
+  createWritable(): Promise<ProjectFileWritableLike>;
+  queryPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<string>;
+  requestPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<string>;
+}
 
 export interface SavedProjectRecord {
   readonly id: string;
@@ -86,7 +102,7 @@ export class SessionStorageRepository {
   private readonly repo = new IdbRepository({
     dbName: IDB_DATABASE_NAME,
     dbVersion: IDB_DATABASE_VERSION,
-    storeNames: [IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS],
+    storeNames: [IDB_STORE_PROJECTS, IDB_STORE_SPEAKERS, IDB_STORE_FILE_HANDLES],
     fallbackMode: 'memory',
   });
 
@@ -123,5 +139,26 @@ export class SessionStorageRepository {
   public async listProjects(): Promise<SavedProjectRecord[]> {
     const rows = await this.repo.getAll<SavedProjectRecord>(IDB_STORE_PROJECTS);
     return rows.sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso));
+  }
+
+  public async saveActiveFileHandle(handle: ProjectFileHandleLike): Promise<void> {
+    await this.repo.put(IDB_STORE_FILE_HANDLES, {
+      id: ACTIVE_FILE_HANDLE_RECORD_ID,
+      handle,
+    });
+  }
+
+  public async loadActiveFileHandle(): Promise<ProjectFileHandleLike | null> {
+    const rows = await this.repo.getAll<{ id: string; handle?: ProjectFileHandleLike }>(
+      IDB_STORE_FILE_HANDLES
+    );
+    const found = rows.find((r) => r.id === ACTIVE_FILE_HANDLE_RECORD_ID);
+    return found?.handle && typeof found.handle.createWritable === 'function'
+      ? found.handle
+      : null;
+  }
+
+  public async clearActiveFileHandle(): Promise<void> {
+    await this.repo.delete(IDB_STORE_FILE_HANDLES, ACTIVE_FILE_HANDLE_RECORD_ID);
   }
 }

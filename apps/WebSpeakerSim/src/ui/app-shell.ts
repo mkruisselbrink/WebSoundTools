@@ -20,9 +20,12 @@ import '../charts/chart-panel.js';
 import { DEMO_VENUE_PRESETS, getDemoPresetById } from '../library/demo-presets.js';
 import type { SpeakerDefinition } from '../library/speaker-schema.js';
 import {
-  exportProjectBundleToFile,
   importProjectBundleFile,
+  openProjectViaFilePicker,
+  saveProjectAsViaPicker,
+  saveProjectToHandle,
   saveSceneSnapshotToDb,
+  type ProjectFileHandleLike,
 } from '../model/project-io.js';
 import { ProjectStore } from '../model/project-store.js';
 import {
@@ -76,6 +79,8 @@ export class WebSpeakerSimApp extends LitElement {
   @state() private projectsModalOpen = false;
   @state() private helpModalOpen = false;
   @state() private savedProjects: SavedProjectRecord[] = [];
+  @state() private activeFileHandle: ProjectFileHandleLike | null = null;
+  @state() private hasUnsavedFileChanges = false;
   @state() private toastMessage = '';
 
   // Alignment UI state for Virtual Mic inspector
@@ -146,6 +151,10 @@ export class WebSpeakerSimApp extends LitElement {
       this.storeRevision++;
       if (changeKind === 'scene' && !this.isLoadingPreset) {
         this.isSceneModified = true;
+        this.hasUnsavedFileChanges = true;
+      }
+      if (changeKind === 'colormap' && !this.isLoadingPreset) {
+        this.hasUnsavedFileChanges = true;
       }
       if (changeKind === 'scene' || changeKind === 'colormap') {
         this.scheduleAutosave();
@@ -175,6 +184,9 @@ export class WebSpeakerSimApp extends LitElement {
     dispatchAppShortcut(ev, {
       undo: () => this.store.undo(),
       redo: () => this.store.redo(),
+      save: () => {
+        void this.handleSaveProjectFile();
+      },
       addPointSource: () => this.store.addPointSource(),
       addSubArray: () => this.store.addSubArray(),
       addVirtualMic: () => this.store.addVirtualMic(),
@@ -209,14 +221,18 @@ export class WebSpeakerSimApp extends LitElement {
   }
 
   private async hydrateIndexedDb(): Promise<void> {
-    const [speakers, projects] = await Promise.all([
+    const [speakers, projects, savedHandle] = await Promise.all([
       this.repository.listSpeakers(),
       this.repository.listProjects(),
+      this.repository.loadActiveFileHandle().catch(() => null),
     ]);
     if (speakers.length > 0) {
       this.store.setCustomSpeakers(speakers);
     }
     this.savedProjects = projects;
+    if (savedHandle) {
+      this.activeFileHandle = savedHandle;
+    }
   }
 
   private scheduleAutosave(): void {
@@ -267,6 +283,9 @@ export class WebSpeakerSimApp extends LitElement {
   private handleSelectPreset(presetId: string): void {
     this.activePresetId = presetId;
     this.isSceneModified = false;
+    this.hasUnsavedFileChanges = false;
+    this.activeFileHandle = null;
+    void this.repository.clearActiveFileHandle().catch(() => {});
     this.isLoadingPreset = true;
     try {
       this.store.loadPreset(presetId);
@@ -278,15 +297,74 @@ export class WebSpeakerSimApp extends LitElement {
     this.showToast(`Loaded venue preset: ${this.store.scene.name}`);
   }
 
-  private exportProjectBundle(): void {
-    exportProjectBundleToFile(this.store);
-    this.showToast('Exported .wss-project.json bundle.');
+  private async handleSaveProjectFile(): Promise<void> {
+    if (this.activeFileHandle) {
+      const res = await saveProjectToHandle(this.activeFileHandle, this.store);
+      if (res.ok) {
+        this.hasUnsavedFileChanges = false;
+        this.flushAutosave();
+        this.showToast(`Saved directly to "${res.fileName}".`);
+        return;
+      }
+      if (res.reason === 'permission-denied') {
+        this.showToast(res.message);
+        return;
+      }
+    }
+    await this.handleSaveProjectAs();
+  }
+
+  private async handleSaveProjectAs(): Promise<void> {
+    try {
+      const res = await saveProjectAsViaPicker(this.store, this.repository);
+      if (res.kind === 'cancelled') return;
+      if (res.kind === 'saved-handle') {
+        this.activeFileHandle = res.handle;
+        this.hasUnsavedFileChanges = false;
+        this.flushAutosave();
+        this.showToast(`Saved project to "${res.fileName}".`);
+        return;
+      }
+      this.hasUnsavedFileChanges = false;
+      this.showToast(`Exported "${res.fileName}".`);
+    } catch (err) {
+      this.showToast(
+        `Project save failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  private async handleOpenProjectPickerOrFallback(): Promise<void> {
+    try {
+      const res = await openProjectViaFilePicker(this.store, this.repository);
+      if (res.kind === 'cancelled') return;
+      if (res.kind === 'opened') {
+        this.activeFileHandle = res.handle;
+        this.isSceneModified = true;
+        this.hasUnsavedFileChanges = false;
+        this.flushAutosave();
+        this.showToast(`Opened "${res.handle.name}".`);
+        return;
+      }
+    } catch (err) {
+      this.showToast(
+        `Project open failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
+    const inp = this.renderRoot.querySelector(
+      '#project-file-input'
+    ) as HTMLInputElement | null;
+    inp?.click();
   }
 
   private async importProjectFile(file: File | undefined): Promise<void> {
     if (!file) return;
     try {
       const importedScene = await importProjectBundleFile(file, this.store, this.repository);
+      this.activeFileHandle = null;
+      this.isSceneModified = true;
+      this.hasUnsavedFileChanges = false;
       this.scheduleAutosave();
       this.showToast(`Imported project "${importedScene.name}".`);
     } catch (err) {
@@ -315,6 +393,8 @@ export class WebSpeakerSimApp extends LitElement {
         .wcoVisible=${this.shellWindow.wcoVisible}
         .updateReady=${this.shellWindow.swUpdateReady}
         .isSceneModified=${this.isSceneModified}
+        .activeFileName=${this.activeFileHandle?.name ?? ''}
+        .hasUnsavedFileChanges=${this.hasUnsavedFileChanges}
         .onSelectPreset=${(id: string) => this.handleSelectPreset(id)}
         .onOpenProjectsModal=${() => {
           this.projectsModalOpen = true;
@@ -322,12 +402,14 @@ export class WebSpeakerSimApp extends LitElement {
         .onSaveSnapshot=${() => {
           void this.saveCurrentProjectToDb();
         }}
-        .onExportProjectJson=${() => this.exportProjectBundle()}
+        .onSaveProjectFile=${() => {
+          void this.handleSaveProjectFile();
+        }}
+        .onExportProjectJson=${() => {
+          void this.handleSaveProjectAs();
+        }}
         .onTriggerImportProjectJson=${() => {
-          const inp = this.renderRoot.querySelector(
-            '#project-file-input'
-          ) as HTMLInputElement | null;
-          inp?.click();
+          void this.handleOpenProjectPickerOrFallback();
         }}
         .onOpenSpeakerLibrary=${() => {
           this.speakerLibraryOpen = true;
@@ -450,8 +532,11 @@ export class WebSpeakerSimApp extends LitElement {
           this.projectsModalOpen = false;
         }}
         .onLoadProject=${(proj: SavedProjectRecord) => {
+          this.activeFileHandle = null;
+          void this.repository.clearActiveFileHandle().catch(() => {});
           this.store.setColormap(proj.colormap);
           this.store.replaceProject(proj.scene, true);
+          this.hasUnsavedFileChanges = false;
           this.projectsModalOpen = false;
           this.showToast(`Loaded "${proj.name}".`);
         }}

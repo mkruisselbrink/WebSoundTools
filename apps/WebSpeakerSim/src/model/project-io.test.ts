@@ -6,7 +6,11 @@ import { buildSpeakerFromSpec } from '../library/spec-builder.js';
 import {
   buildProjectBundleDownload,
   importProjectBundleText,
+  openProjectViaFilePicker,
+  saveProjectAsViaPicker,
+  saveProjectToHandle,
   saveSceneSnapshotToDb,
+  type ProjectFileHandleLike,
   type ProjectPersistenceRepositoryLike,
 } from './project-io.js';
 import { ProjectStore } from './project-store.js';
@@ -83,5 +87,69 @@ describe('project-io helpers', () => {
     expect(record.updatedAtIso).toBe('2026-06-15T18:30:00.000Z');
     expect(projects).toHaveLength(1);
     expect(projects[0]?.name).toBe('Festival Delay Tower');
+  });
+
+  it('supports showSaveFilePicker, direct saveProjectToHandle, and showOpenFilePicker round-trips', async () => {
+    const store = new ProjectStore();
+    store.updateScene((s) => ({ ...s, name: 'Touring Theater Rig' }));
+    const repo = createMemoryRepo();
+
+    let diskContent = '';
+    let savedHandleRef: ProjectFileHandleLike | undefined;
+    const mockHandle: ProjectFileHandleLike = {
+      name: 'touring-theater-rig.wss-project.json',
+      async getFile() {
+        return new File([diskContent], 'touring-theater-rig.wss-project.json', {
+          type: 'application/json',
+        });
+      },
+      async createWritable() {
+        let buf = '';
+        return {
+          async write(data: string) {
+            buf += data;
+          },
+          async close() {
+            diskContent = buf;
+          },
+        };
+      },
+      async queryPermission() {
+        return 'granted';
+      },
+    };
+
+    const saveAsRes = await saveProjectAsViaPicker(
+      store,
+      {
+        async saveActiveFileHandle(h) {
+          savedHandleRef = h;
+        },
+      },
+      {
+        async showSaveFilePicker() {
+          return mockHandle;
+        },
+      }
+    );
+    expect(saveAsRes.kind).toBe('saved-handle');
+    expect(savedHandleRef).toBe(mockHandle);
+    expect(diskContent).toContain('Touring Theater Rig');
+
+    // Modify scene and save directly in-place via Cmd/Ctrl+S handle
+    store.updateScene((s) => ({ ...s, name: 'Touring Theater Rig v2' }));
+    const directRes = await saveProjectToHandle(mockHandle, store);
+    expect(directRes).toEqual({ ok: true, fileName: 'touring-theater-rig.wss-project.json' });
+    expect(diskContent).toContain('Touring Theater Rig v2');
+
+    // Re-open into a fresh store via showOpenFilePicker
+    const reopenedStore = new ProjectStore();
+    const openRes = await openProjectViaFilePicker(reopenedStore, repo, {
+      async showOpenFilePicker() {
+        return [mockHandle];
+      },
+    });
+    expect(openRes.kind).toBe('opened');
+    expect(reopenedStore.scene.name).toBe('Touring Theater Rig v2');
   });
 });

@@ -109,4 +109,22 @@ describe('shortcut-router', () => {
     expect(onShiftSpace).toHaveBeenCalledTimes(1);
     expect(onSpace).not.toHaveBeenCalled();
   });
+
+  it('dispatches Mod+S to onSave even when an input is focused', () => {
+    const onSave = vi.fn();
+    const preventDefault = vi.fn();
+    expect(
+      dispatchKeyboardShortcut(
+        {
+          key: 's',
+          metaKey: true,
+          composedPath: () => [{ tagName: 'INPUT' }],
+          preventDefault,
+        },
+        { onSave }
+      )
+    ).toBe(true);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
 });

@@ -23,6 +23,7 @@ export interface ShortcutRouterConfig {
   readonly onEscape?: () => void;
   readonly onUndo?: () => void;
   readonly onRedo?: () => void;
+  readonly onSave?: () => void;
   readonly bindings?: Readonly<Record<string, (() => void) | undefined>>;
 }
 
@@ -64,6 +65,12 @@ export function dispatchKeyboardShortcut(
   if (key === 'Escape' && config.onEscape) {
     ev.preventDefault?.();
     config.onEscape();
+    return true;
+  }
+
+  if (mod && !alt && !shift && lower === 's' && config.onSave) {
+    ev.preventDefault?.();
+    config.onSave();
     return true;
   }
 

@@ -15,6 +15,7 @@ import type { ViewportLayoutMode } from '../model/url-state.js';
 export interface AppShortcutHandlers {
   readonly undo: () => void;
   readonly redo: () => void;
+  readonly save?: () => void;
   readonly addPointSource: () => void;
   readonly addSubArray: () => void;
   readonly addVirtualMic: () => void;
@@ -39,6 +40,7 @@ export function dispatchAppShortcut(
     onEscape: handlers.onEscape,
     onUndo: handlers.undo,
     onRedo: handlers.redo,
+    onSave: handlers.save,
     bindings: {
       p: handlers.addPointSource,
       s: handlers.addSubArray,

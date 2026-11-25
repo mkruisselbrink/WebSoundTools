@@ -53,6 +53,7 @@ export const WSS_HELP_SHORTCUTS: readonly HelpShortcutItem[] = [
   { keys: 'G', action: 'Toggle 1st-Order Ground Reflection' },
   { keys: 'L', action: 'Open Loudspeaker Library, Spec Builder & Importer' },
   { keys: '1 / 2 / 3', action: 'Switch Viewport Layout (Split / Plan / Section)' },
+  { keys: 'Cmd / Ctrl + S', action: 'Save project directly to .wss-project.json file' },
   { keys: 'Cmd / Ctrl + Z', action: 'Undo last scene or colormap edit' },
   { keys: 'Cmd / Ctrl + Shift + Z', action: 'Redo scene or colormap edit' },
   { keys: '?', action: 'Open or close this Help & Shortcuts dialog' },

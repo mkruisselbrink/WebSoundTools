@@ -25,9 +25,10 @@ Operational rules and architectural invariants for coding agents modifying `WebS
 Renaming any of these constants will break saved venue projects, imported `.gll`/`.clf`/`.frd` speaker libraries, or crash recovery:
 
 - **`localStorage` Workspace Key:** `'wss.workspace.v1'` (`src/model/workspace-session.ts`)
-- **`IndexedDB` Database:** `IDB_DATABASE_NAME = 'web-speaker-sim-db'`, `IDB_DATABASE_VERSION = 1` (`src/model/session-storage.ts`, `fallbackMode: 'memory'`)
+- **`IndexedDB` Database:** `IDB_DATABASE_NAME = 'web-speaker-sim-db'`, `IDB_DATABASE_VERSION = 2` (`src/model/session-storage.ts`, `fallbackMode: 'memory'`)
   - `'projects'` — Named saved venue scenes & colormap configs (`SavedProjectRecord`)
   - `'speakers'` — Custom spec-built & imported `.gll` / `.clf` / `.frd` loudspeaker definitions (`SpeakerDefinition`)
+  - `'file-handles'` — Active `FileSystemFileHandle` for direct `Cmd/Ctrl + S` `.wss-project.json` save-in-place
 - **Portable Project Bundle Format:** `format: 'wss-project-v1'` (`.wss-project.json`, bundling scene + colormap + custom speakers via `src/model/session-storage.ts` and `src/model/project-io.ts`)
 - **Service Worker Cache Prefix:** `'wss-precache-'`, version `'v1'` (`vite.config.ts`)
 

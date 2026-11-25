@@ -49,10 +49,13 @@ export interface TopbarRenderCallbacks {
   readonly wcoVisible?: boolean;
   readonly updateReady?: boolean;
   readonly isSceneModified?: boolean;
+  readonly activeFileName?: string;
+  readonly hasUnsavedFileChanges?: boolean;
   readonly popoverRoot?: PopoverParentRootLike;
   readonly onSelectPreset: (presetId: string) => void;
   readonly onOpenProjectsModal: () => void;
   readonly onSaveSnapshot?: () => void;
+  readonly onSaveProjectFile?: () => void;
   readonly onExportProjectJson: () => void;
   readonly onTriggerImportProjectJson: () => void;
   readonly onOpenSpeakerLibrary: () => void;
@@ -118,10 +121,13 @@ export function renderTopbar(
 
           ${renderScenePopover({
             activePresetId,
+            activeFileName: cb.activeFileName,
+            hasUnsavedFileChanges: cb.hasUnsavedFileChanges,
             popoverRoot: cb.popoverRoot,
             onSelectPreset: cb.onSelectPreset,
             onOpenProjectsModal: cb.onOpenProjectsModal,
             onSaveSnapshot: cb.onSaveSnapshot,
+            onSaveProjectFile: cb.onSaveProjectFile,
             onTriggerImportProjectJson: cb.onTriggerImportProjectJson,
             onExportProjectJson: cb.onExportProjectJson,
           })}

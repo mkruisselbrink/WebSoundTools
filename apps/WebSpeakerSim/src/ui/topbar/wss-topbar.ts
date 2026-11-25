@@ -115,10 +115,13 @@ export class WssTopbar extends LitElement {
   @property({ type: Boolean }) public wcoVisible = false;
   @property({ type: Boolean }) public updateReady = false;
   @property({ type: Boolean }) public isSceneModified = false;
+  @property({ type: String }) public activeFileName = '';
+  @property({ type: Boolean }) public hasUnsavedFileChanges = false;
 
   @property({ attribute: false }) public onSelectPreset: (presetId: string) => void = () => {};
   @property({ attribute: false }) public onOpenProjectsModal: () => void = () => {};
   @property({ attribute: false }) public onSaveSnapshot?: () => void;
+  @property({ attribute: false }) public onSaveProjectFile?: () => void;
   @property({ attribute: false }) public onExportProjectJson: () => void = () => {};
   @property({ attribute: false }) public onTriggerImportProjectJson: () => void = () => {};
   @property({ attribute: false }) public onOpenSpeakerLibrary: () => void = () => {};
@@ -159,10 +162,13 @@ export class WssTopbar extends LitElement {
         wcoVisible: this.wcoVisible,
         updateReady: this.updateReady,
         isSceneModified: this.isSceneModified,
+        activeFileName: this.activeFileName || undefined,
+        hasUnsavedFileChanges: this.hasUnsavedFileChanges,
         popoverRoot: this.renderRoot,
         onSelectPreset: this.onSelectPreset,
         onOpenProjectsModal: this.onOpenProjectsModal,
         onSaveSnapshot: this.onSaveSnapshot,
+        onSaveProjectFile: this.onSaveProjectFile,
         onExportProjectJson: this.onExportProjectJson,
         onTriggerImportProjectJson: this.onTriggerImportProjectJson,
         onOpenSpeakerLibrary: this.onOpenSpeakerLibrary,

@@ -13,6 +13,7 @@ export const WSS_TEST_IDS = {
   presetSelect: 'preset-select',
   projectsBtn: 'btn-projects',
   saveSnapshotBtn: 'btn-save-snapshot',
+  saveProjectFileBtn: 'btn-save-project-file',
   exportProjectBtn: 'btn-export-project',
   importProjectBtn: 'btn-import-project',
   undoBtn: 'btn-undo',
