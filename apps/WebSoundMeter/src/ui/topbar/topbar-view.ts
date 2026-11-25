@@ -111,7 +111,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
           </div>
 
           <div
-            class="foh-segmented foh-hide-below-medium"
+            class="foh-segmented foh-hide-below-wide"
             role="group"
             aria-label="Edit History"
           >
@@ -274,7 +274,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
             ${renderHelpQuestionSvg()}
           </button>
           <a
-            class="foh-tb-pill foh-tb-icon-btn foh-hide-below-medium"
+            class="foh-tb-pill foh-tb-icon-btn foh-hide-below-wide"
             href=${FOH_GITHUB_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"

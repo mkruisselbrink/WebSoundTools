@@ -79,24 +79,33 @@ export const appShellStyles = [
     gap: 7px;
   }
 
-  @container topbar (max-width: 1079px) {
+  @container topbar (max-width: 1259px) {
     .wsm-io-pill {
-      max-inline-size: 144px;
+      max-inline-size: 136px;
     }
   }
 
-  @container topbar (max-width: 819px) {
+  @container topbar (max-width: 1099px) {
     .wsm-pause-pill:not([aria-pressed='true']) {
-      inline-size: 28px;
-    }
-    .wsm-io-pill {
-      max-inline-size: 112px;
+      inline-size: 30px;
     }
   }
 
-  @container topbar (max-width: 479px) {
+  @container topbar (max-width: 939px) {
     .wsm-io-pill {
-      max-inline-size: 104px;
+      max-inline-size: 102px;
+    }
+    .wsm-gen-toggle-btn {
+      inline-size: 52px;
+    }
+    .spl-show-inline {
+      gap: 4px;
+    }
+  }
+
+  @container topbar (max-width: 779px) {
+    .wsm-io-pill {
+      max-inline-size: 88px;
     }
   }
 
@@ -777,12 +786,12 @@ export const appShellStyles = [
   /* Coarse Touch Pointer Ergonomics (Tablet & Phone) */
   @media (pointer: coarse) {
     .wsm-pause-pill {
-      inline-size: 74px;
+      inline-size: 70px;
     }
 
-    @container topbar (max-width: 819px) {
+    @container topbar (max-width: 1099px) {
       .wsm-pause-pill:not([aria-pressed='true']) {
-        inline-size: 36px;
+        inline-size: 34px;
       }
     }
 

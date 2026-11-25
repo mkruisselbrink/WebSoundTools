@@ -43,6 +43,7 @@ export class HardwareAudioRouter {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private splitterNode: ChannelSplitterNode | null = null;
   private captureWorkletNode: AudioWorkletNode | null = null;
+  private fallbackScriptNode: ScriptProcessorNode | null = null;
   private outputMergerNode: ChannelMergerNode | null = null;
   private lastStartOptions: HardwareStreamStartOptions | null = null;
 
@@ -222,18 +223,38 @@ export class HardwareAudioRouter {
     this.generatorOutputChannel = options.generatorOutputChannel;
     this.setActivePhysicalChannels(options.activePhysicalChannels);
 
-    // Request getUserMedia FIRST inside the user gesture before awaiting AudioWorklet module
-    // loading so WebKit standalone PWAs preserve transient user activation and switch
-    // AVAudioSession to PlayAndRecord before AudioContext resumes.
-    this.mediaStream = await this.acquireMediaStream(options.deviceId);
-
+    // Unlock AudioContext AND request getUserMedia synchronously in the same user-gesture
+    // tick before the first `await`: WebKit requires AudioContext creation/resume inside an
+    // active user gesture (which would expire during a multi-second mic permission prompt),
+    // AND requires getUserMedia inside an active user gesture before async module fetches.
     if (!this.audioContext || (this.audioContext.state as string) === 'closed') {
       this.audioContext = new AudioContext({ latencyHint: 'interactive' });
       this.workletModuleLoaded = false;
+      this.audioContext.onstatechange = () => {
+        if (
+          this.mediaStream &&
+          this.lastStartOptions &&
+          !this.lastStartOptions.isPaused &&
+          this.audioContext &&
+          (this.audioContext.state as string) === 'interrupted'
+        ) {
+          void this.audioContext.resume().catch(() => {});
+        }
+      };
     }
-    if (!this.workletModuleLoaded) {
-      await this.audioContext.audioWorklet.addModule(CaptureWorkletUrl);
-      this.workletModuleLoaded = true;
+    void this.audioContext.resume().catch(() => {});
+
+    const streamPromise = this.acquireMediaStream(options.deviceId);
+    this.mediaStream = await streamPromise;
+
+    let useWorklet = Boolean(this.audioContext.audioWorklet?.addModule);
+    if (useWorklet && !this.workletModuleLoaded) {
+      try {
+        await this.audioContext.audioWorklet.addModule(CaptureWorkletUrl);
+        this.workletModuleLoaded = true;
+      } catch {
+        useWorklet = false;
+      }
     }
 
     const maxOut = Math.min(64, Math.max(2, this.audioContext.destination.maxChannelCount || 2));
@@ -256,56 +277,82 @@ export class HardwareAudioRouter {
     this.outputMergerNode = this.audioContext.createChannelMerger(this.availableOutputChannels);
     this.outputMergerNode.connect(this.audioContext.destination);
 
-    this.captureWorkletNode = new AudioWorkletNode(
-      this.audioContext,
-      'capture-tap-processor',
-      {
-        numberOfInputs: MAX_CAPTURE_TAP_SLOTS,
-        numberOfOutputs: 1,
-        outputChannelCount: [1],
-      }
-    );
+    if (useWorklet) {
+      this.captureWorkletNode = new AudioWorkletNode(
+        this.audioContext,
+        'capture-tap-processor',
+        {
+          numberOfInputs: MAX_CAPTURE_TAP_SLOTS,
+          numberOfOutputs: 1,
+          outputChannelCount: [1],
+        }
+      );
 
-    this.captureWorkletNode.port.postMessage({
-      type: 'update-generator-config',
-      config: options.generatorConfig,
-    });
-    if (options.isPaused) {
       this.captureWorkletNode.port.postMessage({
-        type: 'pause',
-        paused: true,
+        type: 'update-generator-config',
+        config: options.generatorConfig,
       });
-    }
-
-    const canShareRingBuffer =
-      options.ringBufferStorage !== null &&
-      typeof SharedArrayBuffer !== 'undefined' &&
-      options.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer &&
-      ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated ?? true);
-
-    if (canShareRingBuffer) {
-      try {
+      if (options.isPaused) {
         this.captureWorkletNode.port.postMessage({
-          type: 'init-ring-buffer',
-          storage: options.ringBufferStorage,
+          type: 'pause',
+          paused: true,
         });
-      } catch {
+      }
+
+      const canShareRingBuffer =
+        options.ringBufferStorage !== null &&
+        typeof SharedArrayBuffer !== 'undefined' &&
+        options.ringBufferStorage.headerBuffer instanceof SharedArrayBuffer &&
+        ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated ?? true);
+
+      if (canShareRingBuffer) {
+        try {
+          this.captureWorkletNode.port.postMessage({
+            type: 'init-ring-buffer',
+            storage: options.ringBufferStorage,
+          });
+        } catch {
+          this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
+            if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
+              options.onFallbackChunk(e.data.channels as Float32Array[]);
+            }
+          };
+        }
+      } else {
         this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
           if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
             options.onFallbackChunk(e.data.channels as Float32Array[]);
           }
         };
       }
-    } else {
-      this.captureWorkletNode.port.onmessage = (e: MessageEvent) => {
-        if (e.data?.type === 'audio-chunk' && Array.isArray(e.data.channels)) {
-          options.onFallbackChunk(e.data.channels as Float32Array[]);
-        }
-      };
-    }
 
-    this.sourceNode.connect(this.splitterNode);
-    this.reconnectChannels();
+      this.sourceNode.connect(this.splitterNode);
+      this.reconnectChannels();
+    } else if (typeof this.audioContext.createScriptProcessor === 'function') {
+      // Fallback capture node if AudioWorklet module loading fails in a standalone WebView
+      const tapCount = Math.min(MAX_CAPTURE_TAP_SLOTS, this.availableChannels);
+      const sp = this.audioContext.createScriptProcessor(2048, tapCount, 1);
+      sp.onaudioprocess = (ev: AudioProcessingEvent) => {
+        if (this.lastStartOptions?.isPaused) return;
+        const inBuf = ev.inputBuffer;
+        const len = inBuf.length;
+        const zero = new Float32Array(len);
+        const chunks: Float32Array[] = new Array(MAX_CAPTURE_TAP_SLOTS + 1);
+        for (let t = 0; t < MAX_CAPTURE_TAP_SLOTS; t++) {
+          const physCh = this.activePhysicalChannels[t];
+          if (physCh !== undefined && physCh < inBuf.numberOfChannels) {
+            chunks[t] = new Float32Array(inBuf.getChannelData(physCh));
+          } else {
+            chunks[t] = zero;
+          }
+        }
+        chunks[MAX_CAPTURE_TAP_SLOTS] = zero;
+        options.onFallbackChunk(chunks);
+      };
+      this.fallbackScriptNode = sp;
+      this.sourceNode.connect(sp);
+      sp.connect(this.audioContext.destination);
+    }
 
     // Always resume AudioContext AFTER getUserMedia & graph connection so WebKit
     // recovers from 'suspended' or 'interrupted' PlayAndRecord session transitions.
@@ -358,6 +405,11 @@ export class HardwareAudioRouter {
     if (this.captureWorkletNode) {
       this.captureWorkletNode.disconnect();
       this.captureWorkletNode = null;
+    }
+    if (this.fallbackScriptNode) {
+      this.fallbackScriptNode.onaudioprocess = null;
+      this.fallbackScriptNode.disconnect();
+      this.fallbackScriptNode = null;
     }
     if (this.outputMergerNode) {
       this.outputMergerNode.disconnect();

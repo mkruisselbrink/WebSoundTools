@@ -149,6 +149,7 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
 
   test('adapts Live Show Mode across Handheld Phone (< 680px) and Tablet Portrait (820x1180)', async ({
     page,
+    browser,
   }) => {
     const wsm = new WsmPageDriver(page);
 
@@ -214,6 +215,34 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
     expect(ringsCardBox).not.toBeNull();
     expect(chartsBox!.y + chartsBox!.height).toBeLessThanOrEqual(sidebarBox!.y + 2);
     expect(micsCardBox!.x + micsCardBox!.width).toBeLessThanOrEqual(ringsCardBox!.x + 2);
+
+    // 3. Verify ALL topbar controls (1x, 2x, 3x, layout popover, and Help ?) fit inside iPad
+    // Portrait (768px & 820px) and iPad Landscape (1024px & 1180px) with `pointer: coarse`!
+    const ipadCtx = await browser.newContext({
+      viewport: { width: 768, height: 1024 },
+      hasTouch: true,
+    });
+    try {
+      const ipadPage = await ipadCtx.newPage();
+      const ipadWsm = new WsmPageDriver(ipadPage);
+      await ipadWsm.goto('/?mode=show');
+      await ipadWsm.waitForLiveSignal();
+
+      for (const width of [744, 768, 820, 1024, 1180]) {
+        await ipadPage.setViewportSize({ width, height: 900 });
+        for (const mode of ['show', 'tuning'] as const) {
+          await ipadWsm.setMode(mode);
+          const layout3xBox = await ipadWsm.app.getByTestId('btn-layout-3x').boundingBox();
+          const helpBox = await ipadWsm.app.getByTestId('btn-help').boundingBox();
+          expect(layout3xBox).not.toBeNull();
+          expect(helpBox).not.toBeNull();
+          expect(layout3xBox!.x + layout3xBox!.width).toBeLessThanOrEqual(width);
+          expect(helpBox!.x + helpBox!.width).toBeLessThanOrEqual(width);
+        }
+      }
+    } finally {
+      await ipadCtx.close();
+    }
   });
 
   test('recovers cleanly on standalone PWA relaunch when Hardware mode was saved in localStorage', async ({

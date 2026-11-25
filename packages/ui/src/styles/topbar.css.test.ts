@@ -13,8 +13,8 @@ describe('fohTopbarCss WCO, container queries & zero-jitter rules', () => {
     expect(cssText).toContain('app-region: drag');
     expect(cssText).toContain('app-region: no-drag');
     expect(cssText).toContain('container: topbar / inline-size');
-    expect(cssText).toContain('@container topbar (max-width: 1079px)');
-    expect(cssText).toContain('@container topbar (max-width: 819px)');
+    expect(cssText).toContain('@container topbar (max-width: 1259px)');
+    expect(cssText).toContain('@container topbar (max-width: 939px)');
     expect(cssText).toContain('@supports (position-area: block-end)');
     expect(cssText).toContain('env(safe-area-inset-bottom, 0px)');
     expect(cssText).toContain('font-size: 16px');

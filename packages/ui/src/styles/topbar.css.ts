@@ -573,7 +573,7 @@ export const fohTopbarCss = css`
     border-top: 1px solid var(--_foh-border-subtle, #1e293b);
   }
 
-  /* Coarse touch pointer sizing (Tablet & Phone) */
+  /* Coarse touch pointer sizing (Tablet & Phone) — generous vertical height with compact inline padding */
   @media (pointer: coarse) {
     .foh-topbar {
       min-block-size: max(
@@ -597,21 +597,21 @@ export const fohTopbarCss = css`
 
     .foh-seg-btn {
       min-block-size: 30px;
-      min-inline-size: 34px;
-      padding: 3px 10px;
-      font-size: 12px;
+      min-inline-size: 28px;
+      padding: 2px 8px;
+      font-size: 11.5px;
     }
 
     .foh-split-pill > button {
-      min-inline-size: 34px;
-      padding: 0 10px;
-      font-size: 12px;
+      min-inline-size: 28px;
+      padding: 0 8px;
+      font-size: 11.5px;
     }
 
     .foh-lcd-trigger {
       min-block-size: 28px;
-      padding: 2px 7px;
-      font-size: 11.5px;
+      padding: 2px 6px;
+      font-size: 11px;
     }
 
     .foh-popover-row select,
@@ -631,39 +631,81 @@ export const fohTopbarCss = css`
     }
   }
 
-  /* @container topbar Progressive Compaction Tiers */
-  @container topbar (max-width: 1079px) {
+  /* @container topbar Progressive Compaction Tiers
+   * >= 1260px: Full Desktop Studio Bar (brand wordmark + secondary KPIs + generator summary)
+   * 940-1259px: Tablet Landscape (1024px - 1194px iPads) & Compact Desktop
+   * 700-939px: Tablet Portrait (744px - 834px iPads) — keeps 1x | 2x | 3x | ▾ + ? fully visible!
+   */
+  @container topbar (max-width: 1259px) {
     .foh-brand-name {
       display: none;
     }
     .foh-topbar-zone {
       gap: 5px;
     }
+    .foh-topbar-spacer {
+      flex: 1 1 6px;
+      min-inline-size: 6px;
+    }
     .foh-hide-below-full {
       display: none !important;
     }
   }
 
-  @container topbar (max-width: 819px) {
-    .foh-hide-below-medium {
+  @container topbar (max-width: 1099px) {
+    .foh-hide-below-wide {
       display: none !important;
-    }
-    .foh-seg-btn {
-      padding: 2px 6px;
-    }
-    .foh-tb-pill {
-      padding: 0 6px;
     }
   }
 
-  @container topbar (max-width: 479px) {
+  @container topbar (max-width: 939px) {
     .foh-brand {
       display: none;
+    }
+    .foh-hide-below-medium {
+      display: none !important;
+    }
+    .foh-topbar-track,
+    .foh-topbar-zone {
+      gap: 4px;
     }
     .foh-topbar-spacer {
       flex: 1 1 4px;
       min-inline-size: 4px;
     }
+    .foh-seg-btn {
+      padding: 2px 6px;
+      min-inline-size: 26px;
+    }
+    .foh-tb-pill {
+      padding: 0 6px;
+    }
+    .foh-lcd {
+      gap: 5px;
+      padding: 0 6px;
+    }
+  }
+
+  @container topbar (max-width: 779px) {
+    .foh-hide-below-narrow {
+      display: none !important;
+    }
+    .foh-seg-btn {
+      padding: 2px 5px;
+      min-inline-size: 24px;
+    }
+    .foh-lcd-primary {
+      inline-size: 8.4ch;
+      font-size: 12px;
+    }
+    .foh-lcd-badge {
+      inline-size: 48px;
+      font-size: 9px;
+      padding: 1px 2px;
+    }
+  }
+
+  @container topbar (max-width: 479px) {
     .foh-popover-row select {
       padding-inline-end: 28px;
     }

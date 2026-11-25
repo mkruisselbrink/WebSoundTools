@@ -65,7 +65,11 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
           @click=${props.onToggleGenerator}
         >
           ${renderSineWaveIconSvg()}
-          <span>${props.genConfig.enabled ? 'Gen ON' : 'Gen'}</span>
+          <span
+            >Gen<span class="foh-hide-below-medium"
+              >${props.genConfig.enabled ? ' ON' : ''}</span
+            ></span
+          >
         </button>
         <button
           type="button"

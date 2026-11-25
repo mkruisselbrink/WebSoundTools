@@ -80,7 +80,7 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
         @click=${props.onTogglePause}
       >
         ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
-        <span class=${props.isPaused ? '' : 'foh-hide-below-medium'}
+        <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
           >${props.isPaused ? 'Resume' : 'Pause'}</span
         >
       </button>
