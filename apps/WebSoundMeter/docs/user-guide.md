@@ -37,7 +37,10 @@ Each mode maintains its own active chart stack (`1` to `3` panels), selectable v
 - **Hardware Generator Auto-Mute:** Switching from `Built-in Demo Simulator` to any physical hardware device automatically sets **`Gen`** to **`OFF`** so pink noise never fires unexpectedly into an unmuted PA.
 - **Global Reference Channel (`Ref`):** Shown in Hardware mode. Selects **`Internal Signal Generator`** (internal digital reference) or any physical input **`In Ch 1..N`** (physical analog/digital loopback or console mix feed) as the dual-FFT reference for transfer-function magnitude, phase, coherence, impulse deconvolution, and delay estimation.
 - **Concurrent Tap Capacity:** Supports up to **`8` full dual-FFT Live Measurement slots** plus up to **`32` watched console USB channels** in **Mixer Input Watch**—either sharing the same multi-channel interface (`up to 40` active taps) or opening a **separate secondary USB mixer interface** alongside a 2-channel FOH measurement interface on desktop browsers.
-- **`Pause` / `Resume` (`Space`):** Freezes live capture, spectrum integration, and hardware generator output simultaneously.
+- **`Pause` / `Resume` (`Space`) vs. `Stop / Disconnect` (`⏹` / `Shift + Space`):**
+  - **`Pause` (`Space`):** Instantly freezes live spectrum integration, SPL meters, and hardware generator output while keeping the `AudioContext` and `MediaStreamTrack`s **warm** for zero-latency resume between pink-noise bursts or songs.
+  - **`Stop / Disconnect` (`⏹` in the `[⏸ Pause | ⏹]` Hardware split-pill, `Disconnect / Release OS Mic` inside `Audio Input & Reference ▾`, or `Shift + Space`):** Calls `track.stop()` on all open primary and secondary hardware audio streams—turning off the OS/browser active-microphone indicator and releasing USB device locks—while preserving your selected audio interface and channel routing in standby. Clicking **`Resume`** (`Space`) or **`▶ Resume Mic`** reconnects immediately.
+  - **`Auto-Release Mic When Paused`:** Configurable inside `Audio Input & Reference ▾` (`Never`, `2`, `5` [default], `10`, or `30` minutes); automatically transitions a warm `Paused` session into `Disconnected` standby if left idle so the OS mic is not held open indefinitely.
 
 ### Signal Generator (`Gen` Split-Pill)
 - **`Gen` / `Gen ON` Toggle:** 1-click button enables or mutes the internal test signal; the adjacent `▾` chevron opens waveform, level, and output routing controls.
@@ -186,7 +189,8 @@ Transform and smoothing settings are synchronized across all live slots so multi
 | :--- | :--- |
 | `Cmd / Ctrl + Z` | Undo last authored Stored Trace, Virtual EQ, or Math Union change *(live hardware routing, `Ref Delay`, and live `Input Gain` are immediate hardware/worker controls and are not part of the undo stack)* |
 | `Cmd / Ctrl + Shift + Z` / `Ctrl + Y` | Redo authored change |
-| `Space` | Pause / Resume measurement and generator |
+| `Space` | Pause / Resume measurement and generator (keeps hardware stream warm when paused; reconnects when stopped) |
+| `Shift + Space` | Stop & disconnect hardware audio capture (releases OS microphone while keeping device routing) |
 | `C` | Capture active live trace to Stored Traces |
 | `D` | Find & Apply propagation delay on active Live Measurement |
 | `M` | Add a new Live Measurement slot (`+ Meas`) |
