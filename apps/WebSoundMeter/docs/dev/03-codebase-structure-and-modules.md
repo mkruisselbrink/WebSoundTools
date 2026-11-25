@@ -45,15 +45,15 @@ apps/WebSoundMeter/
 │   ├── audio/
 │   │   ├── audio-engine.ts                    # Multi-slot coordinator between DSP Worker & HardwareAudioRouter
 │   │   ├── live-slot-manager.ts               # Live slot config management & shared FFT/averaging sync
-│   │   ├── hardware-audio-router.ts           # AudioContext, 64ch getUserMedia, dynamic 8-tap splitter/merger
+│   │   ├── hardware-audio-router.ts           # AudioContext, 64ch getUserMedia, dynamic 40-tap + secondary mixer router
 │   │   ├── ring-buffer.ts                     # Lock-free SPSC MultiChannelRingBuffer (SharedArrayBuffer)
 │   │   └── worklets/
-│   │       └── capture-worklet.ts             # AudioWorkletProcessor: signal generator + 8-ch + loopback tap
+│   │       └── capture-worklet.ts             # AudioWorkletProcessor: signal generator + multi-ch + loopback tap
 │   ├── dsp/                                   # 100% Pure TypeScript (Zero DOM/WebAudio dependencies)
 │   │   ├── dsp-worker-protocol.ts             # Typed main <-> DSP worker message contracts
-│   │   ├── dsp.worker.ts                      # Background Web Worker running AnalyzerPipeline & SyntheticAcousticRig
+│   │   ├── dsp.worker.ts                      # Background Web Worker running AnalyzerPipeline & MixerInputWatchScanner
 │   │   ├── analyzer-pipeline.ts               # Dual-channel measurement pipeline orchestrator
-│   │   ├── synthetic-rig.ts                   # Deterministic PA/Room simulator (6 presets incl. feedback ring)
+│   │   ├── synthetic-rig.ts                   # Deterministic PA/Room & 4-ch Stage Mixer simulator
 │   │   ├── signal-generator.ts                # Pink (Voss-McCartney), White, Sine, and Log Sweep synthesis
 │   │   ├── transfer-function.ts               # H1 & Ratio estimators, FIFO/Bessel LPF averaging, coherence γ²(f)
 │   │   ├── deconvolution.ts                   # Regularized IFFT impulse/step response & auto delay finder
@@ -62,14 +62,18 @@ apps/WebSoundMeter/
 │   │   ├── spl-compliance.ts                  # LAeq15 / LAeq1 / Peak threshold & dose compliance evaluator
 │   │   ├── spl-csv-export.ts                  # Timestamped SPL show log CSV serializer
 │   │   ├── spl-history.ts                     # Rolling SPL history coordinator & checkpoint serializer
-│   │   ├── feedback-discriminators.ts         # Prominence, narrowband Q, coherence & persistence discriminators
-│   │   ├── feedback-detector.ts               # Stateful FeedbackDetector & FeedbackRingEvent tracker
+│   │   ├── feedback-phase-tracker.ts          # Phase-vocoder instantaneous frequency & pitch-jitter tracker
+│   │   ├── feedback-discriminators.ts         # Sparse-safe prominence, narrowband Q & 2nd–6th harmonic comb sieve
+│   │   ├── feedback-detector.ts               # Phase-coherent FeedbackDetector & post-transient overhang tracker
+│   │   ├── mixer-watch-scanner.ts             # Lightweight 32-ch console input scanner & causal Mix-Bus guard
+│   │   ├── feedback-culprit-resolver.ts       # Cross-channel feedback merger & culprit confidence ranker
 │   │   └── calibration.ts                     # Microphone calibration curve adapter (@foh/acoustics .frd/.cal)
 │   ├── sources/                               # SourceData Model, Virtual Sources & Persistence
 │   │   ├── source-data.ts                     # Structure-of-Arrays (SoA) Float32Array data structures & .frd export
 │   │   ├── source-store.ts                    # Authored ReactiveUndoStore + 25 FPS live telemetry store
 │   │   ├── eq-source.ts                       # Full @foh/dsp SourceDspConfig virtual crossover/delay/PEQ model
-│   │   ├── auto-eq-matcher.ts                 # Bounded room-mode inverse peaking EQ synthesizer
+│   │   ├── auto-eq-matcher.ts                 # Room-mode inverse PEQ synthesizer & per-culprit Notch EQ builder
+│   │   ├── mixer-patch-storage.ts             # Named Mixer Input Patch presets & deviceId/label affinity storage
 │   │   ├── union-source.ts                    # Vector Avg, Power Avg, Sum, Subtract, Cascade, dB Diff, Min/Max
 │   │   ├── calibration-manager.ts             # Calibration file import/delete & active slot assignment
 │   │   ├── workspace-session.ts               # Tier 2 localStorage ('web-sound-meter:workspace:v1')
@@ -86,6 +90,7 @@ apps/WebSoundMeter/
 │       ├── keyboard-shortcuts.ts              # Shortcut bindings via @foh/ui shortcut-router
 │       ├── sidebar-view.ts                    # Tuning Mode sidebar built on @foh/ui renderEntityTree
 │       ├── show-sidebar-view.ts               # Show Mode compliance dashboard & Feedback Watch ring log
+│       ├── mixer-watch-modal.ts               # 32-ch Mixer Input Watch & Named Patch Presets dialog
 │       ├── topbar/                            # Input routing, generator, and live SPL/Leq meter groups
 │       └── inspectors/                        # Live, Calibration, Stored (.frd), EQ (dsp-chain-editor) & Union views
 └── tests/

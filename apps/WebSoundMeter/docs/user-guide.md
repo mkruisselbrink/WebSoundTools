@@ -36,7 +36,7 @@ Each mode maintains its own active chart stack (`1` to `3` panels), selectable v
 - **Input Selector:** Clicking the audio interface pill opens the **Audio Input & Reference** popover to switch between **`Built-in Demo Simulator`** and any detected multi-channel **`Hardware`** audio interface (`getUserMedia` with echo cancellation, noise suppression, and auto-gain disabled at the device's native sample rate).
 - **Hardware Generator Auto-Mute:** Switching from `Built-in Demo Simulator` to any physical hardware device automatically sets **`Gen`** to **`OFF`** so pink noise never fires unexpectedly into an unmuted PA.
 - **Global Reference Channel (`Ref`):** Shown in Hardware mode. Selects **`Internal Signal Generator`** (internal digital reference) or any physical input **`In Ch 1..N`** (physical analog/digital loopback or console mix feed) as the dual-FFT reference for transfer-function magnitude, phase, coherence, impulse deconvolution, and delay estimation.
-- **Concurrent Tap Capacity:** The real-time `AudioWorklet` ring buffer taps up to **`8` distinct physical hardware input channels** simultaneously—supporting up to **`7` live measurement microphones + `1` physical reference loopback channel** (or `8` microphones when `Ref` is set to `Internal Signal Generator`).
+- **Concurrent Tap Capacity:** Supports up to **`8` full dual-FFT Live Measurement slots** plus up to **`32` watched console USB channels** in **Mixer Input Watch**—either sharing the same multi-channel interface (`up to 40` active taps) or opening a **separate secondary USB mixer interface** alongside a 2-channel FOH measurement interface on desktop browsers.
 - **`Pause` / `Resume` (`Space`):** Freezes live capture, spectrum integration, and hardware generator output simultaneously.
 
 ### Signal Generator (`Gen` Split-Pill)
@@ -93,7 +93,10 @@ The **Sources (N)** card lists all active sources with visibility checkboxes, co
 - **Preamp Headroom (`dBFS`):** Live pre-gain RMS/Peak bars and **`OK` / `CLIP`** (`≥ -0.5 dBFS`) indicators for both **`Meas M`** and **`Ref R`**, independent of software `Input Gain (dB)`.
 - **Delay Alignment (`Ref Delay (ms)` & `Find & Apply Delay`):** Displays deconvolved **`Est Delay`** in `ms` (with **`(−POL)`** badge when acoustic polarity is inverted). Clicking **`Find & Apply Delay`** (`D`) locks `Ref Delay` to unwrap phase and center the impulse peak at `0.0 ms`.
 - **`Input Gain (dB)` & `Polarity`:** Applies software trim and polarity flip (`Normal (+)` / `Inverted (−180°)`). Note: adjusting `Input Gain (dB)` shifts **both** broadband SPL readouts and transfer-function Magnitude (`dB`), so set SPL calibration gain before capturing baseline TF traces.
-- **`Feedback Watch Mode`:** `FOH Normal (Balanced)`, `Monitor / Wedge Sensitive`, `Custom Thresholds`, or `Off`.
+- **`Feedback Watch Mode` & `Feedback Ref (R) Role`:**
+  - **`Feedback Watch Mode`:** `FOH Concert Strict` (near-zero false alarms on vocals/music), `Soundcheck / Wedge Ring-Out` (catches subtle post-syllable overhang rings), `Custom Thresholds`, or `Off`.
+  - **`Feedback Ref (R) Role`:** `Console Mix (Tag In-Mix vs Stage)` (default — never suppresses PA feedback present in the console mix, instead tagging each ring as `In Mix` vs. `Stage Only`), `Playback / Stem Veto` (suppresses tones present in non-acoustic backing-track/synth stems), or `Ignore Reference`.
+- **`Mixer Input Watch (Culprit Attribution)`:** Opens the **Mixer Input Watch & Patch Presets** dialog from either Tuning or Show mode to scan up to `32` console USB direct outs, save named channel patches per console or band, and pinpoint specifically which open input channel is driving a feedback loop.
 - **`Mic Calibration Curve`:** Selects a saved `.cal` / `.txt` / `.frd` capsule correction curve. Calibration curves correct frequency-domain **Transfer Function** and **RTA** traces; broadband `IEC 61672` SPL meters measure raw time-domain pressure directly from `Input Gain` calibration.
 
 #### Advanced Measurement Settings
@@ -146,13 +149,17 @@ Transform and smoothing settings are synchronized across all live slots so multi
 
 ![Live Show Mode Hardware Safety Lockout, Seeded 15m SPL History & Feedback Callouts](./images/05-live-show-spl-and-feedback.png)
 
-### Live Mics & SPL Watch Card
-- **`+ Mic`:** Adds concurrent show monitoring microphones (`LAeq15` and `LAF` badges shown per row), with per-slot hardware channel/reference routing and **`FB Watch`** mode (`FOH Normal`, `Monitor / Wedge Sensitive`, `Custom`, `Off`).
+### Live Mics, SPL Watch & Mixer Input Culprit Attribution
+- **`+ Mic`:** Adds concurrent show monitoring microphones (`LAeq15` and `LAF` badges shown per row), with per-slot hardware channel/reference routing and **`FB Watch`** mode (`FOH Concert Strict`, `Soundcheck / Wedge Ring-Out`, `Custom`, `Off`).
+- **`Mixer Watch` (`Mixer Input Watch & Patch Presets`):**
+  - **Same or Separate USB Device:** Monitor up to **`32` console USB inputs** on your main multi-channel interface *or* select a **Separate USB Mixer** interface while keeping your calibrated FOH mic on a dedicated 2-channel measurement interface.
+  - **Saved Input Patch Presets:** Save, update, and switch named channel label patches (e.g., `Festival Headliner Vox`, `Sunday Lavs`) with automatic recall whenever that USB mixer is reconnected, plus manual preset switching across acts.
+  - **Pre-Fader vs. Post-Fader + Mix Bus Guard:** Supports default **Pre-Fader Direct Outs** (tracking causal electrical Mix-Bus coupling so muted spare mics near loud wedges are ignored) and **Post-Fader / Post-Mute Outs**.
 
 ### Feedback Ring Log & Callout Flags
-- **RTA Callout Flags:** Active rings display center frequency and nearest **ISO 31-band GEQ** center (e.g., `◆ 2.48 kHz (ISO 2.5 kHz)` on line 1; prominence `+dB`, estimated `Q`, musical pitch `D#7`, and mic name on line 2).
-- **Feedback Ring Log Card:** Lists latched and active rings with severity badges (`◆` critical runaway feedback, `▲` persistent ring, `●` held history), exact musical pitch + cents offset (`D#7 (-6c)`), and **`Notch EQ`**.
-- **`Notch EQ` Action:** Creates (or updates) a `Feedback Notch (<Mic Name>)` Virtual EQ source with a narrowband peaking cut (`Q = 8..24`) at the ring frequency. Clicking **`Notch EQ`** repeatedly on the same frequency deepens the cut by **`-3.0 dB`** per click (down to `-18 dB`).
+- **RTA Callout Flags:** Active rings display center frequency, nearest **ISO 31-band GEQ** center, and—when **Mixer Input Watch** is active—the **#1 culprit channel + confidence `%`** (`◆ 2.48 kHz (ISO 2.5 kHz) • Stage Vox 2 (86%)`), plus prominence `+dB`, estimated `Q`, musical pitch `D#7`, and loop location (`In Mix` vs. `Stage Only`).
+- **Feedback Ring Log Card:** Deduplicates simultaneous acoustic bleed across mics into one unified alert with severity badges (`◆` critical runaway feedback, `▲` persistent/overhang ring, `●` held history), culprit & runner-up breakdown, exact musical pitch + cents offset (`D#7 (-6c)`), and **`Notch EQ`**.
+- **`Notch EQ` Action:** Creates (or updates) a per-culprit Virtual EQ cheat-sheet (`Notch — Stage Vox 2 (Ch 2)`, or `Feedback Notch (<Mic Name>)` in single-mic mode) with a narrowband peaking cut (`Q = 8..24`) at the ring frequency. Clicking **`Notch EQ`** repeatedly on the same frequency deepens the cut by **`-3.0 dB`** per click (down to `-18 dB`).
 
 ### Show Limits & Log Card
 - **Compliance Alert Metric:** `LAeq,15m` (default), `LAeq,60m`, `LAeq,5m`, `LAeq,1m`, `LCeq,1m`, `LAF`, or `LZpeak`.

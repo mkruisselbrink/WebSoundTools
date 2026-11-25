@@ -12,19 +12,19 @@ Once system tuning is complete and doors are about to open, **WebSoundMeter** (`
 
 ---
 
-## 2. Ringing Out Monitors & Vocal Mics Before Doors
+## 2. Ringing Out Monitors & Pinpointing Culprit Mixer Inputs
 
-Acoustic feedback begins as a high-`Q`, persistent narrowband sinusoid before turning into a loud howl. Rather than flagging every sustained guitar or synth note, **WebSoundMeter** runs a **5-stage discriminator** (prominence above local spectral median, sub-bin parabolic frequency stability, temporal persistence, amplitude kurtosis, and harmonic overtone rejection) to isolate runaway feedback rings:
+Acoustic feedback begins as a phase-locked, high-`Q` narrowband resonance or post-syllable overhang before turning into a loud howl. Rather than flagging sustained vocals or synth notes, **WebSoundMeter** runs unaveraged phase-vocoder pitch-stability tracking, sparse-safe prominence, and a 2nd–6th harmonic comb sieve—working with **just a single measurement mic** or **connected over USB to your console** to tell you specifically which open channel is feeding back:
 
-1. **Patching for Ring-Out:**
-   - **FOH / Room Mic:** Keep your calibrated measurement mic on `In Ch 1` (`FB Watch: FOH Normal`).
-   - **Monitor World / Cue Wedge:** Click **`+ Mic`** in **`Live Mics & SPL Watch`**, assign `In Ch 2` to your console `Solo/Cue` bus or stage mic, and set **`FB Watch`** to **`Monitor / Wedge Sensitive`** for fast wedge ring-out.
-   - *(Practicing without hardware? Set **`SIM RIG`** to **`6. Live Show Feedback Ring (2.5 kHz & 630 Hz)`**.)*
+1. **Single-Mic Setup vs. Multi-Channel Mixer Input Watch:**
+   - **Single Measurement Mic (FOH or Stage):** Keep your calibrated mic on `In Ch 1` (`FB Watch: FOH Concert Strict` during a show, or `Soundcheck / Wedge Ring-Out` before doors). If your console Main L/R mix is patched to `Ref (R)` for live Transfer Function, leave **`Feedback Ref (R) Role`** on **`Console Mix (Tag In-Mix vs Stage)`** so closed-loop PA rings are tagged `In Mix` while monitor-only rings are tagged `Stage Only` *(use `Playback / Stem Veto` only when `R` carries non-acoustic backing tracks)*.
+   - **Multi-Channel Console USB (`Mixer Watch`):** Click **`Mixer Watch`** (available in both **`🛠 Tuning`** and **`🎚 Show`**) to watch up to **`32` console USB direct outs**—either on the same multi-channel interface or on a **Separate USB Mixer** alongside your 2-channel FOH measurement interface. Label your open stage channels (`Lead Vox`, `Stage Vox 2`, `Acoustic Gtr`…), uncheck DI/playback channels, and click **`Save Preset`** so your channel names recall automatically whenever that console is connected (or switch saved band patches manually between sets).
+   - *(Practicing without hardware? Enable **`Mixer Watch`** and set **`SIM RIG`** to **`6. Live Show Feedback Ring (2.5 kHz & 630 Hz)`** to watch the 4-channel stage simulator ignore vibrato vocals and muted wedge bleed while pinpointing `Stage Vox 2 · Ch 2`!)*
 2. **Reading RTA Callout Flags vs. the Feedback Ring Log:**
-   - On the **`Spectrum (RTA)`** chart, each active ring displays a floating callout flag showing exact center frequency + nearest **ISO 31-band GEQ** slider (`◆ 2.48 kHz (ISO 2.5 kHz)`) on line 1, and prominence (`+33.3dB`), estimated `Q`, musical note (`D#7`), and mic name on line 2.
-   - In the **`Feedback Ring Log`** card on the right, each row adds severity badges (`◆` runaway feedback, `▲` persistent ring, `●` latched hold) and fine **cents offset** (`D#7 (-6c)`, `D#5 (+21c)`) to distinguish out-of-key cavity resonances from musical pitch centers.
-3. **One-Click Surgical Notch (`Notch EQ`):**
-   - Click **`Notch EQ`** next to any ring in **`Feedback Ring Log`** to insert a narrowband peaking cut (`Q = 8..24`) into an auto-created `Feedback Notch (<Mic Name>)` Virtual EQ source. Clicking **`Notch EQ`** again on the same ring deepens the notch by `-3.0 dB` per click (down to `-18 dB`).
+   - Simultaneous acoustic bleed across multiple open mics is merged into **one unified alert** showing center frequency, nearest **ISO 31-band GEQ** slider, and top culprit confidence (`◆ 2.48 kHz (ISO 2.5 kHz) • Stage Vox 2 (86%)`).
+   - In **`Feedback Ring Log`**, each row shows severity (`◆` runaway feedback, `▲` overhang/persistent ring, `●` 5s latched hold), culprit + runner-up channels, `In Mix` / `Stage Only` tag, and fine **cents offset** (`D#7 (-6c)`).
+3. **Per-Channel Surgical Notch (`Notch EQ`):**
+   - Click **`Notch EQ`** next to any ring to insert a narrowband peaking cut (`Q = 8..24`) into an isolated per-culprit Virtual EQ cheat-sheet (`Notch — Stage Vox 2 (Ch 2)`, or `Feedback Notch (<Mic Name>)` in single-mic mode). Clicking **`Notch EQ`** again on the same frequency deepens the notch by `-3.0 dB` per click (down to `-18 dB`) so you can copy clean strip PEQ values (`Hz`, `Q`, `dB`) straight to that mixer channel.
 
 ![Show Topbar in LIMIT State, RTA Feedback Callout Flags & Ring Log Notch EQ](./images/t05-02-show-limit-and-ring-log.png)
 
