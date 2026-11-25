@@ -84,15 +84,15 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
   const canDeleteSlot = props.liveSlots.length > 1;
 
   return html`
-    <div class="section-card card-live-mics" data-testid="card-live-mics-watch">
-      <div class="section-header">
+    <div class="foh-form-section card-live-mics" data-testid="card-live-mics-watch">
+      <div class="foh-form-section-title">
         <span>Live Mics & SPL Watch (${props.liveSlots.length})</span>
         <div style="display:flex;align-items:center;gap:4px;">
           ${props.onOpenMixerWatch
             ? html`
                 <button
                   type="button"
-                  class=${props.mixerWatchEnabled ? 'btn-accent' : ''}
+                  class="foh-btn foh-btn-xs ${props.mixerWatchEnabled ? 'foh-btn-accent' : ''}"
                   data-testid="btn-open-mixer-watch"
                   title="Configure up to 32 watched mixer USB inputs & patch presets for culprit attribution"
                   @click=${props.onOpenMixerWatch}
@@ -107,6 +107,7 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
             ? html`
                 <button
                   type="button"
+                  class="foh-btn foh-btn-xs"
                   data-testid="btn-show-add-meas"
                   title="Add Live Measurement Microphone"
                   @click=${props.onAddLiveSource}
@@ -162,7 +163,8 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
                   ${canDeleteSlot && props.onDeleteSlot
                     ? html`
                         <button
-                          style="padding:1px 5px;color:#f43f5e;font-size:10px;"
+                          type="button"
+                          class="foh-btn foh-btn-xs foh-btn-danger"
                           title="Remove ${slot.name}"
                           @click=${(e: Event) => {
                             e.stopPropagation();
@@ -311,7 +313,7 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
                   </label>
                   <button
                     type="button"
-                    class="show-cal-btn"
+                    class="foh-btn foh-btn-xs show-cal-btn"
                     data-testid="btn-show-cal-${slot.id}"
                     data-popover-trigger="show-cal-pop-${slot.id}"
                     popovertarget="show-cal-pop-${slot.id}"
@@ -367,10 +369,12 @@ export function renderFeedbackRingLogCard(
   >
 ): TemplateResult {
   return html`
-    <div class="section-card card-ring-log" data-testid="card-feedback-ring-log">
-      <div class="section-header">
+    <div class="foh-form-section card-ring-log" data-testid="card-feedback-ring-log">
+      <div class="foh-form-section-title">
         <span>Feedback Ring Log (${props.feedbackRingLog.length})</span>
         <button
+          type="button"
+          class="foh-btn foh-btn-xs"
           data-testid="btn-clear-ring-log"
           ?disabled=${props.feedbackRingLog.length === 0}
           @click=${props.onClearFeedbackRingLog}
@@ -450,7 +454,7 @@ export function renderFeedbackRingLogCard(
                     </div>
                     <button
                       type="button"
-                      class="btn-notch-eq"
+                      class="foh-btn foh-btn-xs btn-notch-eq"
                       data-testid="btn-notch-eq-${track.id}"
                       title="Insert or deepen surgical peaking notch in Virtual EQ for ${track.notchTargetLabel ?? track.slotName}"
                       @click=${() => props.onApplyFeedbackNotch(track)}
@@ -473,11 +477,13 @@ export function renderShowLimitsExportCard(
   >
 ): TemplateResult {
   return html`
-    <div class="section-card card-show-limits" data-testid="card-show-limits-export">
-      <div class="section-header">
+    <div class="foh-form-section card-show-limits" data-testid="card-show-limits-export">
+      <div class="foh-form-section-title">
         <span>Show Limits & Log</span>
         <div style="display:flex;gap:4px;">
           <button
+            type="button"
+            class="foh-btn foh-btn-xs"
             data-testid="btn-reset-show-log"
             title="Clear 4-hour SPL history and IndexedDB show checkpoint"
             @click=${props.onResetShowLog}
@@ -485,7 +491,8 @@ export function renderShowLimitsExportCard(
             Reset Log
           </button>
           <button
-            class="btn-primary-action"
+            type="button"
+            class="foh-btn foh-btn-xs foh-btn-primary"
             data-testid="btn-export-spl-csv"
             title="Download 1-second SPL & Rolling Leq CSV log"
             @click=${props.onExportSplCsv}
@@ -495,8 +502,8 @@ export function renderShowLimitsExportCard(
         </div>
       </div>
 
-      <div class="prop-grid">
-        <div class="prop-field full-width">
+      <div class="foh-xy-grid">
+        <div class="foh-mini-field full-width">
           <label for="wsm-spl-alert-metric">Compliance Alert Metric</label>
           <select
             id="wsm-spl-alert-metric"
@@ -519,7 +526,7 @@ export function renderShowLimitsExportCard(
           </select>
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-spl-warn-db">▲ Warn Threshold (dB)</label>
           <input
             type="number"
@@ -538,7 +545,7 @@ export function renderShowLimitsExportCard(
           />
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-spl-limit-db">◆ Limit Threshold (dB)</label>
           <input
             type="number"

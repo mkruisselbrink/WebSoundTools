@@ -271,7 +271,7 @@ export function renderMobileShowWorkspace(
               </button>
               <button
                 type="button"
-                class="btn-notch-eq"
+                class="foh-btn foh-btn-xs btn-notch-eq"
                 @click=${() => props.onApplyFeedbackNotch(topActiveRing)}
               >
                 Notch EQ

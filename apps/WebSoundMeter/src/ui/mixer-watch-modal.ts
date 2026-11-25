@@ -196,8 +196,8 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
             : nothing}
 
         <!-- 2. Audio Device & Named Patch Preset Controls -->
-        <div class="prop-grid" style="margin-top:4px;">
-          <div class="prop-field">
+        <div class="foh-xy-grid" style="margin-top:4px;">
+          <div class="foh-mini-field">
             <label for="wsm-mixer-watch-device">Mixer Audio Interface</label>
             <select
               id="wsm-mixer-watch-device"
@@ -243,7 +243,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
             </select>
           </div>
 
-          <div class="prop-field">
+          <div class="foh-mini-field">
             <label for="wsm-mixer-watch-preset">Saved Input Patch Preset</label>
             <div style="display:flex;gap:4px;">
               <select
@@ -279,6 +279,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
                 ? html`
                     <button
                       type="button"
+                      class="foh-btn foh-btn-xs"
                       title="Save current channel names & settings back into '${activeProfile.name}'"
                       @click=${props.onUpdateActivePreset}
                     >
@@ -286,7 +287,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
                     </button>
                     <button
                       type="button"
-                      style="color:#f43f5e;"
+                      class="foh-btn foh-btn-xs foh-btn-danger"
                       title="Delete preset '${activeProfile.name}'"
                       @click=${props.onDeleteActivePreset}
                     >
@@ -298,7 +299,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
           </div>
 
           <!-- Save New Patch Preset Form -->
-          <div class="prop-field full-width">
+          <div class="foh-mini-field full-width">
             <form
               class="mixer-preset-save-form"
               aria-label="Save New Mixer Input Patch Preset"
@@ -340,7 +341,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
               />
               <button
                 type="submit"
-                class="btn-primary"
+                class="foh-btn foh-btn-primary"
                 data-testid="btn-save-mixer-preset"
               >
                 Save Preset
@@ -349,7 +350,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
           </div>
 
           <!-- 3. Console USB Tap Point, Mix Bus Reference & Sensitivity -->
-          <div class="prop-field">
+          <div class="foh-mini-field">
             <label for="wsm-mixer-tap-mode">Console USB Tap Point</label>
             <select
               id="wsm-mixer-tap-mode"
@@ -366,7 +367,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
             </select>
           </div>
 
-          <div class="prop-field">
+          <div class="foh-mini-field">
             <label for="wsm-mixer-bus-ch">Console Mix / Wedge Bus Ref</label>
             <select
               id="wsm-mixer-bus-ch"
@@ -401,7 +402,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
             </select>
           </div>
 
-          <div class="prop-field full-width">
+          <div class="foh-mini-field full-width">
             <label for="wsm-mixer-sensitivity">Stage Input Watch Sensitivity</label>
             <select
               id="wsm-mixer-sensitivity"
@@ -430,21 +431,34 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
             playback channels
           </span>
           <div class="mixer-batch-btns">
-            <button type="button" @click=${() => applyBatchSelection((i) => i < 4)}>
+            <button
+              type="button"
+              class="foh-btn foh-btn-xs"
+              @click=${() => applyBatchSelection((i) => i < 4)}
+            >
               Ch 1–4
             </button>
-            <button type="button" @click=${() => applyBatchSelection((i) => i < 16)}>
+            <button
+              type="button"
+              class="foh-btn foh-btn-xs"
+              @click=${() => applyBatchSelection((i) => i < 16)}
+            >
               Ch 1–16
             </button>
             <button
               type="button"
+              class="foh-btn foh-btn-xs"
               title="Enable channels currently showing audio above -58 dBFS"
               @click=${() =>
                 applyBatchSelection((i) => (channelLevelsDbFs[i] ?? -120) > -58)}
             >
               Watch Active
             </button>
-            <button type="button" @click=${() => applyBatchSelection(() => false)}>
+            <button
+              type="button"
+              class="foh-btn foh-btn-xs"
+              @click=${() => applyBatchSelection(() => false)}
+            >
               Clear
             </button>
           </div>
@@ -477,7 +491,7 @@ export function renderMixerWatchModal(props: MixerWatchModalProps): TemplateResu
                   class="mixer-ch-led ${isHot ? 'hot' : isSignal ? 'sig' : ''}"
                   title=${isSignal ? `${db.toFixed(1)} dBFS` : 'Silent'}
                 ></span>
-                <label for=${nameId} class="visually-hidden">
+                <label for=${nameId} class="foh-sr-only">
                   Channel ${idx + 1} Label
                 </label>
                 <input

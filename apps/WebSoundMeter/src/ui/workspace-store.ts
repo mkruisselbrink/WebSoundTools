@@ -7,6 +7,7 @@
  * state controller for `<web-sound-meter-app>`.
  */
 
+import { downloadTextFile } from '@foh/ui';
 import { PlotType } from '../charts/plot-types.js';
 import type {
   InputSourceMode,
@@ -36,6 +37,8 @@ import {
   syncBrowserUrlState,
 } from './url-state.js';
 
+export { downloadTextFile };
+
 export type LayoutPreset =
   | 'tf-dual'
   | 'pa-triple'
@@ -56,6 +59,21 @@ export class WorkspaceLayoutController {
   splWeighting: WeightingCurve = 'A';
   splTime: MeterIntegrationTime = 'Fast';
   audioInputMode: InputSourceMode = 'simulator';
+  revision = 0;
+
+  private readonly listeners = new Set<() => void>();
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  public notify(): void {
+    this.revision++;
+    for (const fn of this.listeners) {
+      fn();
+    }
+  }
 
   hydrateFromSessionAndUrl(
     session: WorkspaceSessionSnapshot,
@@ -105,6 +123,7 @@ export class WorkspaceLayoutController {
     this.audioInputMode = initialUrl.audioInputMode;
     this.splWeighting = initialUrl.splWeighting;
     this.splTime = initialUrl.splTime;
+    this.notify();
 
     return initialUrl;
   }
@@ -127,6 +146,7 @@ export class WorkspaceLayoutController {
       this.layoutPreset = this.tuningLayoutPreset;
       this.chartPlotTypes = [...this.tuningChartPlotTypes];
     }
+    this.notify();
     return true;
   }
 
@@ -140,6 +160,7 @@ export class WorkspaceLayoutController {
       this.tuningLayoutPreset = preset;
       this.tuningChartPlotTypes = [...this.chartPlotTypes];
     }
+    this.notify();
   }
 
   updateChartPlotTypeAt(index: number, plotType: PlotType): void {
@@ -151,6 +172,24 @@ export class WorkspaceLayoutController {
     } else {
       this.tuningChartPlotTypes = [...updated];
     }
+    this.notify();
+  }
+
+  setSplWeighting(curve: WeightingCurve): void {
+    if (this.splWeighting === curve) return;
+    this.splWeighting = curve;
+    this.notify();
+  }
+
+  setSplTime(time: MeterIntegrationTime): void {
+    if (this.splTime === time) return;
+    this.splTime = time;
+    this.notify();
+  }
+
+  updateSplThresholds(partial: Partial<SplAlertThresholds>): void {
+    this.splAlertThresholds = { ...this.splAlertThresholds, ...partial };
+    this.notify();
   }
 
   buildUrlViewState(params: {
@@ -203,22 +242,4 @@ export class WorkspaceLayoutController {
       ...(params.mixerWatch ? { mixerWatch: params.mixerWatch } : {}),
     });
   }
-}
-
-export function downloadTextFile(
-  content: string,
-  filename: string,
-  mimeType: string
-): void {
-  if (typeof document === 'undefined' || typeof URL === 'undefined') return;
-  const blob = new Blob([content], { type: mimeType });
-  if (typeof URL.createObjectURL !== 'function') return;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }

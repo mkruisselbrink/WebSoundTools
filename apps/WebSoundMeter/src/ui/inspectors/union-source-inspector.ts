@@ -34,13 +34,14 @@ export function renderUnionInspector(
   const selectedIds = new Set(union.sourceIds);
 
   return html`
-    <div class="section-card" data-testid="inspector-union-source">
-      <div class="section-header">
+    <div class="foh-form-section" data-testid="inspector-union-source">
+      <div class="foh-form-section-title">
         <span>${union.name}</span>
         ${handlers.onDelete
           ? html`
               <button
-                style="color:#f43f5e;"
+                type="button"
+                class="foh-btn foh-btn-xs foh-btn-danger"
                 @click=${() => handlers.onDelete?.(union.id)}
               >
                 Delete
@@ -49,8 +50,8 @@ export function renderUnionInspector(
           : nothing}
       </div>
 
-      <div class="prop-grid">
-        <div class="prop-field full-width">
+      <div class="foh-xy-grid">
+        <div class="foh-mini-field full-width">
           <label for="wsm-union-operation">Math Operation</label>
           <select
             id="wsm-union-operation"
@@ -83,7 +84,7 @@ export function renderUnionInspector(
 
         ${isBinaryOp
           ? html`
-              <div class="prop-field">
+              <div class="foh-mini-field">
                 <label for="wsm-union-source-a">Source A</label>
                 <select
                   id="wsm-union-source-a"
@@ -106,7 +107,7 @@ export function renderUnionInspector(
                 </select>
               </div>
 
-              <div class="prop-field">
+              <div class="foh-mini-field">
                 <label for="wsm-union-source-b">Source B</label>
                 <select
                   id="wsm-union-source-b"
@@ -131,11 +132,11 @@ export function renderUnionInspector(
             `
           : html`
               <div
-                class="prop-field full-width"
+                class="foh-mini-field full-width"
                 role="group"
                 aria-label="Sources to Combine"
               >
-                <span class="prop-label">Sources to Combine (${union.sourceIds.length} selected)</span>
+                <span>Sources to Combine (${union.sourceIds.length} selected)</span>
                 <div class="union-source-checklist" data-testid="union-source-checklist">
                   ${candidates.map((s) => {
                     const checked = selectedIds.has(s.id);
@@ -166,7 +167,7 @@ export function renderUnionInspector(
                           }}
                         />
                         <span
-                          class="source-color-dot"
+                          class="foh-swatch"
                           style="background:${s.color}"
                         ></span>
                         <span class="source-name">${s.name}</span>

@@ -19,13 +19,15 @@ export function renderStoredInspector(
   handlers: StoredInspectorHandlers
 ): TemplateResult {
   return html`
-    <div class="section-card" data-testid="inspector-stored-source">
-      <div class="section-header">
+    <div class="foh-form-section" data-testid="inspector-stored-source">
+      <div class="foh-form-section-title">
         <span>Stored Trace</span>
         <div style="display:flex;gap:4px;">
           ${handlers.onExportFrd
             ? html`
                 <button
+                  type="button"
+                  class="foh-btn foh-btn-xs"
                   data-testid="btn-export-stored-frd"
                   title="Export Magnitude + Phase trace as .frd file"
                   @click=${() => handlers.onExportFrd?.(stored)}
@@ -34,14 +36,18 @@ export function renderStoredInspector(
                 </button>
               `
             : nothing}
-          <button style="color:#f43f5e;" @click=${() => handlers.onDelete(stored.id)}>
+          <button
+            type="button"
+            class="foh-btn foh-btn-xs foh-btn-danger"
+            @click=${() => handlers.onDelete(stored.id)}
+          >
             Delete
           </button>
         </div>
       </div>
 
-      <div class="prop-grid">
-        <div class="prop-field full-width">
+      <div class="foh-xy-grid">
+        <div class="foh-mini-field full-width">
           <label for="wsm-stored-name">Trace Name</label>
           <input
             type="text"
@@ -56,7 +62,7 @@ export function renderStoredInspector(
           />
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-stored-gain">Gain Offset (dB)</label>
           <input
             type="number"
@@ -72,7 +78,7 @@ export function renderStoredInspector(
           />
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-stored-delay">Delay Offset (ms)</label>
           <input
             type="number"
@@ -88,7 +94,9 @@ export function renderStoredInspector(
           />
         </div>
       </div>
-      <div style="font-size:11px;color:#94a3b8;">${stored.notes}</div>
+      ${stored.notes
+        ? html`<div class="foh-insp-subtitle">${stored.notes}</div>`
+        : nothing}
     </div>
   `;
 }

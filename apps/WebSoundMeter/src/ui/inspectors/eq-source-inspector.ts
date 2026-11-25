@@ -35,12 +35,13 @@ export function renderEqInspector(
   const dsp = resolveEqDspConfig(eq);
 
   return html`
-    <div class="section-card" data-testid="inspector-eq-source">
-      <div class="section-header">
+    <div class="foh-form-section" data-testid="inspector-eq-source">
+      <div class="foh-form-section-title">
         <span>${eq.name}</span>
         <div style="display:flex;gap:4px;">
           <button
-            class="btn-accent"
+            type="button"
+            class="foh-btn foh-btn-xs foh-btn-accent"
             data-testid="btn-auto-flatten-eq"
             title="Synthesize subtractive parametric EQ bands for broad resonances on the target trace"
             @click=${() => handlers.onAutoFlatten(eq.id)}
@@ -50,7 +51,8 @@ export function renderEqInspector(
           ${handlers.onDelete
             ? html`
                 <button
-                  style="color:#f43f5e;"
+                  type="button"
+                  class="foh-btn foh-btn-xs foh-btn-danger"
                   @click=${() => handlers.onDelete?.(eq.id)}
                 >
                   Delete
@@ -60,8 +62,10 @@ export function renderEqInspector(
         </div>
       </div>
 
-      <div class="prop-field full-width">
-        <label for="wsm-eq-target-source">Apply Virtual EQ To Source</label>
+      <div class="foh-field-row" style="margin-bottom:8px;">
+        <label class="foh-field-label" for="wsm-eq-target-source">
+          Apply Virtual EQ To Source
+        </label>
         <select
           id="wsm-eq-target-source"
           name="eq-target-source"

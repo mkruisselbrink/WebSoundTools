@@ -125,13 +125,15 @@ export function renderLiveMeasurementInspector(
   const showAdvanced = handlers.showAdvanced ?? false;
 
   return html`
-    <div class="section-card" data-testid="inspector-live-measurement">
-      <div class="section-header">
+    <div class="foh-form-section" data-testid="inspector-live-measurement">
+      <div class="foh-form-section-title">
         <span>${slot ? `${slot.name} Settings` : 'Live Measurement Settings'}</span>
         <div style="display:flex;gap:4px;">
           ${handlers.onCaptureTrace
             ? html`
                 <button
+                  type="button"
+                  class="foh-btn foh-btn-xs"
                   data-testid="btn-capture-trace"
                   title="Capture current trace into Stored Sources (Shortcut: C)"
                   @click=${handlers.onCaptureTrace}
@@ -140,11 +142,18 @@ export function renderLiveMeasurementInspector(
                 </button>
               `
             : nothing}
-          <button @click=${handlers.onResetAveraging}>Reset Avg</button>
+          <button
+            type="button"
+            class="foh-btn foh-btn-xs"
+            @click=${handlers.onResetAveraging}
+          >
+            Reset Avg
+          </button>
           ${handlers.canDeleteSlot
             ? html`
                 <button
-                  style="color:#f43f5e;"
+                  type="button"
+                  class="foh-btn foh-btn-xs foh-btn-danger"
                   data-testid="btn-delete-live-slot"
                   title="Remove this Live Measurement source"
                   @click=${handlers.onDeleteSlot}
@@ -156,10 +165,10 @@ export function renderLiveMeasurementInspector(
         </div>
       </div>
 
-      <div class="prop-grid">
+      <div class="foh-xy-grid">
         ${slot
           ? html`
-              <div class="prop-field full-width">
+              <div class="foh-mini-field full-width">
                 <label for="wsm-live-slot-name">Measurement Name</label>
                 <input
                   type="text"
@@ -177,7 +186,7 @@ export function renderLiveMeasurementInspector(
 
               ${inputMode === 'simulator'
                 ? html`
-                    <div class="prop-field full-width">
+                    <div class="foh-mini-field full-width">
                       <label for="wsm-live-slot-preset">Simulator Rig Preset</label>
                       <select
                         id="wsm-live-slot-preset"
@@ -207,7 +216,7 @@ export function renderLiveMeasurementInspector(
                     </div>
                   `
                 : html`
-                    <div class="prop-field full-width">
+                    <div class="foh-mini-field full-width">
                       <label for="wsm-live-slot-meas-ch">Meas Channel (M)</label>
                       <select
                         id="wsm-live-slot-meas-ch"
@@ -237,8 +246,8 @@ export function renderLiveMeasurementInspector(
             `
           : nothing}
 
-        <div class="prop-field full-width">
-          <span class="prop-label">Preamp Headroom (dBFS)</span>
+        <div class="foh-mini-field full-width">
+          <span>Preamp Headroom (dBFS)</span>
           <div class="dbfs-meter-strip" data-testid="input-dbfs-meter-strip">
             ${renderDbfsMeterRow(
               'Meas M',
@@ -265,7 +274,7 @@ export function renderLiveMeasurementInspector(
           </div>
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-ref-delay-ms">Ref Delay (ms)</label>
           <input
             type="number"
@@ -282,9 +291,8 @@ export function renderLiveMeasurementInspector(
           />
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <span
-            class="prop-label"
             data-testid="delay-estimate-readout"
             style="font-variant-numeric:tabular-nums;white-space:nowrap;"
           >
@@ -297,7 +305,8 @@ export function renderLiveMeasurementInspector(
               : nothing}
           </span>
           <button
-            class="btn-primary"
+            type="button"
+            class="foh-btn foh-btn-primary"
             data-testid="btn-apply-delay"
             title="Find propagation delay via cross-correlation and apply to Reference channel (Shortcut: D)"
             @click=${handlers.onFindAndApplyDelay}
@@ -306,7 +315,7 @@ export function renderLiveMeasurementInspector(
           </button>
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-input-gain-db">Input Gain (dB)</label>
           <input
             type="number"
@@ -322,17 +331,18 @@ export function renderLiveMeasurementInspector(
           />
         </div>
 
-        <div class="prop-field">
-          <span class="prop-label">Polarity</span>
+        <div class="foh-mini-field">
+          <span>Polarity</span>
           <button
-            class=${cfg.invertPolarity ? 'btn-active' : ''}
+            type="button"
+            class="foh-btn ${cfg.invertPolarity ? 'foh-btn-active' : ''}"
             @click=${() => handlers.onUpdateConfig({ invertPolarity: !cfg.invertPolarity })}
           >
             ${cfg.invertPolarity ? 'Inverted (−180°)' : 'Normal (+)'}
           </button>
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label
             for="wsm-spl-offset-db"
             title="Acoustic SPL corresponding to 0 dBFS — shifts SPL & Show Leq readouts without moving Transfer Function or RTA dBFS traces"
@@ -354,10 +364,11 @@ export function renderLiveMeasurementInspector(
           />
         </div>
 
-        <div class="prop-field">
-          <span class="prop-label">Acoustic SPL Cal</span>
+        <div class="foh-mini-field">
+          <span>Acoustic SPL Cal</span>
           <button
             type="button"
+            class="foh-btn"
             data-testid="btn-calibrate-spl"
             data-popover-trigger="wsm-inspector-cal-pop"
             popovertarget="wsm-inspector-cal-pop"
@@ -377,7 +388,7 @@ export function renderLiveMeasurementInspector(
           })}
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label for="wsm-feedback-mode">Feedback Watch Mode</label>
           <select
             id="wsm-feedback-mode"
@@ -398,7 +409,7 @@ export function renderLiveMeasurementInspector(
           </select>
         </div>
 
-        <div class="prop-field">
+        <div class="foh-mini-field">
           <label
             for="wsm-feedback-ref-mode"
             title="How Reference (R) relates to single-mic Feedback Watch"
@@ -425,12 +436,12 @@ export function renderLiveMeasurementInspector(
 
         ${handlers.onOpenMixerWatch
           ? html`
-              <div class="prop-field full-width">
+              <div class="foh-mini-field full-width">
                 <button
                   type="button"
-                  class=${handlers.mixerWatchEnabled ? 'btn-accent' : ''}
+                  class="foh-btn ${handlers.mixerWatchEnabled ? 'foh-btn-accent' : ''}"
                   data-testid="btn-tuning-mixer-watch"
-                  style="width:100%;display:flex;align-items:center;justify-content:space-between;"
+                  style="width:100%;justify-content:space-between;"
                   title="Watch up to 32 mixer USB inputs to pinpoint which channel is feeding back"
                   @click=${handlers.onOpenMixerWatch}
                 >
@@ -452,11 +463,13 @@ export function renderLiveMeasurementInspector(
           onDeleteCalibration: handlers.onDeleteCalibration,
         })}
 
-        <div class="prop-field full-width" style="margin-top:4px;">
+        <div class="foh-mini-field full-width" style="margin-top:4px;">
           <button
+            type="button"
+            class="foh-btn"
             data-testid="btn-toggle-advanced-meas"
             aria-expanded=${String(showAdvanced)}
-            style="width:100%;display:flex;align-items:center;justify-content:space-between;"
+            style="width:100%;justify-content:space-between;"
             @click=${handlers.onToggleAdvanced}
           >
             <span>Advanced Settings</span>

@@ -8,10 +8,20 @@
 
 export interface PopoverParentRootLike {
   querySelector(selector: string): Element | null;
+  querySelectorAll?(selector: string): ArrayLike<Element>;
 }
 
 export function hasOpenPopover(root: PopoverParentRootLike | null | undefined): boolean {
-  return Boolean(root?.querySelector('[popover][data-open]'));
+  if (!root) return false;
+  if (root.querySelector('[popover][data-open]')) return true;
+  if (typeof root.querySelectorAll === 'function') {
+    const children = root.querySelectorAll('*');
+    for (let i = 0; i < children.length; i++) {
+      const sr = (children[i] as HTMLElement).shadowRoot;
+      if (sr && hasOpenPopover(sr)) return true;
+    }
+  }
+  return false;
 }
 
 export function closePopoverById(

@@ -116,7 +116,7 @@ export function renderSplCalibratorPopover(params: {
             />
             <button
               type="button"
-              class="foh-tb-pill foh-tb-primary"
+              class="foh-btn foh-btn-primary"
               ?disabled=${!hasSignal}
               title="Set SPL Offset so current live signal reads this exact dB SPL"
               @click=${(e: Event) => {
@@ -134,7 +134,7 @@ export function renderSplCalibratorPopover(params: {
         <div class="foh-popover-actions" style="grid-template-columns:1fr 1fr 1fr;">
           <button
             type="button"
-            class="foh-tb-pill"
+            class="foh-btn"
             ?disabled=${!hasSignal}
             title="Calibrate to 94.0 dB SPL pistonphone"
             @click=${() => applyMatch(94.0)}
@@ -143,7 +143,7 @@ export function renderSplCalibratorPopover(params: {
           </button>
           <button
             type="button"
-            class="foh-tb-pill"
+            class="foh-btn"
             ?disabled=${!hasSignal}
             title="Calibrate to 114.0 dB SPL high-level pistonphone"
             @click=${() => applyMatch(114.0)}
@@ -152,7 +152,7 @@ export function renderSplCalibratorPopover(params: {
           </button>
           <button
             type="button"
-            class="foh-tb-pill"
+            class="foh-btn"
             title="Reset SPL Offset to default (0 dBFS = 100 dB SPL)"
             @click=${() => {
               onUpdateConfig({ splOffsetDb: 100.0 });
@@ -181,7 +181,7 @@ export function renderCalibrationSelectorSection(params: {
   } = params;
 
   return html`
-    <div class="prop-field full-width">
+    <div class="foh-mini-field full-width">
       <label for="wsm-calibration-curve">Mic Calibration Curve</label>
       <div style="display:flex;gap:4px;align-items:center;">
         <select
@@ -207,7 +207,8 @@ export function renderCalibrationSelectorSection(params: {
         ${activeCalibrationId
           ? html`
               <button
-                style="color:#f43f5e;"
+                type="button"
+                class="foh-btn foh-btn-xs foh-btn-danger"
                 title="Delete selected calibration curve"
                 @click=${() => onDeleteCalibration?.(activeCalibrationId)}
               >
@@ -251,7 +252,7 @@ export function renderAdvancedMeasurementSettings(params: {
   return html`
     ${slot && inputMode === 'hardware'
       ? html`
-          <div class="prop-field full-width">
+          <div class="foh-mini-field full-width">
             <label for="wsm-live-slot-ref-ch">Ref Channel (R) Override</label>
             <select
               id="wsm-live-slot-ref-ch"
@@ -288,15 +289,15 @@ export function renderAdvancedMeasurementSettings(params: {
       : nothing}
 
     <div
-      class="prop-field full-width"
-      style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
+      class="foh-mini-field full-width"
+      style="margin-top:4px;padding-top:6px;border-top:1px solid #1e293b;"
     >
-      <span class="prop-label" style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
+      <span style="color:#38bdf8;font-weight:600;text-transform:uppercase;">
         Shared Transform & Averaging (All Live Measurements)
       </span>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-fft-size">FFT Size</label>
       <select
         id="wsm-fft-size"
@@ -318,7 +319,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-window-type">Window Function</label>
       <select
         id="wsm-window-type"
@@ -336,7 +337,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-averaging-mode">Averaging Mode</label>
       <select
         id="wsm-averaging-mode"
@@ -354,7 +355,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-fifo-depth">FIFO Averages</label>
       <select
         id="wsm-fifo-depth"
@@ -374,7 +375,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-octave-smoothing">Octave Smoothing</label>
       <select
         id="wsm-octave-smoothing"
@@ -397,7 +398,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field">
+    <div class="foh-mini-field">
       <label for="wsm-tf-estimator">TF Estimator</label>
       <select
         id="wsm-tf-estimator"
@@ -415,15 +416,15 @@ export function renderAdvancedMeasurementSettings(params: {
     </div>
 
     <div
-      class="prop-field full-width"
-      style="margin-top:4px;padding-top:6px;border-top:1px solid #263554;"
+      class="foh-mini-field full-width"
+      style="margin-top:4px;padding-top:6px;border-top:1px solid #1e293b;"
     >
-      <span class="prop-label" style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
+      <span style="color:#94a3b8;font-weight:600;text-transform:uppercase;">
         Channel Pre-Filter & Calibration Upload
       </span>
     </div>
 
-    <div class="prop-field full-width">
+    <div class="foh-mini-field full-width">
       <label for="wsm-input-filter">Input Filter</label>
       <select
         id="wsm-input-filter"
@@ -442,7 +443,7 @@ export function renderAdvancedMeasurementSettings(params: {
       </select>
     </div>
 
-    <div class="prop-field full-width">
+    <div class="foh-mini-field full-width">
       <label for="wsm-calibration-upload">Upload New Calibration (.cal / .txt / .frd)</label>
       <input
         type="file"
