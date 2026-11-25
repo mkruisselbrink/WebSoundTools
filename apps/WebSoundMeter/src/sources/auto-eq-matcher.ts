@@ -222,15 +222,31 @@ export function mergeFeedbackTracksIntoRingLog(
 ): DetectedFeedbackTrack[] {
   let log = [...currentLog];
   for (const t of tracks) {
-    const existingIdx = log.findIndex(
-      (entry) =>
-        entry.slotId === t.slotId &&
-        (entry.id === t.id ||
-          Math.abs(entry.frequencyHz - t.frequencyHz) <= Math.max(15, t.frequencyHz * 0.025))
-    );
+    const freqTol = Math.max(15, t.frequencyHz * 0.029);
+    const existingIdx = log.findIndex((entry) => {
+      if (entry.id === t.id) return true;
+      const freqClose = Math.abs(entry.frequencyHz - t.frequencyHz) <= freqTol;
+      if (!freqClose) return false;
+      if (entry.slotId === t.slotId) return true;
+      // Merge same-frequency FOH mic + mixer culprit detections into one unified log entry
+      return Boolean(t.culprit || entry.culprit);
+    });
 
     if (existingIdx >= 0) {
       const prev = log[existingIdx];
+      const culprit =
+        t.culprit && prev.culprit
+          ? t.culprit.confidencePct >= prev.culprit.confidencePct
+            ? t.culprit
+            : prev.culprit
+          : (t.culprit ?? prev.culprit);
+      const loopLocation =
+        t.loopLocation === 'in-mix' || prev.loopLocation === 'in-mix'
+          ? 'in-mix'
+          : (t.loopLocation ?? prev.loopLocation);
+      const notchTargetKey = t.notchTargetKey ?? prev.notchTargetKey;
+      const notchTargetLabel = t.notchTargetLabel ?? prev.notchTargetLabel;
+
       const updated: DetectedFeedbackTrack = {
         ...t,
         state: prev.state === 'feedback' || t.state === 'feedback' ? 'feedback' : t.state,
@@ -238,6 +254,10 @@ export function mergeFeedbackTracksIntoRingLog(
         peakLevelDb: Math.max(prev.peakLevelDb, t.peakLevelDb),
         estimatedQ: Math.max(prev.estimatedQ, t.estimatedQ),
         durationMs: Math.max(prev.durationMs, t.durationMs),
+        ...(loopLocation ? { loopLocation } : {}),
+        ...(culprit ? { culprit } : {}),
+        ...(notchTargetKey ? { notchTargetKey } : {}),
+        ...(notchTargetLabel ? { notchTargetLabel } : {}),
       };
       log.splice(existingIdx, 1);
       log = [updated, ...log].slice(0, MAX_RING_LOG_ENTRIES);
@@ -251,7 +271,8 @@ export function mergeFeedbackTracksIntoRingLog(
 export function applyFeedbackNotchToEqList(
   eqSources: readonly EqualizerSourceConfig[],
   track: DetectedFeedbackTrack,
-  generateId: () => string
+  generateId: () => string,
+  fallbackTargetSourceId: string | null = null
 ): {
   readonly eqId: string;
   readonly updatedEq: EqualizerSourceConfig;
@@ -264,7 +285,11 @@ export function applyFeedbackNotchToEqList(
       ? Math.max(-15, Math.min(-6, -Math.round(track.prominenceDb * 0.75)))
       : Math.max(-9, Math.min(-3, -Math.round(track.prominenceDb * 0.5)));
 
-  const targetEq = eqSources.find((eq) => eq.targetSourceId === track.slotId) ?? null;
+  const culpritKey = track.notchTargetKey;
+  const targetEq = culpritKey
+    ? (eqSources.find((eq) => eq.culpritKey === culpritKey) ?? null)
+    : (eqSources.find((eq) => !eq.culpritKey && eq.targetSourceId === track.slotId) ??
+      null);
 
   if (!targetEq) {
     const id = generateId();
@@ -276,13 +301,22 @@ export function applyFeedbackNotchToEqList(
       gainDb: initialCutDb,
       enabled: true,
     };
+    const isSlotChartSource = track.slotId.startsWith('live-');
+    const resolvedTargetId = isSlotChartSource
+      ? track.slotId
+      : fallbackTargetSourceId;
+    const eqName = culpritKey
+      ? `Notch — ${track.notchTargetLabel ?? track.culprit?.channelName ?? track.slotName}`
+      : `Feedback Notch (${track.slotName})`;
+
     const createdEq: EqualizerSourceConfig = normalizeEqSourceConfig({
       id,
-      name: `Feedback Notch (${track.slotName})`,
+      name: eqName,
       color: '#10b981',
       visible: true,
       bands,
-      targetSourceId: track.slotId,
+      targetSourceId: resolvedTargetId,
+      ...(culpritKey ? { culpritKey } : {}),
       createdAt: new Date().toISOString(),
     });
     return {

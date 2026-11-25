@@ -4,12 +4,18 @@
 
 import { renderEntityTreeSection } from '@foh/ui';
 import { html, nothing, TemplateResult } from 'lit';
+import type { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import { SourceData } from '../sources/source-data.js';
+import { renderFeedbackRingLogCard } from './show-sidebar-view.js';
 
 export interface SidebarViewProps {
   readonly allSources: readonly SourceData[];
   readonly selectedSourceId: string;
   readonly inspectorContent: TemplateResult;
+  readonly feedbackRingLog?: readonly DetectedFeedbackTrack[];
+  readonly showTuningRingLog?: boolean;
+  readonly onApplyFeedbackNotch?: (track: DetectedFeedbackTrack) => void;
+  readonly onClearFeedbackRingLog?: () => void;
   readonly onAddLiveSource?: () => void;
   readonly onAddEqSource: () => void;
   readonly onAddUnionSource: () => void;
@@ -106,6 +112,16 @@ export function renderSidebar(props: SidebarViewProps): TemplateResult {
       </div>
 
       ${props.inspectorContent}
+
+      ${(props.showTuningRingLog || (props.feedbackRingLog?.length ?? 0) > 0) &&
+      props.onApplyFeedbackNotch &&
+      props.onClearFeedbackRingLog
+        ? renderFeedbackRingLogCard({
+            feedbackRingLog: props.feedbackRingLog ?? [],
+            onApplyFeedbackNotch: props.onApplyFeedbackNotch,
+            onClearFeedbackRingLog: props.onClearFeedbackRingLog,
+          })
+        : nothing}
     </aside>
   `;
 }

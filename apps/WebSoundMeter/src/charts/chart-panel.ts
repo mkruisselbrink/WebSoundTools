@@ -18,6 +18,7 @@ import {
 import type { BiquadSpec } from '@foh/dsp';
 import { css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import type { DetectedFeedbackTrack } from '../dsp/feedback-detector.js';
 import {
   DEFAULT_SPL_ALERT_THRESHOLDS,
   type SplAlertThresholds,
@@ -55,6 +56,9 @@ export class ChartPanelElement extends FohChartPanelBase {
 
   @property({ attribute: false })
   sources: SourceData[] = [];
+
+  @property({ attribute: false })
+  extraFeedbackTracks: readonly DetectedFeedbackTrack[] = [];
 
   @property({ attribute: false })
   eqBands: BiquadSpec[] | null = null;
@@ -171,6 +175,7 @@ export class ChartPanelElement extends FohChartPanelBase {
       coherenceMode: this.coherenceMode,
       coherenceThreshold: this.coherenceThreshold,
       showFeedbackWatch: this.showFeedbackWatch,
+      extraFeedbackTracks: this.extraFeedbackTracks,
       splTraceMode: this.splTraceMode,
       showSplThresholds: this.showSplThresholds,
       splAlertThresholds: this.splAlertThresholds,

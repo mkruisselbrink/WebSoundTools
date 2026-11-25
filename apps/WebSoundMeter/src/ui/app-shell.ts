@@ -28,6 +28,18 @@ import {
 import { SplHistoryWindowSec } from '../dsp/spl-history.js';
 import { CalibrationManager } from '../sources/calibration-manager.js';
 import {
+  type MixerPatchLibraryState,
+  type MixerWatchSessionConfig,
+  bindProfileToDevice,
+  createDefaultMixerWatchSessionConfig,
+  deleteMixerPatchProfile,
+  findAffinityProfileForDevice,
+  hydrateMixerPatchData,
+  loadMixerPatchLibrary,
+  saveMixerPatchLibrary,
+  upsertMixerPatchProfile,
+} from '../sources/mixer-patch-storage.js';
+import {
   clearSplShowCheckpointsFromDb,
   loadAllSplShowCheckpointsFromDb,
   saveSplShowCheckpointsToDb,
@@ -47,6 +59,7 @@ import { renderLiveMeasurementInspector } from './inspectors/live-measurement-in
 import { renderStoredInspector } from './inspectors/stored-source-inspector.js';
 import { renderUnionInspector } from './inspectors/union-source-inspector.js';
 import { dispatchAppKeydown } from './keyboard-shortcuts.js';
+import { renderMixerWatchModal } from './mixer-watch-modal.js';
 import {
   type MobileShowTab,
   renderMobileShowWorkspace,
@@ -135,6 +148,25 @@ export class WebSoundMeterApp extends LitElement {
   @state()
   private helpModalOpen = false;
 
+  @state()
+  private mixerWatchModalOpen = false;
+
+  @state()
+  private mixerWatchConfig: MixerWatchSessionConfig =
+    createDefaultMixerWatchSessionConfig();
+
+  @state()
+  private mixerPatchLibrary: MixerPatchLibraryState = {
+    version: 1,
+    profiles: [],
+    deviceAffinity: {},
+  };
+
+  @state()
+  private draftMixerPresetName = '';
+
+  private mixerChannelLevelsDbFs: Readonly<Record<number, number>> = {};
+
   private keydownHandler = (e: KeyboardEvent) => {
     dispatchAppKeydown(e, {
       onCaptureTrace: () => {
@@ -189,6 +221,8 @@ export class WebSoundMeterApp extends LitElement {
         }
         if (this.helpModalOpen) {
           this.helpModalOpen = false;
+        } else if (this.mixerWatchModalOpen) {
+          this.mixerWatchModalOpen = false;
         } else if (this.showAdvancedMeasSettings) {
           this.showAdvancedMeasSettings = false;
         } else {
@@ -303,6 +337,9 @@ export class WebSoundMeterApp extends LitElement {
     this.selectedDeviceLabel = session.hardwareRouting.selectedDeviceLabel;
     this.globalReferenceChannel = session.hardwareRouting.globalReferenceChannel;
     this.generatorOutputChannel = session.hardwareRouting.generatorOutputChannel;
+    this.mixerPatchLibrary = loadMixerPatchLibrary();
+    this.mixerWatchConfig =
+      session.mixerWatch ?? createDefaultMixerWatchSessionConfig();
 
     const hydratedSlots = session.liveSlots.map((slot, idx) =>
       idx === 0 && initialUrl.audioInputMode === 'simulator'
@@ -322,6 +359,7 @@ export class WebSoundMeterApp extends LitElement {
     this.engine = new AudioEngine();
     this.engine.setGlobalReferenceChannel(this.globalReferenceChannel);
     this.engine.setLiveSlots(hydratedSlots);
+    void this.engine.setMixerWatchConfig(this.mixerWatchConfig);
     const safeGenConfig =
       this.workspace.workspaceMode === 'show' && this.workspace.audioInputMode === 'hardware'
         ? { ...session.genConfig, enabled: false }
@@ -342,8 +380,12 @@ export class WebSoundMeterApp extends LitElement {
       }
     });
 
-    this.engine.onLiveFrames((frames) => {
-      this.sourceStore.setLiveFrames(frames);
+    this.engine.onLiveFrames((frames, mixerTelemetry) => {
+      this.mixerChannelLevelsDbFs = mixerTelemetry?.channelLevelsDbFs ?? {};
+      this.sourceStore.setLiveFrames(
+        frames,
+        mixerTelemetry?.mixerOnlyFeedbackTracks
+      );
     });
     this.engine.onMeasurementConfigChange(() => {
       this.persistState('none');
@@ -453,6 +495,62 @@ export class WebSoundMeterApp extends LitElement {
         globalReferenceChannel: this.globalReferenceChannel,
         generatorOutputChannel: this.generatorOutputChannel,
       },
+      mixerWatch: this.mixerWatchConfig,
+    });
+  }
+
+  private getEffectiveMixerDeviceIdentity(): {
+    readonly deviceId: string;
+    readonly deviceLabel: string;
+  } {
+    if (this.workspace.audioInputMode !== 'hardware') {
+      return { deviceId: '', deviceLabel: '' };
+    }
+    if (
+      this.mixerWatchConfig.deviceMode === 'separate-device' &&
+      this.mixerWatchConfig.separateDeviceId
+    ) {
+      return {
+        deviceId: this.mixerWatchConfig.separateDeviceId,
+        deviceLabel: this.mixerWatchConfig.separateDeviceLabel,
+      };
+    }
+    return {
+      deviceId: this.selectedDeviceId,
+      deviceLabel: this.selectedDeviceLabel,
+    };
+  }
+
+  private applyMixerWatchUpdate(nextConfig: MixerWatchSessionConfig): void {
+    this.mixerWatchConfig = nextConfig;
+    if (this.engine) {
+      void this.engine.setMixerWatchConfig(nextConfig).then(() => {
+        if (this.engine) {
+          this.mixerWatchConfig = this.engine.getMixerWatchConfig();
+        }
+        this.persistState('none');
+        this.requestUpdate();
+      });
+    } else {
+      this.persistState('none');
+      this.requestUpdate();
+    }
+  }
+
+  private maybeRecallMixerProfileForDevice(
+    deviceId: string,
+    deviceLabel: string
+  ): void {
+    const matched = findAffinityProfileForDevice(
+      this.mixerPatchLibrary,
+      deviceId,
+      deviceLabel
+    );
+    if (!matched) return;
+    this.applyMixerWatchUpdate({
+      ...this.mixerWatchConfig,
+      activeProfileId: matched.id,
+      patch: hydrateMixerPatchData(matched, Math.max(16, matched.channels.length)),
     });
   }
 
@@ -526,6 +624,12 @@ export class WebSoundMeterApp extends LitElement {
         );
         if (activeDev) {
           this.selectedDeviceLabel = activeDev.label;
+        }
+        if (this.mixerWatchConfig.deviceMode === 'follow-main') {
+          this.maybeRecallMixerProfileForDevice(
+            this.selectedDeviceId,
+            this.selectedDeviceLabel
+          );
         }
       }
     } catch (err) {
@@ -645,6 +749,13 @@ export class WebSoundMeterApp extends LitElement {
       },
       onCalibrationUpload: (e: Event) =>
         this.handleCalibrationUpload(liveSlot.id, e),
+      mixerWatchEnabled: this.mixerWatchConfig.enabled,
+      mixerWatchChannelCount: this.mixerWatchConfig.patch.channels.filter(
+        (c) => c.enabled
+      ).length,
+      onOpenMixerWatch: () => {
+        this.mixerWatchModalOpen = true;
+      },
     };
 
     if (isLiveSourceId(selectedId)) {
@@ -724,6 +835,11 @@ export class WebSoundMeterApp extends LitElement {
     const isMobileShow =
       this.workspace.workspaceMode === 'show' && this.isPhoneViewport;
 
+    const extraFeedbackTracks = this.sourceStore.getMixerOnlyFeedbackTracks();
+    const enabledMixerWatchCount = this.mixerWatchConfig.patch.channels.filter(
+      (c) => c.enabled
+    ).length;
+
     const showSidebarProps: ShowSidebarViewProps = {
       audioInputMode: this.workspace.audioInputMode,
       availableChannels: this.availableChannels,
@@ -735,6 +851,11 @@ export class WebSoundMeterApp extends LitElement {
       liveSources: this.sourceStore.getLiveSources(),
       feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
       splAlertThresholds: this.workspace.splAlertThresholds,
+      mixerWatchEnabled: this.mixerWatchConfig.enabled,
+      mixerWatchChannelCount: enabledMixerWatchCount,
+      onOpenMixerWatch: () => {
+        this.mixerWatchModalOpen = true;
+      },
       onAddLiveSource: this.handleAddLiveSource,
       onSelectSlot: (slotId) => {
         this.sourceStore.setSelectedSourceId(slotId);
@@ -917,6 +1038,7 @@ export class WebSoundMeterApp extends LitElement {
             activeSlotColor: activeLiveSlot?.color ?? '#38bdf8',
             wakeLockActive: this.wakeLockActive,
             chartSources,
+            extraFeedbackTracks,
             eqBands: activeEq ? activeEq.bands : null,
             onSelectTab: (tab) => {
               this.mobileShowTab = tab;
@@ -946,6 +1068,7 @@ export class WebSoundMeterApp extends LitElement {
                       data-testid="chart-panel-${idx}"
                       .plotType=${pt}
                       .sources=${chartSources}
+                      .extraFeedbackTracks=${extraFeedbackTracks}
                       .eqBands=${activeEq ? activeEq.bands : null}
                       .splAlertThresholds=${this.workspace.splAlertThresholds}
                       @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {
@@ -971,6 +1094,15 @@ export class WebSoundMeterApp extends LitElement {
                     allSources,
                     selectedSourceId: this.sourceStore.getSelectedSourceId(),
                     inspectorContent: this.renderSelectedSourceInspector(allSources),
+                    feedbackRingLog: this.sourceStore.getFeedbackRingLog(),
+                    showTuningRingLog: this.mixerWatchConfig.enabled,
+                    onApplyFeedbackNotch: (track) => {
+                      this.sourceStore.applyFeedbackNotchToEq(track);
+                      this.persistState('none');
+                    },
+                    onClearFeedbackRingLog: () => {
+                      this.sourceStore.clearFeedbackRingLog();
+                    },
                     onAddLiveSource: this.handleAddLiveSource,
                     onAddEqSource: () => {
                       this.sourceStore.addVirtualEqSource();
@@ -1004,6 +1136,152 @@ export class WebSoundMeterApp extends LitElement {
                   })}
             </div>
           `}
+
+      ${renderMixerWatchModal({
+        open: this.mixerWatchModalOpen,
+        audioInputMode: this.workspace.audioInputMode,
+        mainDeviceId: this.selectedDeviceId,
+        mainDeviceLabel: this.selectedDeviceLabel,
+        audioDevices: this.audioDevices,
+        availableMixerChannels: this.engine?.getMixerWatchAvailableChannels() ?? 16,
+        mixerSampleRate: this.engine?.getMixerWatchSampleRate() ?? 48000,
+        globalReferenceChannel: this.globalReferenceChannel,
+        config: this.mixerWatchConfig,
+        library: this.mixerPatchLibrary,
+        channelLevelsDbFs: this.mixerChannelLevelsDbFs,
+        statusNotice: this.engine?.getMixerWatchStatusNotice() ?? '',
+        draftPresetName: this.draftMixerPresetName,
+        onClose: () => {
+          this.mixerWatchModalOpen = false;
+        },
+        onDraftPresetNameChange: (name) => {
+          this.draftMixerPresetName = name;
+        },
+        onSaveNewPreset: (name) => {
+          const dev = this.getEffectiveMixerDeviceIdentity();
+          const { library, profile } = upsertMixerPatchProfile(
+            this.mixerPatchLibrary,
+            {
+              name,
+              patch: this.mixerWatchConfig.patch,
+              deviceId: dev.deviceId,
+              deviceLabel: dev.deviceLabel,
+            }
+          );
+          this.mixerPatchLibrary = library;
+          saveMixerPatchLibrary(library);
+          this.draftMixerPresetName = '';
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            activeProfileId: profile.id,
+          });
+        },
+        onUpdateActivePreset: () => {
+          const activeId = this.mixerWatchConfig.activeProfileId;
+          if (!activeId) return;
+          const existing = this.mixerPatchLibrary.profiles.find(
+            (p) => p.id === activeId
+          );
+          if (!existing) return;
+          const dev = this.getEffectiveMixerDeviceIdentity();
+          const { library } = upsertMixerPatchProfile(this.mixerPatchLibrary, {
+            id: existing.id,
+            name: existing.name,
+            patch: this.mixerWatchConfig.patch,
+            deviceId: dev.deviceId || existing.lastDeviceId,
+            deviceLabel: dev.deviceLabel || existing.lastDeviceLabel,
+          });
+          this.mixerPatchLibrary = library;
+          saveMixerPatchLibrary(library);
+          this.requestUpdate();
+        },
+        onDeleteActivePreset: () => {
+          const activeId = this.mixerWatchConfig.activeProfileId;
+          if (!activeId) return;
+          const nextLib = deleteMixerPatchProfile(
+            this.mixerPatchLibrary,
+            activeId
+          );
+          this.mixerPatchLibrary = nextLib;
+          saveMixerPatchLibrary(nextLib);
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            activeProfileId: null,
+          });
+        },
+        onSelectPreset: (profileId) => {
+          if (!profileId) {
+            this.applyMixerWatchUpdate({
+              ...this.mixerWatchConfig,
+              activeProfileId: null,
+            });
+            return;
+          }
+          const prof = this.mixerPatchLibrary.profiles.find(
+            (p) => p.id === profileId
+          );
+          if (!prof) return;
+          const dev = this.getEffectiveMixerDeviceIdentity();
+          if (dev.deviceId || dev.deviceLabel) {
+            this.mixerPatchLibrary = bindProfileToDevice(
+              this.mixerPatchLibrary,
+              prof.id,
+              dev.deviceId,
+              dev.deviceLabel
+            );
+            saveMixerPatchLibrary(this.mixerPatchLibrary);
+          }
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            activeProfileId: prof.id,
+            patch: hydrateMixerPatchData(
+              prof,
+              Math.max(16, prof.channels.length)
+            ),
+          });
+        },
+        onSelectMixerDevice: (mode, deviceId, deviceLabel) => {
+          const matched = findAffinityProfileForDevice(
+            this.mixerPatchLibrary,
+            deviceId,
+            deviceLabel
+          );
+          const nextPatch = matched
+            ? hydrateMixerPatchData(
+                matched,
+                Math.max(16, matched.channels.length)
+              )
+            : mode === 'separate-device' &&
+                this.mixerWatchConfig.patch.mixBusChannel === -2
+              ? { ...this.mixerWatchConfig.patch, mixBusChannel: -1 }
+              : this.mixerWatchConfig.patch;
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            deviceMode: mode,
+            separateDeviceId: mode === 'separate-device' ? deviceId : '',
+            separateDeviceLabel: mode === 'separate-device' ? deviceLabel : '',
+            activeProfileId: matched
+              ? matched.id
+              : this.mixerWatchConfig.activeProfileId,
+            patch: nextPatch,
+          });
+        },
+        onUpdateConfig: (partial) => {
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            ...partial,
+          });
+        },
+        onUpdatePatch: (partial) => {
+          this.applyMixerWatchUpdate({
+            ...this.mixerWatchConfig,
+            patch: {
+              ...this.mixerWatchConfig.patch,
+              ...partial,
+            },
+          });
+        },
+      })}
 
       <foh-help-modal
         .open=${this.helpModalOpen}

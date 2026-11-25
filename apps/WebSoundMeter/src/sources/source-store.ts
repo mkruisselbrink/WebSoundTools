@@ -100,6 +100,7 @@ export class SourceStore {
   private readonly liveVisibility = new Map<string, boolean>([
     ['live-measurement', true],
   ]);
+  private mixerOnlyFeedbackTracks: DetectedFeedbackTrack[] = [];
   private feedbackRingLog: DetectedFeedbackTrack[] = [];
   private selectedSourceId = 'live-measurement';
 
@@ -325,7 +326,10 @@ export class SourceStore {
     this.notify();
   }
 
-  setLiveFrames(frames: readonly SourceData[]): void {
+  setLiveFrames(
+    frames: readonly SourceData[],
+    mixerOnlyTracks?: readonly DetectedFeedbackTrack[]
+  ): void {
     const prevById = new Map<string, SourceData>();
     for (const prev of this.liveSources) {
       prevById.set(prev.id, prev);
@@ -351,7 +355,22 @@ export class SourceStore {
         ...(splHistory ? { splHistory } : {}),
       };
     });
+
+    if (mixerOnlyTracks !== undefined) {
+      this.mixerOnlyFeedbackTracks = [...mixerOnlyTracks];
+      if (mixerOnlyTracks.length > 0) {
+        this.feedbackRingLog = mergeFeedbackTracksIntoRingLog(
+          this.feedbackRingLog,
+          mixerOnlyTracks
+        );
+      }
+    }
+
     this.notify();
+  }
+
+  getMixerOnlyFeedbackTracks(): readonly DetectedFeedbackTrack[] {
+    return this.mixerOnlyFeedbackTracks;
   }
 
   getFeedbackRingLog(): readonly DetectedFeedbackTrack[] {
@@ -366,11 +385,13 @@ export class SourceStore {
 
   applyFeedbackNotchToEq(track: DetectedFeedbackTrack): string {
     let appliedId = '';
+    const fallbackLiveId = this.getActiveLiveSourceId();
     this.authoredStore.update((s) => {
       const { eqId, updatedEq, nextEqSources } = applyFeedbackNotchToEqList(
         s.eqSources,
         track,
-        () => generateShortId('eq')
+        () => generateShortId('eq'),
+        fallbackLiveId
       );
       appliedId = eqId;
       void this.persistence.saveEq?.(updatedEq);

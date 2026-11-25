@@ -15,7 +15,10 @@ import type {
   InputSourceMode,
   LiveMeasurementSlotConfig,
 } from '../../dsp/dsp-worker-protocol.js';
-import { FeedbackSensitivityMode } from '../../dsp/feedback-detector.js';
+import {
+  FeedbackReferenceMode,
+  FeedbackSensitivityMode,
+} from '../../dsp/feedback-detector.js';
 import {
   SIMULATOR_PRESETS,
   SimulatorPresetId,
@@ -61,6 +64,9 @@ export interface LiveMeasurementInspectorHandlers {
   readonly onResetAveraging: () => void;
   readonly onUpdateConfig: (partial: Partial<MeasurementPipelineConfig>) => void;
   readonly onCalibrationUpload: (e: Event) => void;
+  readonly mixerWatchEnabled?: boolean;
+  readonly mixerWatchChannelCount?: number;
+  readonly onOpenMixerWatch?: () => void;
 }
 
 function renderDbfsMeterRow(
@@ -371,7 +377,7 @@ export function renderLiveMeasurementInspector(
           })}
         </div>
 
-        <div class="prop-field full-width">
+        <div class="prop-field">
           <label for="wsm-feedback-mode">Feedback Watch Mode</label>
           <select
             id="wsm-feedback-mode"
@@ -385,12 +391,59 @@ export function renderLiveMeasurementInspector(
                   .value as FeedbackSensitivityMode,
               })}
           >
-            <option value="foh-normal">FOH Normal (Balanced)</option>
-            <option value="monitor-sensitive">Monitor / Wedge Sensitive</option>
+            <option value="foh-normal">FOH Concert Strict</option>
+            <option value="monitor-sensitive">Soundcheck / Wedge Ring-Out</option>
             <option value="custom">Custom Thresholds</option>
             <option value="off">Off</option>
           </select>
         </div>
+
+        <div class="prop-field">
+          <label
+            for="wsm-feedback-ref-mode"
+            title="How Reference (R) relates to single-mic Feedback Watch"
+          >
+            Feedback Ref (R) Role
+          </label>
+          <select
+            id="wsm-feedback-ref-mode"
+            name="feedback-ref-mode"
+            aria-label="Feedback Reference Role"
+            data-testid="select-feedback-ref-mode"
+            .value=${cfg.feedbackRefMode ?? 'closed-loop-mix'}
+            @change=${(e: Event) =>
+              handlers.onUpdateConfig({
+                feedbackRefMode: (e.target as HTMLSelectElement)
+                  .value as FeedbackReferenceMode,
+              })}
+          >
+            <option value="closed-loop-mix">Console Mix (Tag In-Mix vs Stage)</option>
+            <option value="playback-veto">Playback / Stem Veto (Suppress R)</option>
+            <option value="ignore">Ignore Reference</option>
+          </select>
+        </div>
+
+        ${handlers.onOpenMixerWatch
+          ? html`
+              <div class="prop-field full-width">
+                <button
+                  type="button"
+                  class=${handlers.mixerWatchEnabled ? 'btn-accent' : ''}
+                  data-testid="btn-tuning-mixer-watch"
+                  style="width:100%;display:flex;align-items:center;justify-content:space-between;"
+                  title="Watch up to 32 mixer USB inputs to pinpoint which channel is feeding back"
+                  @click=${handlers.onOpenMixerWatch}
+                >
+                  <span>Mixer Input Watch (Culprit Attribution)</span>
+                  <span>
+                    ${handlers.mixerWatchEnabled
+                      ? `ON · ${handlers.mixerWatchChannelCount ?? 0} ch`
+                      : 'Configure…'}
+                  </span>
+                </button>
+              </div>
+            `
+          : nothing}
 
         ${renderCalibrationSelectorSection({
           savedCalibrations: savedCals,

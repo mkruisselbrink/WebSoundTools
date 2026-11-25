@@ -39,6 +39,9 @@ export interface ShowSidebarViewProps {
   readonly liveSources: readonly SourceData[];
   readonly feedbackRingLog: readonly DetectedFeedbackTrack[];
   readonly splAlertThresholds: SplAlertThresholds;
+  readonly mixerWatchEnabled?: boolean;
+  readonly mixerWatchChannelCount?: number;
+  readonly onOpenMixerWatch?: () => void;
   readonly onAddLiveSource?: () => void;
   readonly onSelectSlot?: (slotId: string) => void;
   readonly onDeleteSlot?: (slotId: string) => void;
@@ -84,17 +87,35 @@ export function renderLiveMicsWatchCard(props: ShowSidebarViewProps): TemplateRe
     <div class="section-card card-live-mics" data-testid="card-live-mics-watch">
       <div class="section-header">
         <span>Live Mics & SPL Watch (${props.liveSlots.length})</span>
-        ${props.onAddLiveSource
-          ? html`
-              <button
-                data-testid="btn-show-add-meas"
-                title="Add Live Measurement Microphone"
-                @click=${props.onAddLiveSource}
-              >
-                + Mic
-              </button>
-            `
-          : nothing}
+        <div style="display:flex;align-items:center;gap:4px;">
+          ${props.onOpenMixerWatch
+            ? html`
+                <button
+                  type="button"
+                  class=${props.mixerWatchEnabled ? 'btn-accent' : ''}
+                  data-testid="btn-open-mixer-watch"
+                  title="Configure up to 32 watched mixer USB inputs & patch presets for culprit attribution"
+                  @click=${props.onOpenMixerWatch}
+                >
+                  ${props.mixerWatchEnabled
+                    ? `Mixer (${props.mixerWatchChannelCount ?? 0})`
+                    : 'Mixer Watch'}
+                </button>
+              `
+            : nothing}
+          ${props.onAddLiveSource
+            ? html`
+                <button
+                  type="button"
+                  data-testid="btn-show-add-meas"
+                  title="Add Live Measurement Microphone"
+                  @click=${props.onAddLiveSource}
+                >
+                  + Mic
+                </button>
+              `
+            : nothing}
+        </div>
       </div>
 
       <div class="show-mic-list">
@@ -384,15 +405,41 @@ export function renderFeedbackRingLogCard(
                     ? `${(track.frequencyHz / 1000).toFixed(2)} kHz`
                     : `${Math.round(track.frequencyHz)} Hz`;
 
-                return html`
+                  const culprit = track.culprit;
+                  const loopLabel =
+                    track.loopLocation === 'in-mix'
+                      ? 'In Mix'
+                      : track.loopLocation === 'stage-only'
+                        ? 'Stage Only'
+                        : null;
+
+                  return html`
                   <div class="ring-log-row" data-testid="ring-log-item-${track.id}">
                     <div class="ring-log-main">
                       <span class="ring-severity-badge ${badgeClass}">${icon}</span>
-                      <div>
+                      <div style="min-width:0;">
                         <div class="ring-freq-title">
                           <strong>${freqLabel}</strong>
                           <span class="ring-iso-tag">ISO ${track.isoBandLabel}</span>
+                          ${loopLabel
+                            ? html`<span class="ring-loop-tag">${loopLabel}</span>`
+                            : nothing}
                         </div>
+                        ${culprit
+                          ? html`
+                              <div class="ring-culprit-line">
+                                <span class="ring-culprit-pill">
+                                  Culprit: ${culprit.channelName} · Ch ${culprit.channelIndex + 1}
+                                  (${culprit.confidencePct}%)
+                                </span>
+                                ${culprit.runnerUpLabel
+                                  ? html`<span class="ring-runner-up">
+                                      also ${culprit.runnerUpLabel}
+                                    </span>`
+                                  : nothing}
+                              </div>
+                            `
+                          : nothing}
                         <div class="ring-meta-line">
                           <span>${track.musicalNote}</span>
                           <span>• +${track.prominenceDb.toFixed(1)} dB</span>
@@ -402,9 +449,10 @@ export function renderFeedbackRingLogCard(
                       </div>
                     </div>
                     <button
+                      type="button"
                       class="btn-notch-eq"
                       data-testid="btn-notch-eq-${track.id}"
-                      title="Insert or deepen surgical peaking notch in Virtual EQ for ${track.slotName}"
+                      title="Insert or deepen surgical peaking notch in Virtual EQ for ${track.notchTargetLabel ?? track.slotName}"
                       @click=${() => props.onApplyFeedbackNotch(track)}
                     >
                       Notch EQ

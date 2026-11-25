@@ -22,6 +22,7 @@ import {
   MeterIntegrationTime,
   WeightingCurve,
 } from '../dsp/weighting-meters.js';
+import type { MixerWatchSessionConfig } from '../sources/mixer-patch-storage.js';
 import {
   HardwareDeviceRoutingSnapshot,
   WorkspaceSessionSnapshot,
@@ -175,6 +176,7 @@ export class WorkspaceLayoutController {
     readonly liveSlots: LiveMeasurementSlotConfig[];
     readonly genConfig: SignalGeneratorConfig;
     readonly hardwareRouting: HardwareDeviceRoutingSnapshot;
+    readonly mixerWatch?: MixerWatchSessionConfig;
   }): void {
     const viewState = this.buildUrlViewState({
       simulatorPreset: params.simulatorPreset,
@@ -198,6 +200,7 @@ export class WorkspaceLayoutController {
         sineFrequencyHz: params.genConfig.sineFrequencyHz,
       },
       hardwareRouting: params.hardwareRouting,
+      ...(params.mixerWatch ? { mixerWatch: params.mixerWatch } : {}),
     });
   }
 }

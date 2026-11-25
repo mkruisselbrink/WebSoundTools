@@ -51,6 +51,7 @@ export interface WsmChartSceneInput {
   readonly coherenceAlpha?: boolean;
   readonly coherenceThreshold: number;
   readonly showFeedbackWatch: boolean;
+  readonly extraFeedbackTracks?: readonly DetectedFeedbackTrack[];
   readonly splTraceMode: SplHistoryTraceMode;
   readonly showSplThresholds: boolean;
   readonly splAlertThresholds: SplAlertThresholds;
@@ -77,12 +78,18 @@ function getCachedOctaveBands(src: SourceData, bandsPerOctave: 3 | 6 | 12): Octa
   return bands;
 }
 
-function buildFeedbackCalloutFlags(sources: readonly SourceData[]): CalloutFlag[] {
+function buildFeedbackCalloutFlags(
+  sources: readonly SourceData[],
+  extraTracks?: readonly DetectedFeedbackTrack[]
+): CalloutFlag[] {
   const allTracks: DetectedFeedbackTrack[] = [];
   for (const src of sources) {
     if (src.feedbackTracks && src.feedbackTracks.length > 0) {
       allTracks.push(...src.feedbackTracks);
     }
+  }
+  if (extraTracks && extraTracks.length > 0) {
+    allTracks.push(...extraTracks);
   }
   if (allTracks.length === 0) return [];
 
@@ -111,12 +118,28 @@ function buildFeedbackCalloutFlags(sources: readonly SourceData[]): CalloutFlag[
         ? Math.max(0.25, 0.85 * track.latchRemainingRatio)
         : 0.95;
 
+    const culprit = track.culprit;
+    const loopTag =
+      track.loopLocation === 'in-mix'
+        ? 'In Mix'
+        : track.loopLocation === 'stage-only'
+          ? 'Stage'
+          : '';
+    const line1 = culprit
+      ? `${icon} ${freqText} (ISO ${track.isoBandLabel}) • ${culprit.channelName} (${culprit.confidencePct}%)`
+      : `${icon} ${freqText} (ISO ${track.isoBandLabel})`;
+    const tailLabel = culprit
+      ? loopTag || track.slotName
+      : loopTag
+        ? `${track.slotName} · ${loopTag}`
+        : track.slotName;
+
     return {
       id: track.id,
       x: track.frequencyHz,
       state: track.state,
-      line1: `${icon} ${freqText} (ISO ${track.isoBandLabel})`,
-      line2: `+${track.prominenceDb.toFixed(1)}dB • Q≈${Math.round(track.estimatedQ)} • ${track.musicalNote.split(' ')[0]} • ${track.slotName}`,
+      line1,
+      line2: `+${track.prominenceDb.toFixed(1)}dB • Q≈${Math.round(track.estimatedQ)} • ${track.musicalNote.split(' ')[0]} • ${tailLabel}`,
       accentColor,
       badgeColor: track.slotColor,
       opacity,
@@ -403,7 +426,7 @@ export function buildWsmChartScene(input: WsmChartSceneInput): ChartScene {
 
   const calloutFlags =
     (input.plotType === 'rta' || input.plotType === 'magnitude') && input.showFeedbackWatch
-      ? buildFeedbackCalloutFlags(visibleSources)
+      ? buildFeedbackCalloutFlags(visibleSources, input.extraFeedbackTracks)
       : undefined;
 
   const eqOverlay =

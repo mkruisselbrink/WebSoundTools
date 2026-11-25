@@ -41,6 +41,8 @@ export interface EqualizerSourceConfig {
   dsp?: SourceDspConfig;
   /** Optional ID of a live Measurement or Stored source to apply this EQ onto */
   targetSourceId?: string | null;
+  /** Optional mixer culprit key (e.g. 'mixer-ch-13') for per-input feedback notch cheat-sheets */
+  culpritKey?: string;
   createdAt?: string;
 }
 

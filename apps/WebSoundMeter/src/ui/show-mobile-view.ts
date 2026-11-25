@@ -101,6 +101,7 @@ export interface MobileShowWorkspaceProps extends ShowSidebarViewProps {
   readonly activeSlotColor: string;
   readonly wakeLockActive: boolean;
   readonly chartSources: readonly SourceData[];
+  readonly extraFeedbackTracks?: readonly DetectedFeedbackTrack[];
   readonly eqBands: BiquadSpec[] | null;
   readonly onSelectTab: (tab: MobileShowTab) => void;
   readonly onSplWeightingChange: (curve: WeightingCurve) => void;
@@ -261,6 +262,9 @@ export function renderMobileShowWorkspace(
                     ${topActiveRing.frequencyHz >= 1000
                       ? `${(topActiveRing.frequencyHz / 1000).toFixed(2)} kHz`
                       : `${Math.round(topActiveRing.frequencyHz)} Hz`}
+                    ${topActiveRing.culprit
+                      ? ` · ${topActiveRing.culprit.channelName} (${topActiveRing.culprit.confidencePct}%)`
+                      : ''}
                   </strong>
                   <span>ISO ${topActiveRing.isoBandLabel} · ${topActiveRing.musicalNote}</span>
                 </span>
@@ -289,6 +293,7 @@ export function renderMobileShowWorkspace(
                 .plotType=${activeChartPlotType}
                 .hidePlotTypeSelector=${true}
                 .sources=${props.chartSources}
+                .extraFeedbackTracks=${props.extraFeedbackTracks ?? []}
                 .eqBands=${props.eqBands}
                 .splAlertThresholds=${props.splAlertThresholds}
                 @plot-type-change=${(e: CustomEvent<{ plotType: PlotType }>) => {

@@ -755,6 +755,210 @@ export const appShellStyles = [
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
+  .ring-loop-tag {
+    font-size: 9.5px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(56, 189, 248, 0.14);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  .ring-culprit-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin: 2px 0;
+  }
+
+  .ring-culprit-pill {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(52, 211, 153, 0.45);
+    color: #6ee7b7;
+  }
+
+  .ring-runner-up {
+    font-size: 9.5px;
+    color: #94a3b8;
+  }
+
+  /* Mixer Input Watch & Patch Presets Modal */
+  .visually-hidden {
+    position: absolute;
+    clip-path: inset(50%);
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    white-space: nowrap;
+  }
+
+  .mixer-watch-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mixer-watch-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #162033;
+    border: 1px solid #263554;
+    border-radius: 6px;
+  }
+
+  .mixer-watch-enable-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: #f8fafc;
+  }
+
+  .mixer-watch-status-pill {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #1e293b;
+    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: nowrap;
+  }
+
+  .mixer-watch-status-pill.active {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid #10b981;
+    color: #34d399;
+  }
+
+  .mixer-watch-notice {
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: rgba(245, 158, 11, 0.16);
+    border: 1px solid #f59e0b;
+    color: #fef3c7;
+    font-size: 11px;
+  }
+
+  .mixer-preset-save-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 5px;
+  }
+
+  .mixer-preset-save-form input[type='text'] {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mixer-channel-matrix-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #1e293b;
+  }
+
+  .mixer-batch-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mixer-batch-btns button {
+    padding: 2px 7px;
+    font-size: 10.5px;
+  }
+
+  .mixer-channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+    background: #080d18;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+  }
+
+  @media (max-width: 560px) {
+    .mixer-channel-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .mixer-ch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    min-width: 0;
+  }
+
+  .mixer-ch-row.watched {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .mixer-ch-num {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #94a3b8;
+    width: 34px;
+    flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    cursor: pointer;
+  }
+
+  .mixer-ch-led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #1e293b;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+  }
+
+  .mixer-ch-led.sig {
+    background: #10b981;
+    border-color: #34d399;
+    box-shadow: 0 0 5px rgba(16, 185, 129, 0.7);
+  }
+
+  .mixer-ch-led.hot {
+    background: #f59e0b;
+    border-color: #fbbf24;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+  }
+
+  .mixer-ch-name-input {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+
   .ring-meta-line {
     display: flex;
     flex-wrap: wrap;
