@@ -155,7 +155,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         <div class="foh-topbar-spacer" aria-hidden="true"></div>
 
         <!-- Zone 2: Transport, Audio Input & Reference, Signal Generator & Recessed SPL LCD -->
-        <div class="foh-topbar-zone foh-topbar-zone-shrink">
+        <div class="foh-topbar-zone">
           ${renderInputRoutingGroup(props)}
           ${mode === 'show' && props.audioInputMode === 'hardware'
             ? nothing

@@ -102,7 +102,7 @@ export function renderTopbar(
     >
       <div class="foh-topbar-track">
         <!-- Zone 1: Brand + Scene/Project Menu + Undo/Redo -->
-        <div class="foh-topbar-zone foh-topbar-zone-shrink">
+        <div class="foh-topbar-zone">
           <div class="foh-brand">
             <span class="foh-brand-mark">${renderWssAppMarkSvg()}</span>
             <span class="foh-brand-name">WebSpeakerSim</span>
@@ -178,7 +178,7 @@ export function renderTopbar(
         <div class="foh-topbar-spacer" aria-hidden="true"></div>
 
         <!-- Zone 2: Primary Band + Ground Bounce / Heatmap Split-Pill + Zero-Jitter Coverage LCD -->
-        <div class="foh-topbar-zone foh-topbar-zone-shrink">
+        <div class="foh-topbar-zone">
           <select
             id="band-select"
             name="analysis-band"
@@ -206,6 +206,7 @@ export function renderTopbar(
               type="button"
               class="wss-bounce-btn"
               data-testid="btn-ground-bounce"
+              aria-label="Ground Bounce"
               aria-pressed=${String(groundEnabled)}
               title="Toggle 1st-Order Ground Reflection (G)"
               @click=${() => store.setGroundReflection(!groundEnabled)}
@@ -286,6 +287,7 @@ export function renderTopbar(
             type="button"
             class="foh-tb-pill foh-tb-primary"
             data-testid="btn-speaker-library"
+            aria-label="Speakers"
             title="Open Loudspeaker Library, Spec Builder & .gll/.clf/.frd Importer (L)"
             @click=${cb.onOpenSpeakerLibrary}
           >

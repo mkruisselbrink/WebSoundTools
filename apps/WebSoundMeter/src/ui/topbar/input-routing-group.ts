@@ -85,11 +85,7 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
     : '';
 
   return html`
-    <div
-      class="foh-topbar-zone foh-topbar-zone-shrink"
-      role="group"
-      aria-label="Audio Input and Reference"
-    >
+    <div class="foh-topbar-zone" role="group" aria-label="Audio Input and Reference">
       ${props.audioInputMode === 'hardware'
         ? html`
             <div
@@ -111,7 +107,10 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
                 @click=${props.onTogglePause}
               >
                 ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
-                <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
+                <span
+                  class=${props.isPaused
+                    ? 'foh-hide-below-narrow'
+                    : 'foh-hide-below-wide'}
                   >${props.isPaused ? 'Resume' : 'Pause'}</span
                 >
               </button>
@@ -141,7 +140,10 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
               @click=${props.onTogglePause}
             >
               ${props.isPaused ? renderPlayIconSvg() : renderPauseIconSvg()}
-              <span class=${props.isPaused ? '' : 'foh-hide-below-wide'}
+              <span
+                class=${props.isPaused
+                  ? 'foh-hide-below-narrow'
+                  : 'foh-hide-below-wide'}
                 >${props.isPaused ? 'Resume' : 'Pause'}</span
               >
             </button>

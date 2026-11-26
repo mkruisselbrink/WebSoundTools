@@ -134,11 +134,6 @@ export const fohTopbarCss = css`
     flex-shrink: 0;
   }
 
-  .foh-topbar-zone-shrink {
-    flex-shrink: 1;
-    min-inline-size: 0;
-  }
-
   .foh-topbar-spacer {
     flex: 1 1 12px;
     min-inline-size: 12px;

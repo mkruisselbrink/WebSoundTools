@@ -60,12 +60,13 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
           class="wsm-gen-toggle-btn"
           data-testid="btn-generator-toggle"
           data-variant="gen"
+          aria-label="Signal Generator"
           aria-pressed=${String(props.genConfig.enabled)}
           title="Toggle Signal Generator On / Off"
           @click=${props.onToggleGenerator}
         >
           ${renderSineWaveIconSvg()}
-          <span
+          <span class="foh-hide-below-narrow"
             >Gen<span class="foh-hide-below-medium"
               >${props.genConfig.enabled ? ' ON' : ''}</span
             ></span

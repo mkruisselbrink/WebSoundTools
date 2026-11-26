@@ -121,6 +121,15 @@ export class WssTopbar extends LitElement {
           inline-size: 40px;
         }
       }
+
+      @container topbar (max-width: 779px) {
+        .wss-scene-pill {
+          max-inline-size: 92px;
+        }
+        .wss-band-select {
+          inline-size: 96px;
+        }
+      }
     `,
   ];
 

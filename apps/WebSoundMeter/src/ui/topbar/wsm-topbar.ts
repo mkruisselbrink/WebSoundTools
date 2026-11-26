@@ -123,6 +123,17 @@ export class WsmTopbar extends LitElement {
         }
       }
 
+      @container topbar (max-width: 639px) {
+        .wsm-pause-pill[aria-pressed='true'] {
+          min-inline-size: 30px;
+          padding-inline: 6px;
+        }
+        .wsm-gen-toggle-btn {
+          inline-size: 28px;
+          padding-inline: 5px;
+        }
+      }
+
       @media (pointer: coarse) {
         .wsm-pause-pill {
           inline-size: 70px;
