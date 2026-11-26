@@ -71,7 +71,7 @@ export class WebSoundMeterApp extends LitElement {
 
   private readonly shellWindow = new ShellWindowController(this, {
     mediaQuery: '(max-width: 679px)',
-    observeWco: (cb) => observeWindowControlsOverlay((snap) => cb(snap.visible)),
+    observeWco: observeWindowControlsOverlay,
     observeSwUpdate: observeServiceWorkerUpdate,
     onFlushPersistence: () => this.audio.flushPendingPersistence(),
     onKeyDown: (e) => this.handleKeyDown(e),
@@ -313,6 +313,7 @@ export class WebSoundMeterApp extends LitElement {
         .sources=${this.sourceStore}
         .isMobileShow=${isMobileShow}
         .wcoVisible=${this.shellWindow.wcoVisible}
+        .wcoInsets=${this.shellWindow.wcoInsets}
         .updateReady=${this.shellWindow.swUpdateReady}
         .onWorkspaceModeChange=${(mode: WorkspaceMode) => this.setWorkspaceMode(mode)}
         .onLayoutPresetChange=${(preset: LayoutPreset) => this.setLayoutPreset(preset)}

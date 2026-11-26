@@ -8,6 +8,7 @@
 
 import {
   type PopoverParentRootLike,
+  type WcoSafeInsets,
   renderChevronDownSvg,
   renderGroundBounceIconSvg,
   renderHelpQuestionSvg,
@@ -47,6 +48,7 @@ export {
 
 export interface TopbarRenderCallbacks {
   readonly wcoVisible?: boolean;
+  readonly wcoInsets?: WcoSafeInsets;
   readonly updateReady?: boolean;
   readonly isSceneModified?: boolean;
   readonly activeFileName?: string;
@@ -83,6 +85,11 @@ export function renderTopbar(
   const rangeShort = SHORT_RANGE_LABELS[cmap.rangeMode];
   const contourShort = cmap.isolineStepDb > 0 ? `${cmap.isolineStepDb}dB` : 'Off';
 
+  const wcoStyle =
+    cb.wcoVisible && cb.wcoInsets
+      ? `--foh-wco-left:${cb.wcoInsets.left}px;--foh-wco-right:${cb.wcoInsets.right}px;--foh-wco-top:${cb.wcoInsets.top}px;--foh-wco-height:${cb.wcoInsets.height}px`
+      : '';
+
   return html`
     <header
       class="foh-topbar"
@@ -91,10 +98,11 @@ export function renderTopbar(
       data-testid="app-topbar"
       data-doc-region="topbar"
       data-wco-visible=${String(Boolean(cb.wcoVisible))}
+      style=${wcoStyle || nothing}
     >
       <div class="foh-topbar-track">
         <!-- Zone 1: Brand + Scene/Project Menu + Undo/Redo -->
-        <div class="foh-topbar-zone">
+        <div class="foh-topbar-zone foh-topbar-zone-shrink">
           <div class="foh-brand">
             <span class="foh-brand-mark">${renderWssAppMarkSvg()}</span>
             <span class="foh-brand-name">WebSpeakerSim</span>
@@ -133,7 +141,11 @@ export function renderTopbar(
             onExportProjectJson: cb.onExportProjectJson,
           })}
 
-          <div class="foh-segmented" role="group" aria-label="Edit History">
+          <div
+            class="foh-segmented foh-hide-below-wide"
+            role="group"
+            aria-label="Edit History"
+          >
             <button
               type="button"
               class="foh-seg-btn"
@@ -166,7 +178,7 @@ export function renderTopbar(
         <div class="foh-topbar-spacer" aria-hidden="true"></div>
 
         <!-- Zone 2: Primary Band + Ground Bounce / Heatmap Split-Pill + Zero-Jitter Coverage LCD -->
-        <div class="foh-topbar-zone">
+        <div class="foh-topbar-zone foh-topbar-zone-shrink">
           <select
             id="band-select"
             name="analysis-band"
@@ -242,8 +254,8 @@ export function renderTopbar(
                 ${hasStats && stats ? `${stats.meanAudienceSplDb.toFixed(1)} dB` : '—'}
               </span>
             </span>
-            <span class="foh-lcd-sep" aria-hidden="true"></span>
-            <span class="foh-lcd-kv">
+            <span class="foh-lcd-sep foh-hide-below-narrow" aria-hidden="true"></span>
+            <span class="foh-lcd-kv foh-hide-below-narrow">
               <span class="foh-lcd-k">±3dB</span>
               <span
                 class="foh-lcd-v ${hasStats && stats && stats.homogeneityPlusMinus3DbPercent >= 75

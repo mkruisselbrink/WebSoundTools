@@ -39,6 +39,21 @@ export function blurFocusedNumberInputOnWheel(ev: {
   return false;
 }
 
+export interface WcoTitlebarGeometry {
+  readonly visible: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface WcoSafeInsets {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly height: number;
+}
+
 export interface ShellWindowControllerOptions {
   /** Global `keydown` handler attached on `window` while connected. */
   readonly onKeyDown?: (ev: KeyboardEvent) => void;
@@ -58,7 +73,9 @@ export interface ShellWindowControllerOptions {
    * Optional Window Controls Overlay observer factory (e.g. `observeWindowControlsOverlay`
    * from `@foh/pwa/client`), keeping `@foh/ui` decoupled from `@foh/pwa`.
    */
-  readonly observeWco?: (onChange: (visible: boolean) => void) => () => void;
+  readonly observeWco?: (
+    onChange: (state: boolean | WcoTitlebarGeometry) => void
+  ) => () => void;
   /**
    * Optional staged Service Worker update observer (e.g. `observeServiceWorkerUpdate`
    * from `@foh/pwa/client`).
@@ -82,8 +99,16 @@ const WHEEL_CAPTURE_OPTIONS: AddEventListenerOptions = {
  * (`keydown`, `popstate`, `visibilitychange`/`pagehide` persistence flush, passive
  * `<input type="number">` wheel guard, responsive `matchMedia`, WCO state, and staged PWA updates).
  */
+const ZERO_WCO_INSETS: WcoSafeInsets = {
+  left: 0,
+  right: 0,
+  top: 0,
+  height: 0,
+};
+
 export class ShellWindowController implements ReactiveController {
   public wcoVisible = false;
+  public wcoInsets: WcoSafeInsets = ZERO_WCO_INSETS;
   public mediaMatches = false;
   public swUpdateReady = false;
 
@@ -93,6 +118,7 @@ export class ShellWindowController implements ReactiveController {
   private unsubWco: (() => void) | null = null;
   private unsubSwUpdate: (() => void) | null = null;
   private applySwUpdateFn: (() => void) | null = null;
+  private lastWcoGeometry: WcoTitlebarGeometry | null = null;
 
   private readonly handleMediaChange = (ev: MediaQueryListEvent): void => {
     this.mediaMatches = ev.matches;
@@ -113,6 +139,41 @@ export class ShellWindowController implements ReactiveController {
   private readonly handlePageHide = (): void => {
     this.options.onFlushPersistence?.();
   };
+
+  private readonly handleWindowResize = (): void => {
+    if (this.lastWcoGeometry?.visible) {
+      this.syncWcoInsetsFromGeometry(this.lastWcoGeometry);
+    }
+  };
+
+  private syncWcoInsetsFromGeometry(geom: WcoTitlebarGeometry): void {
+    if (!geom.visible) {
+      if (this.wcoVisible || this.wcoInsets !== ZERO_WCO_INSETS) {
+        this.wcoVisible = false;
+        this.wcoInsets = ZERO_WCO_INSETS;
+        this.host.requestUpdate();
+      }
+      return;
+    }
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const left = Math.max(0, Math.round(geom.x));
+    const right =
+      vw > 0 && geom.width > 0 ? Math.max(0, Math.round(vw - geom.x - geom.width)) : 0;
+    const top = Math.max(0, Math.round(geom.y));
+    const height = Math.max(0, Math.round(geom.height));
+
+    if (
+      !this.wcoVisible ||
+      this.wcoInsets.left !== left ||
+      this.wcoInsets.right !== right ||
+      this.wcoInsets.top !== top ||
+      this.wcoInsets.height !== height
+    ) {
+      this.wcoVisible = true;
+      this.wcoInsets = { left, right, top, height };
+      this.host.requestUpdate();
+    }
+  }
 
   constructor(host: ReactiveControllerHost, options: ShellWindowControllerOptions) {
     this.host = host;
@@ -150,14 +211,24 @@ export class ShellWindowController implements ReactiveController {
         this.options.onMediaQueryChange?.(this.mediaMatches);
         this.mql.addEventListener('change', this.handleMediaChange);
       }
+      if (this.options.observeWco) {
+        window.addEventListener('resize', this.handleWindowResize);
+      }
     }
 
     if (this.options.observeWco) {
-      this.unsubWco = this.options.observeWco((visible) => {
-        if (this.wcoVisible !== visible) {
-          this.wcoVisible = visible;
-          this.host.requestUpdate();
+      this.unsubWco = this.options.observeWco((state) => {
+        if (typeof state === 'boolean') {
+          this.lastWcoGeometry = null;
+          if (this.wcoVisible !== state) {
+            this.wcoVisible = state;
+            this.wcoInsets = ZERO_WCO_INSETS;
+            this.host.requestUpdate();
+          }
+          return;
         }
+        this.lastWcoGeometry = state;
+        this.syncWcoInsetsFromGeometry(state);
       });
     }
 
@@ -188,6 +259,9 @@ export class ShellWindowController implements ReactiveController {
       }
       if (this.options.disableNumberInputWheel !== false) {
         window.removeEventListener('wheel', this.handleWindowWheel, true);
+      }
+      if (this.options.observeWco) {
+        window.removeEventListener('resize', this.handleWindowResize);
       }
     }
     this.mql?.removeEventListener('change', this.handleMediaChange);

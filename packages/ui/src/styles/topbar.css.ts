@@ -11,32 +11,81 @@ import { fohPopoverCss } from './popover.css.js';
  */
 export const fohTopbarCss = css`
   .foh-topbar {
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     inline-size: 100%;
+    min-inline-size: 0;
     padding-block-start: env(safe-area-inset-top, 0px);
-    min-block-size: max(
-      calc(40px + env(safe-area-inset-top, 0px)),
-      env(titlebar-area-height, 0px)
-    );
-    block-size: max(
-      calc(40px + env(safe-area-inset-top, 0px)),
-      env(titlebar-area-height, 0px)
-    );
-    padding-inline-start: calc(
-      max(env(titlebar-area-x, 0px), env(safe-area-inset-left, 0px)) + 10px
-    );
-    padding-inline-end: calc(
-      max(
-          100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px),
-          env(safe-area-inset-right, 0px)
-        ) + 10px
-    );
+    min-block-size: calc(40px + env(safe-area-inset-top, 0px));
+    block-size: calc(40px + env(safe-area-inset-top, 0px));
+    padding-inline-start: calc(env(safe-area-inset-left, 0px) + 10px);
+    padding-inline-end: calc(env(safe-area-inset-right, 0px) + 10px);
     background: var(--_foh-bg-panel, #0b1120);
     border-bottom: 1px solid var(--_foh-border-subtle, #1e293b);
+    overflow: hidden;
     flex-shrink: 0;
     z-index: 20;
     user-select: none;
+  }
+
+  /* Match OS titlebar height (>= 40px so 26px pills stay vertically centered with macOS traffic lights)
+     & horizontal caption insets strictly when WCO is active (avoiding env(titlebar-area-width) === 0px
+     collapse when WCO is toggled off in an installed PWA). */
+  .foh-topbar[data-wco-visible='true'] {
+    padding-block-start: max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px));
+    min-block-size: max(
+      40px,
+      calc(
+        max(var(--foh-wco-height, 0px), env(titlebar-area-height, 0px)) +
+          max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px))
+      )
+    );
+    block-size: max(
+      40px,
+      calc(
+        max(var(--foh-wco-height, 0px), env(titlebar-area-height, 0px)) +
+          max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px))
+      )
+    );
+    padding-inline-start: calc(
+      max(var(--foh-wco-left, 0px), env(titlebar-area-x, 0px)) + 8px
+    );
+    padding-inline-end: calc(
+      max(
+          var(--foh-wco-right, 0px),
+          100% - env(titlebar-area-width, 100%) - env(titlebar-area-x, 0px)
+        ) + 8px
+    );
+  }
+
+  @media (display-mode: window-controls-overlay) {
+    .foh-topbar:not([data-wco-visible='false']) {
+      padding-block-start: max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px));
+      min-block-size: max(
+        40px,
+        calc(
+          max(var(--foh-wco-height, 0px), env(titlebar-area-height, 0px)) +
+            max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px))
+        )
+      );
+      block-size: max(
+        40px,
+        calc(
+          max(var(--foh-wco-height, 0px), env(titlebar-area-height, 0px)) +
+            max(var(--foh-wco-top, 0px), env(titlebar-area-y, 0px))
+        )
+      );
+      padding-inline-start: calc(
+        max(var(--foh-wco-left, 0px), env(titlebar-area-x, 0px)) + 8px
+      );
+      padding-inline-end: calc(
+        max(
+            var(--foh-wco-right, 0px),
+            100% - env(titlebar-area-width, 100%) - env(titlebar-area-x, 0px)
+          ) + 8px
+      );
+    }
   }
 
   /* Enable native OS window dragging across empty titlebar regions when WCO is active,
@@ -64,9 +113,10 @@ export const fohTopbarCss = css`
     display: flex;
     align-items: center;
     flex-wrap: nowrap;
+    flex: 1 1 0%;
     inline-size: 100%;
     block-size: 100%;
-    gap: 6px;
+    gap: 4px;
     min-inline-size: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -82,6 +132,11 @@ export const fohTopbarCss = css`
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  .foh-topbar-zone-shrink {
+    flex-shrink: 1;
+    min-inline-size: 0;
   }
 
   .foh-topbar-spacer {
@@ -538,41 +593,49 @@ export const fohTopbarCss = css`
     }
   }
 
-  /* @container topbar Progressive Compaction Tiers
-   * >= 1260px: Full Desktop Studio Bar (brand wordmark + secondary KPIs + generator summary)
-   * 940-1259px: Tablet Landscape (1024px - 1194px iPads) & Compact Desktop
-   * 700-939px: Tablet Portrait (744px - 834px iPads) — keeps 1x | 2x | 3x | ▾ + ? fully visible!
+  /* @container topbar Progressive Compaction Tiers (measured on .foh-topbar-track AFTER WCO insets)
+   * >= 1580px: Full Widescreen Studio Bar (all secondary KPIs + generator waveform/level summary)
+   * 1380-1579px: 1440px Desktop Browser — keeps LAeq1m, LAeq15m, LC-LA, 1x/2x/3x & ? fully visible
+   * 1220-1379px: 13"/14" MacBook WCO Titlebars (~1240-1320px track) — keeps brand, LAeq15m/Mean, 1x/2x/3x & ? with drag space
+   * 1020-1219px: Compact Laptop / Tablet Landscape — hides wordmark & Undo/Redo buttons (Cmd+Z active)
+   * 780-1019px: Narrow WCO / Tablet Split — iconifies secondary triggers
+   * < 780px: Half-Screen WCO / Tablet Portrait — collapses 1x/2x/3x into [▾] preset menu
    */
-  @container topbar (max-width: 1259px) {
-    .foh-brand-name {
-      display: none;
+  @container topbar (max-width: 1579px) {
+    .foh-hide-below-xlarge {
+      display: none !important;
     }
+  }
+
+  @container topbar (max-width: 1379px) {
     .foh-topbar-zone {
       gap: 5px;
     }
     .foh-topbar-spacer {
-      flex: 1 1 6px;
-      min-inline-size: 6px;
+      flex: 1 1 8px;
+      min-inline-size: 8px;
     }
     .foh-hide-below-full {
       display: none !important;
     }
   }
 
-  @container topbar (max-width: 1099px) {
+  @container topbar (max-width: 1219px) {
+    .foh-brand-name {
+      display: none;
+    }
     .foh-hide-below-wide {
       display: none !important;
     }
   }
 
-  @container topbar (max-width: 939px) {
+  @container topbar (max-width: 1019px) {
     .foh-brand {
       display: none;
     }
     .foh-hide-below-medium {
       display: none !important;
     }
-    .foh-topbar-track,
     .foh-topbar-zone {
       gap: 4px;
     }
@@ -594,9 +657,6 @@ export const fohTopbarCss = css`
   }
 
   @container topbar (max-width: 779px) {
-    .foh-hide-below-narrow {
-      display: none !important;
-    }
     .foh-seg-btn {
       padding: 2px 5px;
       min-inline-size: 24px;
@@ -609,6 +669,12 @@ export const fohTopbarCss = css`
       inline-size: 48px;
       font-size: 9px;
       padding: 1px 2px;
+    }
+  }
+
+  @container topbar (max-width: 639px) {
+    .foh-hide-below-narrow {
+      display: none !important;
     }
   }
 

@@ -99,7 +99,7 @@ export class WebSpeakerSimApp extends LitElement {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly shellWindow = new ShellWindowController(this, {
-    observeWco: (cb) => observeWindowControlsOverlay((snap) => cb(snap.visible)),
+    observeWco: observeWindowControlsOverlay,
     observeSwUpdate: observeServiceWorkerUpdate,
     onFlushPersistence: () => this.flushAutosave(),
     onKeyDown: (ev) => this.handleKeyDown(ev),
@@ -391,6 +391,7 @@ export class WebSpeakerSimApp extends LitElement {
         .layoutMode=${this.layoutMode}
         .chartDrawerExpanded=${this.chartDrawerExpanded}
         .wcoVisible=${this.shellWindow.wcoVisible}
+        .wcoInsets=${this.shellWindow.wcoInsets}
         .updateReady=${this.shellWindow.swUpdateReady}
         .isSceneModified=${this.isSceneModified}
         .activeFileName=${this.activeFileHandle?.name ?? ''}

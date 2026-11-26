@@ -216,7 +216,7 @@ export function renderSplMeterGroup(props: SplMeterGroupProps): TemplateResult {
                   >${cMinusA >= 0 ? '+' : ''}${cMinusA.toFixed(1)}dB</span
                 >
               </span>
-              <span class="foh-lcd-kv foh-hide-below-full">
+              <span class="foh-lcd-kv foh-hide-below-xlarge">
                 <span class="foh-lcd-k">Pk</span>
                 <span class="foh-lcd-v" style="inline-size:5.2ch"
                   >${currentPeak.toFixed(1)}</span

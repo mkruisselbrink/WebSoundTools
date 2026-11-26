@@ -4,6 +4,7 @@
 
 import {
   StoreSubscriptionController,
+  type WcoSafeInsets,
   fohControlsCss,
   fohTokensCss,
   fohTopbarCss,
@@ -57,7 +58,10 @@ export class WsmTopbar extends LitElement {
       }
 
       .wsm-io-pill {
-        max-inline-size: 196px;
+        flex: 0 1 auto;
+        min-inline-size: 68px;
+        max-inline-size: 188px;
+        overflow: hidden;
       }
 
       .wsm-gen-toggle-btn {
@@ -70,24 +74,33 @@ export class WsmTopbar extends LitElement {
         gap: 7px;
       }
 
-      @container topbar (max-width: 1259px) {
+      @container topbar (max-width: 1579px) {
         .wsm-io-pill {
-          max-inline-size: 136px;
+          max-inline-size: 160px;
         }
       }
 
-      @container topbar (max-width: 1099px) {
+      @container topbar (max-width: 1379px) {
+        .wsm-io-pill {
+          max-inline-size: 148px;
+        }
+      }
+
+      @container topbar (max-width: 1219px) {
         .wsm-pause-pill:not([aria-pressed='true']) {
           inline-size: 30px;
         }
+        .wsm-io-pill {
+          max-inline-size: 132px;
+        }
       }
 
-      @container topbar (max-width: 939px) {
+      @container topbar (max-width: 1019px) {
         .wsm-io-pill {
-          max-inline-size: 102px;
+          max-inline-size: 104px;
         }
         .wsm-transport-split + .wsm-io-pill {
-          max-inline-size: 84px;
+          max-inline-size: 92px;
         }
         .wsm-stop-btn {
           padding: 0 5px;
@@ -106,7 +119,7 @@ export class WsmTopbar extends LitElement {
           max-inline-size: 88px;
         }
         .wsm-transport-split + .wsm-io-pill {
-          max-inline-size: 66px;
+          max-inline-size: 72px;
         }
       }
 
@@ -115,7 +128,7 @@ export class WsmTopbar extends LitElement {
           inline-size: 70px;
         }
 
-        @container topbar (max-width: 1099px) {
+        @container topbar (max-width: 1219px) {
           .wsm-pause-pill:not([aria-pressed='true']) {
             inline-size: 34px;
           }
@@ -138,6 +151,9 @@ export class WsmTopbar extends LitElement {
 
   @property({ type: Boolean })
   public wcoVisible = false;
+
+  @property({ attribute: false })
+  public wcoInsets?: WcoSafeInsets;
 
   @property({ type: Boolean })
   public updateReady = false;
@@ -171,6 +187,7 @@ export class WsmTopbar extends LitElement {
       layoutPreset: this.workspace.layoutPreset,
       isMobileShow: this.isMobileShow,
       wcoVisible: this.wcoVisible,
+      wcoInsets: this.wcoInsets,
       updateReady: this.updateReady,
       canUndo: this.sources.canUndo,
       canRedo: this.sources.canRedo,

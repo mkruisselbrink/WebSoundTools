@@ -81,7 +81,7 @@ export function renderGeneratorGroup(props: GeneratorGroupProps): TemplateResult
           aria-expanded="false"
           title="Signal Generator Waveform, Level & Output Routing"
         >
-          <span class="foh-hide-below-full"
+          <span class="foh-hide-below-xlarge"
             >${shortSig} ${props.genConfig.levelDbFs}dB${outSummary}</span
           >
           ${renderChevronDownSvg()}

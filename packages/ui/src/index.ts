@@ -16,6 +16,8 @@ export {
   ShellWindowController,
   blurFocusedNumberInputOnWheel,
   type ShellWindowControllerOptions,
+  type WcoSafeInsets,
+  type WcoTitlebarGeometry,
 } from './controllers/shell-window-controller.js';
 export { downloadTextFile, slugifyFilename } from './dom/download-file.js';
 export {

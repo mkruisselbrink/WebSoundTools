@@ -85,7 +85,11 @@ export function renderInputRoutingGroup(props: InputRoutingGroupProps): Template
     : '';
 
   return html`
-    <div class="foh-topbar-zone" role="group" aria-label="Audio Input and Reference">
+    <div
+      class="foh-topbar-zone foh-topbar-zone-shrink"
+      role="group"
+      aria-label="Audio Input and Reference"
+    >
       ${props.audioInputMode === 'hardware'
         ? html`
             <div

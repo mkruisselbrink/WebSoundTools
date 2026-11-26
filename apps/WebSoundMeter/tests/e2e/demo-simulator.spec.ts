@@ -240,10 +240,81 @@ test.describe('WebSoundMeter Demo Simulator, Multi-Channel & Offline PWA E2E', (
           expect(helpBox!.x + helpBox!.width).toBeLessThanOrEqual(width);
         }
       }
-    } finally {
-      await ipadCtx.close();
-    }
-  });
+      } finally {
+        await ipadCtx.close();
+      }
+
+      // 4. Desktop PWA Window Controls Overlay (macOS traffic lights = 76px left, Chrome WCO icons = 118px right):
+      // Verify zero clipping/overflow in Show & Tuning modes with a long Hardware Standby device name
+      const wcoCtx = await browser.newContext({
+        viewport: { width: 1512, height: 900 },
+      });
+      try {
+        const wcoPage = await wcoCtx.newPage();
+        await wcoPage.addInitScript(() => {
+          const listeners = new Set<() => void>();
+          Object.defineProperty(navigator, 'windowControlsOverlay', {
+            configurable: true,
+            value: {
+              visible: true,
+              getTitlebarAreaRect: () => ({
+                x: 76,
+                y: 0,
+                width: Math.max(200, window.innerWidth - 76 - 118),
+                height: 38,
+              }),
+              addEventListener: (_t: string, fn: () => void) => listeners.add(fn),
+              removeEventListener: (_t: string, fn: () => void) => listeners.delete(fn),
+            },
+          });
+          window.addEventListener('resize', () => {
+            for (const fn of listeners) fn();
+          });
+        });
+
+        const wcoWsm = new WsmPageDriver(wcoPage);
+        await wcoWsm.installMockUsbHardwareInterface(
+          'macbook-mic',
+          'MacBook Air Microphone'
+        );
+        await wcoWsm.goto('/');
+        await wcoWsm.selectInputSource('hardware:macbook-mic');
+        await wcoWsm.byTestId('btn-stop-hardware').click();
+
+        for (const width of [1512, 1440, 1320, 1180, 960, 820]) {
+          await wcoPage.setViewportSize({ width, height: 900 });
+          for (const mode of ['show', 'tuning'] as const) {
+            await wcoWsm.setMode(mode);
+            await wcoWsm.waitForUiSettled();
+
+            const helpBox = await wcoWsm.byTestId('btn-help').boundingBox();
+            const layoutMenuBox = await wcoWsm
+              .byTestId('btn-layout-popover')
+              .boundingBox();
+            expect(helpBox).not.toBeNull();
+            expect(layoutMenuBox).not.toBeNull();
+            // Right edge of Help & Layout controls must stay completely clear of the 118px right WCO caption box
+            expect(helpBox!.x + helpBox!.width).toBeLessThanOrEqual(width - 118);
+            expect(layoutMenuBox!.x + layoutMenuBox!.width).toBeLessThanOrEqual(
+              width - 118
+            );
+
+            // Track must not horizontally overflow/clip any child control
+            const overflowPx = await wcoWsm.app
+              .locator('wsm-topbar')
+              .evaluate((el) => {
+                const track = el.shadowRoot?.querySelector(
+                  '.foh-topbar-track'
+                ) as HTMLElement | null;
+                return track ? track.scrollWidth - track.clientWidth : 999;
+              });
+            expect(overflowPx).toBeLessThanOrEqual(1);
+          }
+        }
+      } finally {
+        await wcoCtx.close();
+      }
+    });
 
   test('recovers cleanly on standalone PWA relaunch when Hardware mode was saved in localStorage', async ({
     page,

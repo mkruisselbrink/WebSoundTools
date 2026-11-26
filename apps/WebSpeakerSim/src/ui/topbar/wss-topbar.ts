@@ -9,6 +9,7 @@
 
 import {
   StoreSubscriptionController,
+  type WcoSafeInsets,
   fohControlsCss,
   fohPanelsCss,
   fohTokensCss,
@@ -32,6 +33,8 @@ export class WssTopbar extends LitElement {
     css`
       :host {
         display: block;
+        width: 100%;
+        min-width: 0;
         flex-shrink: 0;
       }
 
@@ -42,10 +45,15 @@ export class WssTopbar extends LitElement {
       }
 
       .wss-scene-pill {
-        max-inline-size: 196px;
+        flex: 0 1 auto;
+        min-inline-size: 76px;
+        max-inline-size: 188px;
+        overflow: hidden;
       }
 
       .wss-band-select {
+        flex: 0 1 auto;
+        min-inline-size: 84px;
         inline-size: 164px;
       }
 
@@ -81,16 +89,25 @@ export class WssTopbar extends LitElement {
         color: var(--_foh-text-muted, #94a3b8);
       }
 
-      @container topbar (max-width: 1079px) {
+      @container topbar (max-width: 1379px) {
         .wss-scene-pill {
-          max-inline-size: 148px;
+          max-inline-size: 152px;
         }
         .wss-band-select {
-          inline-size: 132px;
+          inline-size: 142px;
         }
       }
 
-      @container topbar (max-width: 819px) {
+      @container topbar (max-width: 1219px) {
+        .wss-scene-pill {
+          max-inline-size: 136px;
+        }
+        .wss-band-select {
+          inline-size: 128px;
+        }
+      }
+
+      @container topbar (max-width: 1019px) {
         .wss-scene-pill {
           max-inline-size: 112px;
         }
@@ -113,6 +130,7 @@ export class WssTopbar extends LitElement {
   @property({ type: String }) public layoutMode: ViewportLayoutMode = 'split';
   @property({ type: Boolean }) public chartDrawerExpanded = true;
   @property({ type: Boolean }) public wcoVisible = false;
+  @property({ attribute: false }) public wcoInsets?: WcoSafeInsets;
   @property({ type: Boolean }) public updateReady = false;
   @property({ type: Boolean }) public isSceneModified = false;
   @property({ type: String }) public activeFileName = '';
@@ -160,6 +178,7 @@ export class WssTopbar extends LitElement {
       this.chartDrawerExpanded,
       {
         wcoVisible: this.wcoVisible,
+        wcoInsets: this.wcoInsets,
         updateReady: this.updateReady,
         isSceneModified: this.isSceneModified,
         activeFileName: this.activeFileName || undefined,

@@ -4,6 +4,7 @@
 
 import {
   type PopoverParentRootLike,
+  type WcoSafeInsets,
   closePopoverById,
   renderChevronDownSvg,
   renderHelpQuestionSvg,
@@ -32,6 +33,7 @@ export interface TopbarViewProps
   readonly layoutPreset: LayoutPreset;
   readonly isMobileShow?: boolean;
   readonly wcoVisible?: boolean;
+  readonly wcoInsets?: WcoSafeInsets;
   readonly updateReady?: boolean;
   readonly canUndo?: boolean;
   readonly canRedo?: boolean;
@@ -67,6 +69,11 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
     props.onLayoutPresetChange(next);
   };
 
+  const wcoStyle =
+    props.wcoVisible && props.wcoInsets
+      ? `--foh-wco-left:${props.wcoInsets.left}px;--foh-wco-right:${props.wcoInsets.right}px;--foh-wco-top:${props.wcoInsets.top}px;--foh-wco-height:${props.wcoInsets.height}px`
+      : '';
+
   return html`
     <header
       class="foh-topbar"
@@ -75,6 +82,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
       data-testid="app-topbar"
       data-doc-region="topbar"
       data-wco-visible=${String(Boolean(props.wcoVisible))}
+      style=${wcoStyle || nothing}
     >
       <div class="foh-topbar-track">
         <!-- Zone 1: Brand + Mode Switcher + History -->
@@ -147,7 +155,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
         <div class="foh-topbar-spacer" aria-hidden="true"></div>
 
         <!-- Zone 2: Transport, Audio Input & Reference, Signal Generator & Recessed SPL LCD -->
-        <div class="foh-topbar-zone">
+        <div class="foh-topbar-zone foh-topbar-zone-shrink">
           ${renderInputRoutingGroup(props)}
           ${mode === 'show' && props.audioInputMode === 'hardware'
             ? nothing
@@ -165,7 +173,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
                 <div class="foh-segmented" role="group" aria-label="Chart Layout">
                   <button
                     type="button"
-                    class="foh-seg-btn"
+                    class="foh-seg-btn foh-hide-below-narrow"
                     data-testid="btn-layout-1x"
                     aria-pressed=${String(activeCount === 1)}
                     title="Single Chart Layout (1)"
@@ -175,7 +183,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
                   </button>
                   <button
                     type="button"
-                    class="foh-seg-btn"
+                    class="foh-seg-btn foh-hide-below-narrow"
                     data-testid="btn-layout-2x"
                     aria-pressed=${String(activeCount === 2)}
                     title="Dual Chart Layout (2)"
@@ -185,7 +193,7 @@ export function renderTopbar(props: TopbarViewProps): TemplateResult {
                   </button>
                   <button
                     type="button"
-                    class="foh-seg-btn"
+                    class="foh-seg-btn foh-hide-below-narrow"
                     data-testid="btn-layout-3x"
                     aria-pressed=${String(activeCount === 3)}
                     title="Triple Chart Layout (3)"

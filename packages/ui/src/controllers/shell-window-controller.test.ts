@@ -6,11 +6,18 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ShellWindowController,
   blurFocusedNumberInputOnWheel,
+  type WcoTitlebarGeometry,
 } from './shell-window-controller.js';
 
 describe('ShellWindowController', () => {
-  it('tracks WCO visibility updates and cleans up subscriptions on disconnect', () => {
-    let wcoCb: ((visible: boolean) => void) | undefined;
+  it('tracks WCO visibility and computes safe titlebar insets from geometry snapshots', () => {
+    let wcoCb: ((state: boolean | WcoTitlebarGeometry) => void) | undefined;
+    const prevWin = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {
+      innerWidth: 1512,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
     const unsubSpy = vi.fn(() => {});
     const requestUpdate = vi.fn(() => {});
     const host: ReactiveControllerHost = {
@@ -20,22 +27,36 @@ describe('ShellWindowController', () => {
       updateComplete: Promise.resolve(true),
     };
 
-    const ctrl = new ShellWindowController(host, {
-      observeWco: (cb) => {
-        wcoCb = cb;
-        return unsubSpy;
-      },
-    });
+    try {
+      const ctrl = new ShellWindowController(host, {
+        observeWco: (cb) => {
+          wcoCb = cb;
+          return unsubSpy;
+        },
+      });
 
-    ctrl.hostConnected();
-    expect(ctrl.wcoVisible).toBe(false);
+      ctrl.hostConnected();
+      expect(ctrl.wcoVisible).toBe(false);
 
-    wcoCb?.(true);
-    expect(ctrl.wcoVisible).toBe(true);
-    expect(requestUpdate).toHaveBeenCalledTimes(1);
+      wcoCb?.({ visible: true, x: 76, y: 0, width: 1318, height: 38 });
+      expect(ctrl.wcoVisible).toBe(true);
+      expect(ctrl.wcoInsets).toEqual({
+        left: 76,
+        right: 118,
+        top: 0,
+        height: 38,
+      });
+      expect(requestUpdate).toHaveBeenCalledTimes(1);
 
-    ctrl.hostDisconnected();
-    expect(unsubSpy).toHaveBeenCalledTimes(1);
+      wcoCb?.({ visible: false, x: 0, y: 0, width: 0, height: 0 });
+      expect(ctrl.wcoVisible).toBe(false);
+      expect(ctrl.wcoInsets).toEqual({ left: 0, right: 0, top: 0, height: 0 });
+
+      ctrl.hostDisconnected();
+      expect(unsubSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      (globalThis as { window?: unknown }).window = prevWin;
+    }
   });
 
   it('tracks staged SW updates and flushes persistence before applying update', () => {
